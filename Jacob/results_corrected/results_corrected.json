@@ -1,0 +1,78 @@
+{
+  "formula": "CORRECTED: sum(core * dd)",
+  "pairwise_results": [
+    {
+      "seed_i": 0,
+      "seed_j": 1,
+      "tensor_sim": 0.5721687265032339,
+      "agreement": 0.974
+    },
+    {
+      "seed_i": 0,
+      "seed_j": 2,
+      "tensor_sim": 0.5691032520828717,
+      "agreement": 0.9704
+    },
+    {
+      "seed_i": 0,
+      "seed_j": 3,
+      "tensor_sim": 0.559142347978878,
+      "agreement": 0.9762
+    },
+    {
+      "seed_i": 0,
+      "seed_j": 4,
+      "tensor_sim": 0.5709494869213783,
+      "agreement": 0.9712
+    },
+    {
+      "seed_i": 1,
+      "seed_j": 2,
+      "tensor_sim": 0.5633080898766785,
+      "agreement": 0.969
+    },
+    {
+      "seed_i": 1,
+      "seed_j": 3,
+      "tensor_sim": 0.5683201092198763,
+      "agreement": 0.9748
+    },
+    {
+      "seed_i": 1,
+      "seed_j": 4,
+      "tensor_sim": 0.5705318666529591,
+      "agreement": 0.9708
+    },
+    {
+      "seed_i": 2,
+      "seed_j": 3,
+      "tensor_sim": 0.5589536783131052,
+      "agreement": 0.9703
+    },
+    {
+      "seed_i": 2,
+      "seed_j": 4,
+      "tensor_sim": 0.5609672285738148,
+      "agreement": 0.967
+    },
+    {
+      "seed_i": 3,
+      "seed_j": 4,
+      "tensor_sim": 0.5576103623407027,
+      "agreement": 0.969
+    }
+  ],
+  "correlations": {
+    "pearson_r": 0.26870443133961514,
+    "pearson_p": 0.4528418448675951,
+    "spearman_r": 0.41945482513924454,
+    "spearman_p": 0.2275515102242155
+  },
+  "model_accuracies": {
+    "0": 0.9751,
+    "1": 0.9783,
+    "2": 0.9704,
+    "3": 0.9754,
+    "4": 0.972
+  }
+}

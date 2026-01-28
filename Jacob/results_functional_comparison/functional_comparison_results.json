@@ -1,0 +1,126 @@
+{
+  "pairwise_results": [
+    {
+      "seed_i": 0,
+      "seed_j": 1,
+      "tensor_sim": 0.5721687467099283,
+      "agreement": 0.974,
+      "logit_cosine": 0.9197033047676086,
+      "prob_cosine": 0.976905107498169,
+      "kl_divergence": 0.25068145990371704,
+      "logit_correlation": 0.9147476553916931
+    },
+    {
+      "seed_i": 0,
+      "seed_j": 2,
+      "tensor_sim": 0.5691032520828717,
+      "agreement": 0.9704,
+      "logit_cosine": 0.8989505767822266,
+      "prob_cosine": 0.9731125235557556,
+      "kl_divergence": 0.27225854992866516,
+      "logit_correlation": 0.8916114568710327
+    },
+    {
+      "seed_i": 0,
+      "seed_j": 3,
+      "tensor_sim": 0.5591423682962903,
+      "agreement": 0.9762,
+      "logit_cosine": 0.9188550710678101,
+      "prob_cosine": 0.9786385893821716,
+      "kl_divergence": 0.21321232616901398,
+      "logit_correlation": 0.9142931699752808
+    },
+    {
+      "seed_i": 0,
+      "seed_j": 4,
+      "tensor_sim": 0.5709494469085122,
+      "agreement": 0.9712,
+      "logit_cosine": 0.9106936454772949,
+      "prob_cosine": 0.9746822118759155,
+      "kl_divergence": 0.24969060719013214,
+      "logit_correlation": 0.8981039524078369
+    },
+    {
+      "seed_i": 1,
+      "seed_j": 2,
+      "tensor_sim": 0.5633081097704509,
+      "agreement": 0.969,
+      "logit_cosine": 0.9129866361618042,
+      "prob_cosine": 0.9720537066459656,
+      "kl_divergence": 0.2764841318130493,
+      "logit_correlation": 0.9071041345596313
+    },
+    {
+      "seed_i": 1,
+      "seed_j": 3,
+      "tensor_sim": 0.568320149941556,
+      "agreement": 0.9748,
+      "logit_cosine": 0.9221431612968445,
+      "prob_cosine": 0.977224588394165,
+      "kl_divergence": 0.24149447679519653,
+      "logit_correlation": 0.9143648147583008
+    },
+    {
+      "seed_i": 1,
+      "seed_j": 4,
+      "tensor_sim": 0.5705318468182461,
+      "agreement": 0.9708,
+      "logit_cosine": 0.9057433605194092,
+      "prob_cosine": 0.9737823009490967,
+      "kl_divergence": 0.26996344327926636,
+      "logit_correlation": 0.8913002610206604
+    },
+    {
+      "seed_i": 2,
+      "seed_j": 3,
+      "tensor_sim": 0.5589536986236617,
+      "agreement": 0.9703,
+      "logit_cosine": 0.9125090837478638,
+      "prob_cosine": 0.9731058478355408,
+      "kl_divergence": 0.31415098905563354,
+      "logit_correlation": 0.9085512161254883
+    },
+    {
+      "seed_i": 2,
+      "seed_j": 4,
+      "tensor_sim": 0.560967189260518,
+      "agreement": 0.967,
+      "logit_cosine": 0.9056445360183716,
+      "prob_cosine": 0.9701755046844482,
+      "kl_divergence": 0.3305167555809021,
+      "logit_correlation": 0.8864129781723022
+    },
+    {
+      "seed_i": 3,
+      "seed_j": 4,
+      "tensor_sim": 0.557610343524403,
+      "agreement": 0.969,
+      "logit_cosine": 0.9114233255386353,
+      "prob_cosine": 0.9720180630683899,
+      "kl_divergence": 0.2959343194961548,
+      "logit_correlation": 0.8980771899223328
+    }
+  ],
+  "correlations": {
+    "agreement": {
+      "pearson_r": 0.26870758019117014,
+      "spearman_r": 0.41945482513924454
+    },
+    "logit_cosine": {
+      "pearson_r": -0.05983795627391342,
+      "spearman_r": -0.01818181818181818
+    },
+    "prob_cosine": {
+      "pearson_r": 0.3084050788269729,
+      "spearman_r": 0.4424242424242424
+    },
+    "logit_correlation": {
+      "pearson_r": -0.03927220163665486,
+      "spearman_r": 0.11515151515151514
+    },
+    "kl_divergence": {
+      "pearson_r": 0.40499068714291403,
+      "spearman_r": 0.4545454545454545
+    }
+  }
+}

@@ -1,0 +1,248 @@
+{
+  "pairwise_results": [
+    {
+      "seed_i": 0,
+      "seed_j": 1,
+      "agreement": 0.974,
+      "tensor_sim_corrected": 0.5721687467099283,
+      "flattened_cosine": 0.0066473414190113544,
+      "flattened_l2_neg": -44.03547668457031,
+      "weight_correlation": 0.00661453464999795,
+      "layerwise_cosine": -0.010552177981783947,
+      "frobenius_diff_neg": -64.83006286621094,
+      "spectral_similarity": 0.9997678796450297,
+      "interaction_cosine": -0.004259948153048754,
+      "interaction_symmetrized": -0.006257647182792425,
+      "cka_weights": 0.602925052245458,
+      "output_cosine": -0.04546772316098213,
+      "input_cosine": 0.006830260157585144
+    },
+    {
+      "seed_i": 0,
+      "seed_j": 2,
+      "agreement": 0.9704,
+      "tensor_sim_corrected": 0.5691032520828717,
+      "flattened_cosine": 0.009165339171886444,
+      "flattened_l2_neg": -43.56071090698242,
+      "weight_correlation": 0.009175985120236874,
+      "layerwise_cosine": 0.010228917313118776,
+      "frobenius_diff_neg": -64.0848388671875,
+      "spectral_similarity": 0.9997548262278239,
+      "interaction_cosine": -0.0016853759298101068,
+      "interaction_symmetrized": -0.002592305885627866,
+      "cka_weights": 0.5971795519193014,
+      "output_cosine": 0.012380477972328663,
+      "input_cosine": 0.009153902530670166
+    },
+    {
+      "seed_i": 0,
+      "seed_j": 3,
+      "agreement": 0.9762,
+      "tensor_sim_corrected": 0.5591423682962903,
+      "flattened_cosine": 0.007783227134495974,
+      "flattened_l2_neg": -43.74119186401367,
+      "weight_correlation": 0.007750322110950947,
+      "layerwise_cosine": -0.0021228454813050726,
+      "frobenius_diff_neg": -64.37654113769531,
+      "spectral_similarity": 0.9997669458389282,
+      "interaction_cosine": 0.0004103383398614824,
+      "interaction_symmetrized": 0.0014293560525402427,
+      "cka_weights": 0.597819189230601,
+      "output_cosine": -0.022182263433933258,
+      "input_cosine": 0.007888708263635635
+    },
+    {
+      "seed_i": 0,
+      "seed_j": 4,
+      "agreement": 0.9712,
+      "tensor_sim_corrected": 0.5709494469085122,
+      "flattened_cosine": -0.017499275505542755,
+      "flattened_l2_neg": -44.5136604309082,
+      "weight_correlation": -0.017511578276753426,
+      "layerwise_cosine": 0.005998137717445691,
+      "frobenius_diff_neg": -65.38370513916016,
+      "spectral_similarity": 0.9996948639551798,
+      "interaction_cosine": 0.0018017403781414032,
+      "interaction_symmetrized": 0.0012842582073062658,
+      "cka_weights": 0.5912472903728485,
+      "output_cosine": 0.05339835211634636,
+      "input_cosine": -0.017747368663549423
+    },
+    {
+      "seed_i": 1,
+      "seed_j": 2,
+      "agreement": 0.969,
+      "tensor_sim_corrected": 0.5633081097704509,
+      "flattened_cosine": -0.011618000455200672,
+      "flattened_l2_neg": -44.42319869995117,
+      "weight_correlation": -0.01161227561533451,
+      "layerwise_cosine": -0.02369755692780018,
+      "frobenius_diff_neg": -65.39515686035156,
+      "spectral_similarity": 0.9996610482533773,
+      "interaction_cosine": -0.005685443989932537,
+      "interaction_symmetrized": -0.006007288582623005,
+      "cka_weights": 0.6040552854537964,
+      "output_cosine": -0.04816925525665283,
+      "input_cosine": -0.011488157324492931
+    },
+    {
+      "seed_i": 1,
+      "seed_j": 3,
+      "agreement": 0.9748,
+      "tensor_sim_corrected": 0.568320149941556,
+      "flattened_cosine": -0.0022503389045596123,
+      "flattened_l2_neg": -44.36652755737305,
+      "weight_correlation": -0.0022685471922159195,
+      "layerwise_cosine": -0.013519265378514925,
+      "frobenius_diff_neg": -65.29710388183594,
+      "spectral_similarity": 0.9996604919433594,
+      "interaction_cosine": -0.0011949035106226802,
+      "interaction_symmetrized": -0.0019225204596295953,
+      "cka_weights": 0.6026159524917603,
+      "output_cosine": -0.03638504073023796,
+      "input_cosine": -0.0021303463727235794
+    },
+    {
+      "seed_i": 1,
+      "seed_j": 4,
+      "agreement": 0.9708,
+      "tensor_sim_corrected": 0.5705318468182461,
+      "flattened_cosine": -0.00338942464441061,
+      "flattened_l2_neg": -44.60698699951172,
+      "weight_correlation": -0.003395950887352228,
+      "layerwise_cosine": -0.012080350308679044,
+      "frobenius_diff_neg": -65.63753509521484,
+      "spectral_similarity": 0.9995170831680298,
+      "interaction_cosine": -0.001461399020627141,
+      "interaction_symmetrized": -0.0023027146235108376,
+      "cka_weights": 0.5910544395446777,
+      "output_cosine": -0.029583707451820374,
+      "input_cosine": -0.0032978891395032406
+    },
+    {
+      "seed_i": 2,
+      "seed_j": 3,
+      "agreement": 0.9703,
+      "tensor_sim_corrected": 0.5589536986236617,
+      "flattened_cosine": 0.0011833148309960961,
+      "flattened_l2_neg": -43.871158599853516,
+      "weight_correlation": 0.0011890672612935305,
+      "layerwise_cosine": 0.0018295003877331812,
+      "frobenius_diff_neg": -64.54444122314453,
+      "spectral_similarity": 0.9997678200403849,
+      "interaction_cosine": -0.0012636387255042791,
+      "interaction_symmetrized": -0.0011671418324112892,
+      "cka_weights": 0.5978696743647257,
+      "output_cosine": 0.003324160585179925,
+      "input_cosine": 0.001175687531940639
+    },
+    {
+      "seed_i": 2,
+      "seed_j": 4,
+      "agreement": 0.967,
+      "tensor_sim_corrected": 0.560967189260518,
+      "flattened_cosine": 0.0018255062168464065,
+      "flattened_l2_neg": -44.07374954223633,
+      "weight_correlation": 0.0018275580368936062,
+      "layerwise_cosine": 0.009207432623952627,
+      "frobenius_diff_neg": -64.80937957763672,
+      "spectral_similarity": 0.9997065464655558,
+      "interaction_cosine": -0.0010270103812217712,
+      "interaction_symmetrized": -0.001035114168189466,
+      "cka_weights": 0.597451905409495,
+      "output_cosine": 0.024013949558138847,
+      "input_cosine": 0.001746922847814858
+    },
+    {
+      "seed_i": 3,
+      "seed_j": 4,
+      "agreement": 0.969,
+      "tensor_sim_corrected": 0.557610343524403,
+      "flattened_cosine": -0.0019367961212992668,
+      "flattened_l2_neg": -44.306419372558594,
+      "weight_correlation": -0.0019433468114584684,
+      "layerwise_cosine": -0.009456811860824624,
+      "frobenius_diff_neg": -65.19437408447266,
+      "spectral_similarity": 0.9995423158009847,
+      "interaction_cosine": -0.0027454074006527662,
+      "interaction_symmetrized": -0.0027975188568234444,
+      "cka_weights": 0.5978664060433706,
+      "output_cosine": -0.024680454283952713,
+      "input_cosine": -0.0018570870161056519
+    }
+  ],
+  "correlations": {
+    "tensor_sim_corrected": {
+      "pearson_r": 0.26870758019117014,
+      "pearson_p": 0.45283634364451253,
+      "spearman_r": 0.41945482513924454,
+      "spearman_p": 0.2275515102242155
+    },
+    "flattened_cosine": {
+      "pearson_r": 0.29732009199494186,
+      "pearson_p": 0.40412081475111405,
+      "spearman_r": 0.13373921960961418,
+      "spearman_p": 0.7126222235089889
+    },
+    "flattened_l2_neg": {
+      "pearson_r": 0.18445937379602767,
+      "pearson_p": 0.609946462186565,
+      "spearman_r": 0.09118583155200968,
+      "spearman_p": 0.8021812915092663
+    },
+    "weight_correlation": {
+      "pearson_r": 0.29590257549364524,
+      "pearson_p": 0.4064731086225814,
+      "spearman_r": 0.13373921960961418,
+      "spearman_p": 0.7126222235089889
+    },
+    "layerwise_cosine": {
+      "pearson_r": -0.19444557121880868,
+      "pearson_p": 0.590370848425962,
+      "spearman_r": -0.2006088294144213,
+      "spearman_p": 0.5784061446498446
+    },
+    "frobenius_diff_neg": {
+      "pearson_r": 0.15983122380799725,
+      "pearson_p": 0.6591648048480456,
+      "spearman_r": 0.06079055436800646,
+      "spearman_p": 0.8675109976588954
+    },
+    "spectral_similarity": {
+      "pearson_r": 0.32286027288646374,
+      "pearson_p": 0.36287237061467714,
+      "spearman_r": 0.21276694028802262,
+      "spearman_p": 0.555075995998558
+    },
+    "interaction_cosine": {
+      "pearson_r": 0.23348721749733634,
+      "pearson_p": 0.5161921205134286,
+      "spearman_r": 0.3465061598976368,
+      "spearman_p": 0.3266572580343008
+    },
+    "interaction_symmetrized": {
+      "pearson_r": 0.17984262796636188,
+      "pearson_p": 0.6190732973004597,
+      "spearman_r": 0.2553203283456271,
+      "spearman_p": 0.47649345335133597
+    },
+    "cka_weights": {
+      "pearson_r": 0.19410669196353,
+      "pearson_p": 0.591031338021194,
+      "spearman_r": -0.01823716631040194,
+      "spearman_p": 0.9601194644967271
+    },
+    "output_cosine": {
+      "pearson_r": -0.35061454131519637,
+      "pearson_p": 0.3205639713736348,
+      "spearman_r": -0.16413449679361747,
+      "spearman_p": 0.6504731396988412
+    },
+    "input_cosine": {
+      "pearson_r": 0.30120909567818854,
+      "pearson_p": 0.3977007365458702,
+      "spearman_r": 0.13373921960961418,
+      "spearman_p": 0.7126222235089889
+    }
+  }
+}

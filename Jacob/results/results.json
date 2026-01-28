@@ -1,0 +1,110 @@
+{
+  "config": {
+    "num_seeds": 5,
+    "num_checkpoints": 10,
+    "hidden_dim": 128,
+    "input_dim": 784,
+    "output_dim": 10,
+    "num_epochs": 20,
+    "batch_size": 128,
+    "learning_rate": 0.001,
+    "device": "mps",
+    "checkpoint_dir": "checkpoints",
+    "results_dir": "results"
+  },
+  "pairwise_results": [
+    {
+      "seed_i": 0,
+      "seed_j": 1,
+      "tensor_sim": 0.004277814523292574,
+      "agreement": 0.974,
+      "accuracy_i": 0.9751,
+      "accuracy_j": 0.9783
+    },
+    {
+      "seed_i": 0,
+      "seed_j": 2,
+      "tensor_sim": 0.002833066934849635,
+      "agreement": 0.9704,
+      "accuracy_i": 0.9751,
+      "accuracy_j": 0.9704
+    },
+    {
+      "seed_i": 0,
+      "seed_j": 3,
+      "tensor_sim": -0.00042699267605391934,
+      "agreement": 0.9762,
+      "accuracy_i": 0.9751,
+      "accuracy_j": 0.9754
+    },
+    {
+      "seed_i": 0,
+      "seed_j": 4,
+      "tensor_sim": 0.020685640277181803,
+      "agreement": 0.9712,
+      "accuracy_i": 0.9751,
+      "accuracy_j": 0.972
+    },
+    {
+      "seed_i": 1,
+      "seed_j": 2,
+      "tensor_sim": 0.010422489690387908,
+      "agreement": 0.969,
+      "accuracy_i": 0.9783,
+      "accuracy_j": 0.9704
+    },
+    {
+      "seed_i": 1,
+      "seed_j": 3,
+      "tensor_sim": 0.002924522922393686,
+      "agreement": 0.9748,
+      "accuracy_i": 0.9783,
+      "accuracy_j": 0.9754
+    },
+    {
+      "seed_i": 1,
+      "seed_j": 4,
+      "tensor_sim": -0.001826164356900668,
+      "agreement": 0.9708,
+      "accuracy_i": 0.9783,
+      "accuracy_j": 0.972
+    },
+    {
+      "seed_i": 2,
+      "seed_j": 3,
+      "tensor_sim": -0.001685281468565578,
+      "agreement": 0.9703,
+      "accuracy_i": 0.9704,
+      "accuracy_j": 0.9754
+    },
+    {
+      "seed_i": 2,
+      "seed_j": 4,
+      "tensor_sim": -0.0014653477017191263,
+      "agreement": 0.967,
+      "accuracy_i": 0.9704,
+      "accuracy_j": 0.972
+    },
+    {
+      "seed_i": 3,
+      "seed_j": 4,
+      "tensor_sim": -0.002447568714611602,
+      "agreement": 0.969,
+      "accuracy_i": 0.9754,
+      "accuracy_j": 0.972
+    }
+  ],
+  "correlations": {
+    "pearson_r": 0.03520536562637115,
+    "pearson_p": 0.9230836414476474,
+    "spearman_r": 0.33434804902403553,
+    "spearman_p": 0.34503632799221073
+  },
+  "model_accuracies": {
+    "0": 0.9751,
+    "1": 0.9783,
+    "2": 0.9704,
+    "3": 0.9754,
+    "4": 0.972
+  }
+}
