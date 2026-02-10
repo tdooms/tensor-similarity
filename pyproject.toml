@@ -1,0 +1,38 @@
+[project]
+name = "tensor-mars"
+version = "0.1.0"
+description = "Never gonna give you up!"
+readme = "README.md"
+requires-python = ">=3.13"
+
+dependencies = [
+    "torch",
+    "torchvision",
+    "triton",
+    "pandas",
+    "numpy",
+    "einops",
+    "opt_einsum",
+    "jaxtyping",
+    "tqdm",
+    "huggingface_hub",
+    "safetensors",
+    "datasets",
+    "transformers",
+    "tokenizers",
+    "wandb",
+    "numba>=0.61",
+    "quimb",
+    "kornia",
+    "bidict",
+    "scikit-learn",
+    "matplotlib",
+    "plotly",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=7.1.0",
+    "jupyter",
+]
+
