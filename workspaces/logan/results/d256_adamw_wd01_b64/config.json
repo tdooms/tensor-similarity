@@ -1,0 +1,1 @@
+{"d_model": 256, "n_head": 4, "n_ctx": 256, "optimizer": "AdamW", "init": "default", "weight_decay": 0.1, "batch_size": 64}

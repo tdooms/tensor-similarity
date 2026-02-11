@@ -1,0 +1,206 @@
+================================================================================
+PLAN: Diagonal Attention Norm Fraction Across Training
+================================================================================
+Author: Logan (workspace)
+Date: 2025-02-11
+Status: IN PROGRESS — all code written, ready to train
+
+GOAL:
+  Train a 1-layer bilinear attention-only model on SimpleStories (vocab ~4k),
+  save checkpoints, then measure: what fraction of the attention tensor's norm
+  lives on the diagonal of the attention pattern?
+
+  Metric = ||T_diag||^2 / ||T_causal||^2
+  where T_diag restricts the attention to diagonal (t == s) only.
+
+================================================================================
+STEP 1: DATASET — SimpleStories tokenizer + data loader  [DONE]
+================================================================================
+- dataset.py: Loads SimpleStories/SimpleStories from HuggingFace
+- Tokenizer: WordPiece from SimpleStories/SimpleStories-1.25M (vocab=4096)
+- Concatenates stories into one token stream, extracts (n_ctx+1)-length windows
+- Tested: 1000 stories -> 293k tokens, 2292 windows of length 128
+
+================================================================================
+STEP 2: MODEL — 1-layer bilinear attention-only  [DONE]
+================================================================================
+- model.py: AttnOnlyModel wrapping src/components/attention.py
+- Architecture: Embed -> Attention -> RMSNorm -> Unembed (tied weights)
+
+  KEY DESIGN DECISIONS (per Thomas' recommendations + team chat):
+  - NO RMSNorm inside attention: self.attn.norm = nn.Identity()
+    Easier to analyze as tensor. The QK normalization is what gets "ugly"
+    for tensor decomposition.
+  - RMSNorm PRE-UNEMBED only: stabilizes training without complicating
+    the attention tensor structure.
+  - Scaling: d_head^2 (not sqrt) already in Attention class
+  - Residual lerp: scale=0.5 = 1/(2*sqrt(1 layer))
+  - No MLP.
+
+  Hyperparams: d_model=64, n_head=4, d_head=16, n_ctx=128
+  Params: 286,784 (~287k)
+  Tested: forward pass OK on random input.
+
+================================================================================
+STEP 3: TRAINING with checkpoints  [DONE — script written]
+================================================================================
+- train.py: AdamW, cosine LR schedule, grad clipping
+- 3 full epochs on SimpleStories (per Logan's recommendation)
+- Checkpoints every 500 steps + end of each epoch + step 0 (init)
+- Saved to workspaces/logan/checkpoints/
+
+================================================================================
+STEP 4: NORM COMPUTATION  [DONE — MC approach]
+================================================================================
+- tensorize.py: Monte Carlo norm estimation
+
+  IMPORTANT MATH NOTES (documented in tensorize.py):
+  The attention tensor T maps (x_t, x_s) -> y_t where:
+    y_t = scale/d_head^2 * sum_h M(t,s) * <R_t Q1_h, x_t> * <R_t Q2_h, x_t> *
+                                            <R_s K1_h, x_s> * <R_s K2_h, x_s> *
+                                            O_h V_h x_s
+
+  T is degree 2 in x_t (Q1, Q2 share it) and degree 3 in x_s (K1, K2, V share it).
+  Total degree 5.
+
+  The exact Frobenius norm ||T||^2 requires computing 4th-order moments for x_t
+  and 6th-order moments for x_s (Isserlis/Wick theorem). This is what Thomas'
+  isserlis.py infrastructure handles for the MLP case.
+
+  FOR NOW: Monte Carlo estimation — feed random Gaussian x through the attention
+  path (with different masks) and measure output variance. This gives the
+  "operational" norm and the ratio ||T_diag||^2 / ||T_causal||^2 is still valid.
+
+  Martin is implementing the exact TN contraction for bilinear attention. We can
+  swap in the exact method later.
+
+  INIT SANITY CHECK (n_samples=64):
+    norm_causal:   1.54e-07
+    norm_diag:     3.01e-09
+    diag_fraction: 0.0195
+    Expected naive: 1/64.5 ≈ 0.0155 (diagonal is 1/avg_ctx positions in causal)
+    Close enough — at random init the attention is roughly uniform, so diagonal
+    fraction ≈ fraction of mask entries that are diagonal.
+
+================================================================================
+STEP 5: ANALYSIS ACROSS CHECKPOINTS  [DONE — script written]
+================================================================================
+- analyze.py: Loads each checkpoint, computes diagonal fraction, plots results
+- Produces: results/diagonal_fraction.json and results/diagonal_fraction.png
+- Three plots: diagonal fraction, both norms, off-diagonal norm
+
+================================================================================
+FILES (all in workspaces/logan/):
+================================================================================
+  plan.txt          — this file
+  dataset.py        — SimpleStories data loading + tokenizer
+  model.py          — 1-layer attn-only model wrapper
+  train.py          — training loop with checkpointing
+  tensorize.py      — MC norm computation for attention tensor
+  analyze.py        — compute & plot diagonal fraction across checkpoints
+  checkpoints/      — (created by train.py)
+  results/          — (created by analyze.py)
+
+================================================================================
+INTERMEDIATE RESULTS & UPDATES:
+================================================================================
+[2025-02-11] Plan created.
+[2025-02-11] Confirmed dataset: SimpleStories/SimpleStories, tokenizer from
+             SimpleStories/SimpleStories-V2-1.25M (vocab=4019).
+[2025-02-11] Resolved self.norm issue: per team chat, NO norm inside attention
+             (Identity). RMSNorm pre-unembed only.
+[2025-02-11] All code written and unit-tested. Init sanity check passed.
+[2025-02-11] Dataset: pre-tokenized from /workspace/tn_4_interp/language/cached_tokens/
+             2,368,168 train chunks of 257 tokens (256 ctx + 1), int16.
+             dataset.py has 3-tier fallback: local cache -> symlink -> generate.
+[2025-02-11] Config: d_model=64, n_head=4, n_ctx=256, batch=64, lr=3e-4, wd=0.1
+             Model: 281,856 params.
+[2025-02-11] Training (1 epoch): 37,002 steps, ~5m22s.
+             Loss: 8.3 -> 3.7,  Accuracy: 0% -> 28%.
+             76 checkpoints saved (every 500 steps + init + final).
+[2025-02-11] Analysis completed across all 76 checkpoints (~8s total).
+
+TRAINING RESULTS:
+  - Final loss: ~3.7 (from ~8.3 at init)
+  - Final accuracy: ~28%
+  - Learning rate: cosine schedule from 3e-4
+
+  NOTE: Loss of ~3.8 is approximately bigram-model equivalent — quite bad.
+  Compared with reference impl (tn_4_interp/language/train_simplestories.py):
+
+  KEY DIFFERENCES (reference → ours):
+    - d_model: 256 → 64          ← biggest factor (~16x fewer attention params)
+    - Optimizer: Muon(lr=0.02) + AdamW → AdamW only (lr=3e-4)
+    - Output proj init: zeros → normal(0.02)  (theirs starts as identity model)
+    - Residual: x + attn(x) → x + 0.5*attn(x)  (we dampen)
+    - Weight tying: no (lm_head zeros-init) → yes
+    - Weight decay: 0.0 → 0.1
+    - RMSNorm: none → pre-unembed
+    - Vocab: padded to 4096 → raw 4019
+    - Steps: 74,000 → 37,002 (1 epoch)
+
+  The d_model difference dominates: 256 vs 64 means their attention has ~16x
+  more parameters per head. Muon optimizer is also much more effective for
+  2D weight matrices than plain AdamW. Zero-init on output projection means
+  the model starts as a clean identity (no noise from attention path at init).
+
+  For our tensor analysis, the small model is intentional (faster training,
+  easier to tensorize). The quality gap is expected and acceptable.
+
+  TODO (later): Try (1) larger d_model, (2) Muon optimizer, (3) zero-init
+  output projection to close the loss gap.
+
+DIAGONAL FRACTION ANALYSIS:
+  - Init (step 0):    diag_frac = 0.0086  (theory: ~1/128.5 = 0.0078 for uniform causal)
+  - Step 1500:        diag_frac = 0.68    (!!!) — massive spike, model suddenly learns diagonal
+  - Step 2000:        diag_frac = 0.39    — rapid decay from spike
+  - Step 3000+:       diag_frac stabilizes around 0.20-0.25, noisy
+  - Final (step 37002): diag_frac = 0.20
+
+  INTERPRETATION:
+  1. At init, attention is approximately uniform -> diagonal gets ~1/T_avg share.
+  2. Very early in training (step ~1500), the model discovers "copy" (diagonal)
+     attention as a useful circuit. The spike to 0.68 means 68% of the tensor's
+     energy is concentrated on self-attention (token attending to itself).
+  3. As training continues, the model develops richer cross-token attention
+     patterns, and the diagonal fraction drops and stabilizes at ~0.20-0.25.
+     This is still 25-30x higher than the init value (~0.009), meaning the
+     diagonal remains overrepresented relative to random/uniform attention.
+  4. Both total norms grow enormously (~1e-7 to ~1e8, 15 orders of magnitude)
+     during training — the attention tensor becomes much "stronger" overall.
+  5. The off-diagonal norm also grows, just slightly slower than diagonal.
+
+  The noisy oscillation (~0.18-0.26) in the stable regime may indicate:
+  - MC variance (128 samples, could increase)
+  - Actual fluctuation in attention structure during training
+  - A longer run (3 epochs) might show whether this tightens up.
+
+TERMINOLOGY:
+  - "MC baseline" = Monte Carlo sampling approach (stochastic, approximate)
+    Feed random Gaussian inputs through the model, measure output statistics.
+    All MC-based plots and metrics MUST be labeled as "MC baseline".
+  - "Tensor sim" = exact weight-based computation (deterministic, exact)
+    Uses isserlis.py / Wick's theorem to compute Frobenius norms and inner
+    products purely from weight matrices. This is the "real" computation.
+    TODO: implement using isserlis.py for the bilinear attention case.
+
+================================================================================
+STEP 6: CROSS-CHECKPOINT SIMILARITY HEATMAP  [TODO]
+================================================================================
+- Compute tensor similarity between all checkpoint pairs
+- Plot as 2D heatmap: step_i x step_j -> similarity
+- Compare with the diagonal fraction curve
+- MC baseline first, then exact when available
+
+KNOWN ISSUES / LIMITATIONS:
+  - src/utils.py doesn't exist; thomas/sim.py has broken import.
+    We import sequential from src.components.compose instead.
+  - Norm computation is MC (sampling), not exact TN contraction.
+    Martin is implementing exact bilinear attention TN sim.
+    MC gives correct ratios but may have variance — we use n_samples=128.
+  - The MC "norm" is an operational norm (how the layer acts on Gaussian inputs),
+    not the pure Frobenius norm of the degree-5 tensor. The ratio (diagonal fraction)
+    is still meaningful and should be equivalent for the Frobenius case.
+  - Only 1 epoch trained so far. 3-epoch run planned for later.
+
+================================================================================
