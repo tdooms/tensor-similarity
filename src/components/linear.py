@@ -3,7 +3,7 @@ from torch import nn
 from quimb.tensor import Tensor, TensorNetwork
 
 class Linear(nn.Linear):
-    """A simple Component wrapper around nn.Linear."""
+    """A component wrapper around nn.Linear."""
     def __init__(self, d_in: int, d_out: int, bias: bool = False) -> None:
         super().__init__(d_in, d_out, bias=bias)
 

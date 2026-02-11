@@ -2,8 +2,12 @@ from quimb.tensor import Tensor, TensorNetwork
 import torch
 
 def pad(linear):
+    """Pad a linear layer with an extra input and output dimension, to allow for bias."""
     w = torch.block_diag(torch.ones_like(linear.weight[:1, :1]), linear.weight)
-    if linear.bias is not None: w[1:, 0] = linear.bias
+    
+    if linear.bias is not None: 
+        w[1:, 0] = linear.bias
+    
     return w
 
 def parallel(tensor: Tensor | TensorNetwork, n: int = 2, tag: str = 'out'):
