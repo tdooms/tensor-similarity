@@ -1,0 +1,56 @@
+# Virtual environments
+.venv/
+.venv2/
+env/
+venv/
+
+uv.lock
+*.egg-info/
+
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Pytest
+.pytest_cache/
+
+# Training outputs / experiment artifacts
+runs/
+checkpoints/
+logs/
+*.ckpt
+
+# Data artifacts (if generated locally)
+*.pt
+*.pth
+*.npy
+*.npz
+
+# IDE settings
+.idea/
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# UV / build artifacts (keep lockfile tracked)
+__pypackages__/
+build/
+dist/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Coverage
+.coverage
+htmlcov/
+
+simple_stories_train/
+
+*.md
+!README.md
+!models/README.md
