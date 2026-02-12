@@ -1,4 +1,4 @@
-name: main256_muon
+name: main256_preunembed
 seed: 42
 
 model:
@@ -8,10 +8,10 @@ model:
   n_head: 8
   n_layers: 2
   attn_type: quadratic
-  attn_scale: 0.2
+  attn_scale: 0.35
   rope_base: 10000
   norm_type: layernorm
-  norm_place: pre_unembed
+  norm_places: [pre_unembed]
   use_rmsnorm_qk: false
   use_bias_qkv: true
   use_bias_o: true

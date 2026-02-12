@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 from .losses import compute_loss
 from .optim import create_optimizer, create_scheduler, Optimizers, _is_muon_param
 from .eval import evaluate
-from .plotting import plot_loss, plot_debug
+from .plotting import plot_loss, plot_debug, plot_weight_norms, plot_activation_norms
 
 # Supported dtype strings → (torch dtype, whether to use GradScaler)
 _DTYPE_MAP = {
@@ -33,6 +33,7 @@ class Trainer:
         run_dir: Optional[str] = None,
         device: str = "cuda" if torch.cuda.is_available() else "cpu",
         behaviour_tracker: Optional["BehaviourTracker"] = None,
+        wandb_run=None,
     ):
         self.model = model.to(device)
         self.train_dataloader = train_dataloader
@@ -110,14 +111,29 @@ class Trainer:
                 else:
                     self._adam_params.append(p)
         
+        # ---- activation norm hooks ----
+        self._activation_stats = {}
+        self._hooks = []
+        for layer_name, module in self.model.named_modules():
+            if isinstance(module, (torch.nn.Linear, torch.nn.Embedding)):
+                hook = module.register_forward_hook(
+                    self._make_activation_hook(layer_name)
+                )
+                self._hooks.append(hook)
+        
         # Behaviour tracker for analysis metrics
         self.behaviour_tracker = behaviour_tracker
+        
+        # Weights & Biases run (optional)
+        self.wandb_run = wandb_run
     
     def log_metrics(self, metrics: dict):
         """Append metrics to jsonl file."""
         metrics["step"] = self.step
         with open(self.metrics_file, "a") as f:
             f.write(json.dumps(metrics) + "\n")
+        if self.wandb_run is not None:
+            self.wandb_run.log(metrics, step=self.step)
     
     def log_error(self, error: Exception, context: str = ""):
         """Log error to errors directory."""
@@ -198,6 +214,8 @@ class Trainer:
                     }
                     if self.debug:
                         metrics.update(self._compute_debug_metrics(preclip_norm.item()))
+                        metrics.update(self._compute_weight_norms())
+                        metrics.update(self._compute_activation_norms())
                     self.log_metrics(metrics)
                 
                 pbar.set_postfix(loss=f"{loss.item():.4f}")
@@ -217,6 +235,10 @@ class Trainer:
                         self.step,
                         additional_metrics={"train_loss": loss.item()}
                     )
+                    # Forward behaviour metrics to wandb via log_metrics
+                    wandb_behaviour = {k: v for k, v in behaviour_metrics.items() if k != "step"}
+                    if wandb_behaviour:
+                        self.log_metrics(wandb_behaviour)
                     if "bigram_score" in behaviour_metrics:
                         pbar.set_postfix(
                             loss=f"{loss.item():.4f}",
@@ -274,11 +296,46 @@ class Trainer:
         
         return m
     
+    def _make_activation_hook(self, layer_name: str):
+        """Create a forward hook that records activation norm mean and variance.
+        
+        Computes the L2 norm along the last dimension (per token), then
+        records the mean and variance of those norms across the batch.
+        """
+        def hook(module, input, output):
+            with torch.no_grad():
+                out = output.float()
+                # L2 norm per token: shape (B, T)
+                norms = out.norm(dim=-1)
+                self._activation_stats[layer_name] = {
+                    "mean": norms.mean().item(),
+                    "var": norms.var().item(),
+                }
+        return hook
+    
+    def _compute_weight_norms(self) -> dict:
+        """Compute L2 norm of each named parameter."""
+        m = {}
+        for name, p in self.model.named_parameters():
+            if p.requires_grad:
+                m[f"weight_norm/{name}"] = p.data.norm(2).item()
+        return m
+    
+    def _compute_activation_norms(self) -> dict:
+        """Return activation norm mean/var captured by forward hooks."""
+        m = {}
+        for layer_name, stats in self._activation_stats.items():
+            m[f"act_norm_mean/{layer_name}"] = stats["mean"]
+            m[f"act_norm_var/{layer_name}"] = stats["var"]
+        return m
+    
     def _generate_plots(self) -> None:
         """Generate end-of-training plots."""
         try:
             plot_loss(self.metrics_file, self.run_dir / "loss.png")
             if self.debug:
                 plot_debug(self.metrics_file, self.run_dir)
+                plot_weight_norms(self.metrics_file, self.run_dir / "weight_norms.png")
+                plot_activation_norms(self.metrics_file, self.run_dir / "activation_norms.png")
         except Exception as e:
             print(f"Warning: plot generation failed: {e}")

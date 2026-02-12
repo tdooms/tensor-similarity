@@ -16,6 +16,7 @@ def main():
     parser.add_argument("--behaviour-every", type=int, default=100, help="Compute behaviour metrics every N steps")
     parser.add_argument("--no-bigram", action="store_true", help="Disable bigram tracking")
     parser.add_argument("--no-ngram", action="store_true", help="Disable n-gram tracking")
+    parser.add_argument("--wandb", action="store_true", help="Enable Weights & Biases logging")
     args = parser.parse_args()
     
     with open(args.config) as f:
@@ -74,6 +75,16 @@ def main():
         print("Fitting behaviour analyzers...")
         behaviour_tracker.fit(max_fit_samples=5000)
     
+    # Initialize wandb if enabled
+    wandb_run = None
+    if args.wandb:
+        import wandb
+        wandb_run = wandb.init(
+            entity="melwina-albuquerque-flame-university",
+            project="bilinear-attn",
+            config=cfg,
+        )
+    
     print("Starting training...")
     trainer = Trainer(
         model=model,
@@ -82,6 +93,7 @@ def main():
         cfg=cfg,
         device=device,
         behaviour_tracker=behaviour_tracker,
+        wandb_run=wandb_run,
     )
     
     trainer.train(
@@ -100,6 +112,9 @@ def main():
         if metrics:
             print("Generating behaviour plots...")
             plot_all_metrics(metrics, save_path=trainer.run_dir / "behaviour_plots.png")
+    
+    if wandb_run is not None:
+        wandb_run.finish()
     
     print(f"Training complete. Run dir: {trainer.run_dir}")
 

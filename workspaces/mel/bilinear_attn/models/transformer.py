@@ -1,16 +1,17 @@
 import torch
 import torch.nn as nn
-from .attention_kernels.bilinear import QuadraticAttention
+from .attention_kernels.bilinear import BilinearAttention, QuadraticAttention
 from .attention_kernels.softmax import SoftmaxAttention
 
 ATTN_REGISTRY = {
+    "bilinear": BilinearAttention,
     "quadratic": QuadraticAttention,
     "softmax": SoftmaxAttention,
 }
 
 
 NORM_TYPES = ("none", "rmsnorm", "layernorm")
-NORM_PLACES = ("none", "post_embed", "pre_layer", "pre_unembed")
+VALID_NORM_PLACES = ("post_embed", "pre_layer", "pre_unembed")
 
 
 class AttentionLM(nn.Module):
@@ -28,11 +29,12 @@ class AttentionLM(nn.Module):
         'rmsnorm'   – RMSNorm (default)
         'layernorm' – LayerNorm
     
-    norm_place controls where normalisation is applied:
-        'none'       – no normalization anywhere
-        'post_embed' – norm after embedding only
-        'pre_layer'  – norm before each attention layer + before unembed
-        'pre_unembed'– norm only before unembed (default)
+    norm_places controls where normalisation is applied (list):
+        []                          – no normalization anywhere
+        ['post_embed']              – norm after embedding only
+        ['pre_layer']               – norm before each attention layer + before unembed
+        ['pre_unembed']             – norm only before unembed
+        ['post_embed', 'pre_unembed'] – both post-embed and pre-unembed
     """
     
     def __init__(
@@ -52,11 +54,14 @@ class AttentionLM(nn.Module):
         std_o: float = 0.01,
         attn_type: str = "quadratic",
         norm_type: str = "rmsnorm",
-        norm_place: str = "pre_unembed",
+        norm_places: list[str] | None = None,
     ) -> None:
         super().__init__()
+        if norm_places is None:
+            norm_places = []
         assert norm_type in NORM_TYPES, f"norm_type must be one of {NORM_TYPES}, got {norm_type!r}"
-        assert norm_place in NORM_PLACES, f"norm_place must be one of {NORM_PLACES}, got {norm_place!r}"
+        for p in norm_places:
+            assert p in VALID_NORM_PLACES, f"each norm_place must be one of {VALID_NORM_PLACES}, got {p!r}"
         self.vocab_size = vocab_size
         self.n_ctx = n_ctx
         self.d_model = d_model
@@ -64,7 +69,7 @@ class AttentionLM(nn.Module):
         self.n_layers = n_layers
         self.attn_type = attn_type
         self.norm_type = norm_type
-        self.norm_place = norm_place
+        self.norm_places = norm_places
         
         attn_cls = ATTN_REGISTRY[attn_type]
         
@@ -78,20 +83,20 @@ class AttentionLM(nn.Module):
         
         self.embed = nn.Embedding(vocab_size, d_model)
         
-        # Post-embedding norm – only used by 'post_embed'
-        if norm_place == "post_embed":
+        # Post-embedding norm – only used when 'post_embed' in norm_places
+        if "post_embed" in norm_places:
             self.embed_norm = _make_norm()
         else:
             self.embed_norm = None
         
-        # Final norm (before unembed) – used by 'pre_unembed' and 'pre_layer'
-        if norm_place in ("pre_unembed", "pre_layer"):
+        # Final norm (before unembed) – used when 'pre_unembed' or 'pre_layer' in norm_places
+        if "pre_unembed" in norm_places or "pre_layer" in norm_places:
             self.final_norm = _make_norm()
         else:
             self.final_norm = nn.Identity()
         
-        # Per-layer pre-norms – only used by 'pre_layer'
-        if norm_place == "pre_layer":
+        # Per-layer pre-norms – only used when 'pre_layer' in norm_places
+        if "pre_layer" in norm_places:
             self.layer_norms = nn.ModuleList([_make_norm() for _ in range(n_layers)])
         else:
             self.layer_norms = None
@@ -120,14 +125,21 @@ class AttentionLM(nn.Module):
         nn.init.normal_(self.unembed.weight, mean=0.0, std=std_embed)
         
         for layer in self.layers:
-            nn.init.normal_(layer.q.weight, mean=0.0, std=std_qkv)
-            nn.init.normal_(layer.k.weight, mean=0.0, std=std_qkv)
+            # BilinearAttention has q1,k1,q2,k2; others have q,k
+            if hasattr(layer, "q1"):
+                qk_projs = [layer.q1, layer.k1, layer.q2, layer.k2]
+            else:
+                qk_projs = [layer.q, layer.k]
+            
+            for proj in qk_projs:
+                nn.init.normal_(proj.weight, mean=0.0, std=std_qkv)
+                if proj.bias is not None:
+                    nn.init.zeros_(proj.bias)
+            
             nn.init.normal_(layer.v.weight, mean=0.0, std=std_qkv)
             nn.init.normal_(layer.o.weight, mean=0.0, std=std_o)
             
-            if layer.q.bias is not None:
-                nn.init.zeros_(layer.q.bias)
-                nn.init.zeros_(layer.k.bias)
+            if layer.v.bias is not None:
                 nn.init.zeros_(layer.v.bias)
             if layer.o.bias is not None:
                 nn.init.zeros_(layer.o.bias)
@@ -198,5 +210,5 @@ class AttentionLM(nn.Module):
             std_o=init_cfg.get("std_o", 0.01),
             attn_type=model_cfg.get("attn_type", "quadratic"),
             norm_type=model_cfg.get("norm_type", "rmsnorm"),
-            norm_place=model_cfg.get("norm_place", "pre_unembed"),
+            norm_places=model_cfg.get("norm_places", []),
         )

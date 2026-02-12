@@ -4,7 +4,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from models.transformer import AttentionLM, NORM_TYPES, NORM_PLACES
+from models.transformer import AttentionLM, NORM_TYPES, VALID_NORM_PLACES
 from train.optim import (
     create_optimizer,
     create_scheduler,
@@ -27,7 +27,7 @@ def _make_model(**overrides):
     defaults = dict(
         vocab_size=V, n_ctx=N_CTX, d_model=D_MODEL,
         n_head=N_HEAD, n_layers=N_LAYERS, attn_type="quadratic",
-        norm_type="rmsnorm", norm_place="pre_unembed",
+        norm_type="rmsnorm", norm_places=["pre_unembed"],
     )
     defaults.update(overrides)
     return AttentionLM(**defaults)
@@ -62,7 +62,7 @@ class TestMuonParamGrouping:
         assert len(bias_names) == 0, f"Biases should not be Muon params: {bias_names}"
 
     def test_norm_weights_not_muon(self):
-        model = _make_model(norm_place="pre_layer", use_rmsnorm_qk=True)
+        model = _make_model(norm_places=["pre_layer"], use_rmsnorm_qk=True)
         muon_names = [n for n, p in model.named_parameters() if _is_muon_param(n, p)]
         norm_names = [n for n in muon_names if "norm" in n]
         assert len(norm_names) == 0, f"Norm weights should not be Muon params: {norm_names}"
@@ -126,49 +126,64 @@ class TestCreateOptimizerAdamOnly:
 # P1: norm_type and norm_place
 # ===================================================================
 
-class TestNormPlace:
-    """Test all norm_place modes produce valid outputs."""
+class TestNormPlaces:
+    """Test all norm_places modes produce valid outputs."""
 
-    @pytest.mark.parametrize("norm_place", NORM_PLACES)
-    def test_forward_runs(self, norm_place):
-        model = _make_model(norm_place=norm_place)
+    NORM_PLACES_COMBOS = [
+        [],
+        ["post_embed"],
+        ["pre_unembed"],
+        ["pre_layer"],
+        ["post_embed", "pre_unembed"],
+    ]
+
+    @pytest.mark.parametrize("norm_places", NORM_PLACES_COMBOS)
+    def test_forward_runs(self, norm_places):
+        model = _make_model(norm_places=norm_places)
         x = torch.randint(0, V, (2, 8))
         logits = model(x)
         assert logits.shape == (2, 8, V)
         assert torch.isfinite(logits).all()
 
-    def test_none_has_no_norms(self):
-        model = _make_model(norm_place="none")
+    def test_empty_has_no_norms(self):
+        model = _make_model(norm_places=[])
         assert isinstance(model.final_norm, nn.Identity)
         assert model.layer_norms is None
         assert model.embed_norm is None
 
     def test_post_embed_has_embed_norm(self):
-        model = _make_model(norm_place="post_embed")
+        model = _make_model(norm_places=["post_embed"])
         assert model.embed_norm is not None
         assert not isinstance(model.embed_norm, nn.Identity)
         assert isinstance(model.final_norm, nn.Identity)
         assert model.layer_norms is None
 
     def test_pre_unembed_has_final_norm(self):
-        model = _make_model(norm_place="pre_unembed")
+        model = _make_model(norm_places=["pre_unembed"])
         assert not isinstance(model.final_norm, nn.Identity)
         assert model.layer_norms is None
         assert model.embed_norm is None
 
     def test_pre_layer_has_all_norms(self):
-        model = _make_model(norm_place="pre_layer")
+        model = _make_model(norm_places=["pre_layer"])
         assert not isinstance(model.final_norm, nn.Identity)
         assert model.layer_norms is not None
         assert len(model.layer_norms) == N_LAYERS
 
+    def test_both_post_embed_and_pre_unembed(self):
+        model = _make_model(norm_places=["post_embed", "pre_unembed"])
+        assert model.embed_norm is not None
+        assert not isinstance(model.embed_norm, nn.Identity)
+        assert not isinstance(model.final_norm, nn.Identity)
+        assert model.layer_norms is None
+
     def test_invalid_norm_place_raises(self):
         with pytest.raises(AssertionError):
-            _make_model(norm_place="invalid")
+            _make_model(norm_places=["invalid"])
 
-    @pytest.mark.parametrize("norm_place", NORM_PLACES)
-    def test_backward_runs(self, norm_place):
-        model = _make_model(norm_place=norm_place)
+    @pytest.mark.parametrize("norm_places", NORM_PLACES_COMBOS)
+    def test_backward_runs(self, norm_places):
+        model = _make_model(norm_places=norm_places)
         x = torch.randint(0, V, (2, 8))
         logits = model(x)
         loss = logits.sum()
@@ -179,9 +194,9 @@ class TestNormPlace:
 
     def test_pre_layer_residual_correct(self):
         """Verify pre_layer mode applies norm before attention, not to residual."""
-        model = _make_model(norm_place="pre_layer")
+        model = _make_model(norm_places=["pre_layer"])
         x = torch.randint(0, V, (1, 4))
-        model_none = _make_model(norm_place="none")
+        model_none = _make_model(norm_places=[])
         model_none.load_state_dict(
             {k: v for k, v in model.state_dict().items() if k in model_none.state_dict()},
             strict=False,
@@ -195,15 +210,15 @@ class TestNormType:
     """Test norm_type selects the correct normalisation function."""
 
     def test_rmsnorm_uses_rmsnorm(self):
-        model = _make_model(norm_type="rmsnorm", norm_place="pre_unembed")
+        model = _make_model(norm_type="rmsnorm", norm_places=["pre_unembed"])
         assert isinstance(model.final_norm, nn.RMSNorm)
 
     def test_layernorm_uses_layernorm(self):
-        model = _make_model(norm_type="layernorm", norm_place="pre_unembed")
+        model = _make_model(norm_type="layernorm", norm_places=["pre_unembed"])
         assert isinstance(model.final_norm, nn.LayerNorm)
 
     def test_none_uses_identity(self):
-        model = _make_model(norm_type="none", norm_place="pre_unembed")
+        model = _make_model(norm_type="none", norm_places=["pre_unembed"])
         assert isinstance(model.final_norm, nn.Identity)
 
     def test_invalid_norm_type_raises(self):
@@ -223,18 +238,18 @@ class TestNormType:
         model = AttentionLM.from_config(cfg)
         assert model.norm_type == norm_type
 
-    @pytest.mark.parametrize("norm_place", NORM_PLACES)
-    def test_from_config_norm_place(self, norm_place):
+    @pytest.mark.parametrize("norm_places", [[], ["post_embed"], ["pre_unembed"], ["post_embed", "pre_unembed"]])
+    def test_from_config_norm_places(self, norm_places):
         cfg = {
             "model": {
                 "vocab_size": V, "n_ctx": N_CTX, "d_model": D_MODEL,
                 "n_head": N_HEAD, "n_layers": N_LAYERS,
-                "attn_type": "quadratic", "norm_place": norm_place,
+                "attn_type": "quadratic", "norm_places": norm_places,
             },
             "init": {},
         }
         model = AttentionLM.from_config(cfg)
-        assert model.norm_place == norm_place
+        assert model.norm_places == norm_places
 
 
 # ===================================================================
@@ -380,10 +395,10 @@ class TestIntegration:
             optimizer.step()
             scheduler.step()
 
-    @pytest.mark.parametrize("norm_place", NORM_PLACES)
+    @pytest.mark.parametrize("norm_places", [[], ["post_embed"], ["pre_unembed"], ["pre_layer"], ["post_embed", "pre_unembed"]])
     @pytest.mark.parametrize("attn_type", ["quadratic", "softmax"])
-    def test_all_norm_attn_combos(self, norm_place, attn_type):
-        model = _make_model(norm_place=norm_place, attn_type=attn_type)
+    def test_all_norm_attn_combos(self, norm_places, attn_type):
+        model = _make_model(norm_places=norm_places, attn_type=attn_type)
         x = torch.randint(0, V, (2, 8))
         logits = model(x)
         assert logits.shape == (2, 8, V)

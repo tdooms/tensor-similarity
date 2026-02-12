@@ -22,6 +22,7 @@ runs/
 checkpoints/
 logs/
 *.ckpt
+wandb/
 
 # Data artifacts (if generated locally)
 *.pt
