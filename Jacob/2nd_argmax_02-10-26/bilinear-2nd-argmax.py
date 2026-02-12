@@ -100,6 +100,12 @@ def correlated_gaussian(*shape):
     L = torch.linalg.cholesky(A)
     return x @ L.T
 
+def neg10_last_gaussian(*shape):
+    """Normal for first 3 dimensions, always -10 for the last."""
+    x = torch.randn(*shape)
+    x[..., -1] = -10.0
+    return x
+
 
 def test_dist(dist_fn, n=4, samples=5):                                       
     x = dist_fn(samples, n)
