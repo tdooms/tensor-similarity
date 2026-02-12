@@ -16,6 +16,7 @@ dependencies = [
     "tqdm>=4.66",
     "transformers>=4.41",
     "muon-optimizer @ git+https://github.com/KellerJordan/Muon",
+    "wandb>=0.24.2",
 ]
 
 [build-system]

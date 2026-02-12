@@ -1,4 +1,4 @@
-name: main256_muon
+name: sweep_norm_places_bilinear
 seed: 42
 
 model:
@@ -12,7 +12,7 @@ model:
   rope_base: 10000
   norm_type: layernorm
   norm_places: []
-  use_rmsnorm_qk: true
+  use_rmsnorm_qk: false
   use_bias_qkv: true
   use_bias_o: true
 

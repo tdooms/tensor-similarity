@@ -7,7 +7,7 @@ model:
   d_model: 256
   n_head: 8
   n_layers: 2
-  attn_type: bilinear
+  attn_type: quadratic
   attn_scale: 0.35
   rope_base: 10000
   norm_type: layernorm

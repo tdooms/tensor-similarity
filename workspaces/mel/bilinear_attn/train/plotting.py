@@ -164,3 +164,71 @@ def plot_debug(metrics_file: Path, save_dir: Path) -> None:
         fig.tight_layout()
         fig.savefig(save_dir / "param_maxabs.png", dpi=150)
         plt.close(fig)
+
+
+# ---------------------------------------------------------------------------
+# Weight norm and activation norm plots
+# ---------------------------------------------------------------------------
+
+def plot_weight_norms(metrics_file: Path, save_path: Path) -> None:
+    """Plot L2 weight norms per parameter over training steps."""
+    rows = _load_metrics(metrics_file)
+    all_keys = {k for r in rows for k in r}
+    wn_keys = sorted(k for k in all_keys if k.startswith("weight_norm/"))
+    if not wn_keys:
+        return
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    for k in wn_keys:
+        s, v = _collect(rows, k)
+        if s:
+            label = k.removeprefix("weight_norm/")
+            ax.plot(s, v, linewidth=0.8, label=label)
+    ax.set_xlabel("Step")
+    ax.set_ylabel("L2 Norm")
+    ax.set_title("Weight Norms")
+    ax.legend(fontsize=7, loc="upper left", ncol=2)
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(save_path, dpi=150)
+    plt.close(fig)
+
+
+def plot_activation_norms(metrics_file: Path, save_path: Path) -> None:
+    """Plot activation norm mean and variance per layer over training steps.
+
+    Produces a two-subplot figure: top = norm mean, bottom = norm variance.
+    """
+    rows = _load_metrics(metrics_file)
+    all_keys = {k for r in rows for k in r}
+    mean_keys = sorted(k for k in all_keys if k.startswith("act_norm_mean/"))
+    var_keys = sorted(k for k in all_keys if k.startswith("act_norm_var/"))
+    if not mean_keys and not var_keys:
+        return
+
+    fig, (ax_mean, ax_var) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
+
+    for k in mean_keys:
+        s, v = _collect(rows, k)
+        if s:
+            label = k.removeprefix("act_norm_mean/")
+            ax_mean.plot(s, v, linewidth=0.8, label=label)
+    ax_mean.set_ylabel("Mean L2 Norm")
+    ax_mean.set_title("Activation Norm Mean")
+    ax_mean.legend(fontsize=7, loc="upper left", ncol=2)
+    ax_mean.grid(True, alpha=0.3)
+
+    for k in var_keys:
+        s, v = _collect(rows, k)
+        if s:
+            label = k.removeprefix("act_norm_var/")
+            ax_var.plot(s, v, linewidth=0.8, label=label)
+    ax_var.set_xlabel("Step")
+    ax_var.set_ylabel("Variance of L2 Norm")
+    ax_var.set_title("Activation Norm Variance")
+    ax_var.legend(fontsize=7, loc="upper left", ncol=2)
+    ax_var.grid(True, alpha=0.3)
+
+    fig.tight_layout()
+    fig.savefig(save_path, dpi=150)
+    plt.close(fig)
