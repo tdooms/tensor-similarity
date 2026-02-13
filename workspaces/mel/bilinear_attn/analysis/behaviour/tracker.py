@@ -54,6 +54,7 @@ class BehaviourTracker:
         device: str = "cpu",
         config: Optional[TrackerConfig] = None,
         run_dir: Optional[str] = None,
+        cache_dir: Optional[str] = None,
         tokenizer=None,
     ):
         """Initialize the behaviour tracker.
@@ -66,6 +67,9 @@ class BehaviourTracker:
             device: Device for computations
             config: Tracker configuration
             run_dir: Directory to save metrics
+            cache_dir: Directory for cached bigram/ngram distributions.
+                       If provided, fit() will load from cache when available
+                       and save to cache after fitting.
             tokenizer: Tokenizer (optional, for n-gram extraction)
         """
         self.model = model
@@ -83,6 +87,13 @@ class BehaviourTracker:
         else:
             self.run_dir = None
         
+        # Set up cache directory
+        if cache_dir is not None:
+            self.cache_dir = Path(cache_dir)
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
+        else:
+            self.cache_dir = None
+        
         # Initialize analyzers
         self.bigram_analyzer: Optional[BigramAnalyzer] = None
         self.ngram_analyzer: Optional[NgramAnalyzer] = None
@@ -95,10 +106,24 @@ class BehaviourTracker:
         
         self._is_fitted = False
     
+    def _bigram_cache_path(self) -> Optional[Path]:
+        """Return the cache file path for bigram data, or None."""
+        if self.cache_dir is None:
+            return None
+        return self.cache_dir / "bigram.pt"
+    
+    def _ngram_cache_path(self) -> Optional[Path]:
+        """Return the cache file path for ngram data, or None."""
+        if self.cache_dir is None:
+            return None
+        return self.cache_dir / "ngram.pt"
+    
     def fit(self, max_fit_samples: int = 10000) -> "BehaviourTracker":
-        """Fit the analyzers on training data.
+        """Fit the analyzers on training data, or load from cache.
         
-        This should be called before training starts.
+        If a cache_dir was provided and cached files exist, the analyzers
+        are loaded from disk instead of re-fitting.  After a fresh fit the
+        distributions are saved to cache_dir for next time.
         
         Args:
             max_fit_samples: Maximum samples for fitting distributions
@@ -106,27 +131,46 @@ class BehaviourTracker:
         Returns:
             self for method chaining
         """
+        bigram_path = self._bigram_cache_path()
+        ngram_path = self._ngram_cache_path()
+        
+        # --- Bigram ---
         if self.config.bigram_enabled:
-            print("Fitting bigram analyzer...")
-            self.bigram_analyzer = BigramAnalyzer(
-                vocab_size=self.vocab_size,
-                device=self.device,
-            )
-            self.bigram_analyzer.fit(self.train_dataloader, max_samples=max_fit_samples)
+            if bigram_path is not None and bigram_path.exists():
+                print(f"Loading cached bigram distribution from {bigram_path}")
+                self.bigram_analyzer = BigramAnalyzer.load(str(bigram_path), device=self.device)
+            else:
+                print("Fitting bigram analyzer...")
+                self.bigram_analyzer = BigramAnalyzer(
+                    vocab_size=self.vocab_size,
+                    device=self.device,
+                )
+                self.bigram_analyzer.fit(self.train_dataloader, max_samples=max_fit_samples)
+                if bigram_path is not None:
+                    self.bigram_analyzer.save(str(bigram_path))
+                    print(f"  Saved bigram cache to {bigram_path}")
             print(f"  Bigram stats: {self.bigram_analyzer.get_stats()}")
         
+        # --- N-gram ---
         if self.config.ngram_enabled:
-            print("Fitting n-gram analyzer...")
-            self.ngram_analyzer = NgramAnalyzer(
-                vocab_size=self.vocab_size,
-                device=self.device,
-                max_common_ngrams=1000,
-            )
-            self.ngram_analyzer.extract_common_ngrams_from_data(
-                self.train_dataloader,
-                max_n=self.config.ngram_max_n,
-                max_samples=max_fit_samples,
-            )
+            if ngram_path is not None and ngram_path.exists():
+                print(f"Loading cached n-gram distribution from {ngram_path}")
+                self.ngram_analyzer = NgramAnalyzer.load(str(ngram_path), device=self.device)
+            else:
+                print("Fitting n-gram analyzer...")
+                self.ngram_analyzer = NgramAnalyzer(
+                    vocab_size=self.vocab_size,
+                    device=self.device,
+                    max_common_ngrams=1000,
+                )
+                self.ngram_analyzer.extract_common_ngrams_from_data(
+                    self.train_dataloader,
+                    max_n=self.config.ngram_max_n,
+                    max_samples=max_fit_samples,
+                )
+                if ngram_path is not None:
+                    self.ngram_analyzer.save(str(ngram_path))
+                    print(f"  Saved n-gram cache to {ngram_path}")
             print(f"  N-gram stats: {self.ngram_analyzer.get_stats()}")
         
         self._is_fitted = True
@@ -150,7 +194,7 @@ class BehaviourTracker:
             
             bigram_score, bigram_entropy = self.bigram_analyzer.compute_average_bigram_score(
                 self.model,
-                self.val_dataloader,
+                self.val_dataloader.dataset,
                 n_samples=self.config.bigram_n_samples,
                 seed=self.config.seed,
             )

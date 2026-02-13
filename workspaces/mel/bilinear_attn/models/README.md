@@ -38,8 +38,8 @@ Each layer is **attention + residual** (no MLP in this repo’s core architectur
 - Token embedding: `E ∈ R^{V × d_model}`
 - Token unembedding `U ∈ R^{d_model x V}`
 - Per-layer projections (all are standard Linear):
-  - `Wq, Wk, Wv ∈ R^{d_model × d_model}` (+ biases optional)
-  - `Wo ∈ R^{d_model × d_model}` (+ bias optional; recommended ON)
+  - `Wq, Wk ∈ R^{d_model × d_model}` (+ biases optional via `use_bias_qk`)
+  - `Wv, Wo ∈ R^{d_model × d_model}` (no bias)
 - RoPE buffers (not learned): sin/cos cached up to `n_ctx`
 
 ### Forward pass
@@ -118,8 +118,7 @@ model:
   norm_type: rmsnorm
   norm_place: pre_unembed
   use_rmsnorm_qk: false
-  use_bias_qkv: true
-  use_bias_o: true
+  use_bias_qk: true
 
 init:
   std_embed: 0.02
@@ -157,8 +156,7 @@ model:
   norm_type: rmsnorm
   norm_place: pre_unembed
   use_rmsnorm_qk: false
-  use_bias_qkv: true
-  use_bias_o: true
+  use_bias_qk: true
 
 init:
   std_embed: 0.02
@@ -196,8 +194,7 @@ model:
   norm_type: rmsnorm
   norm_place: pre_unembed
   use_rmsnorm_qk: false
-  use_bias_qkv: true
-  use_bias_o: true
+  use_bias_qk: true
 
 init:
   std_embed: 0.02

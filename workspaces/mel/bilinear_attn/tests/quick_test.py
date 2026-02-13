@@ -28,8 +28,7 @@ test_config = {
         "attn_scale": 0.2,
         "rope_base": 10000,
         "use_rmsnorm_qk": False,
-        "use_bias_qkv": True,
-        "use_bias_o": True,
+        "use_bias_qk": True,
     },
     "init": {"std_embed": 0.02, "std_qkv": 0.02, "std_o": 0.01},
 }
