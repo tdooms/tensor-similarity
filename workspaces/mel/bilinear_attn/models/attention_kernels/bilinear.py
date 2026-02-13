@@ -23,8 +23,7 @@ class BilinearAttention(nn.Module):
         n_ctx: int,
         scale: float = 1.0,
         use_rmsnorm_qk: bool = False,
-        use_bias_qkv: bool = True,
-        use_bias_o: bool = True,
+        use_bias_qk: bool = True,
         rope_base: int = 10000,
     ) -> None:
         super().__init__()
@@ -40,12 +39,12 @@ class BilinearAttention(nn.Module):
         causal_mask = torch.tril(torch.ones(n_ctx, n_ctx))
         self.register_buffer("causal_mask", causal_mask, persistent=False)
         
-        self.q1 = nn.Linear(d_model, d_model, bias=use_bias_qkv)
-        self.k1 = nn.Linear(d_model, d_model, bias=use_bias_qkv)
-        self.q2 = nn.Linear(d_model, d_model, bias=use_bias_qkv)
-        self.k2 = nn.Linear(d_model, d_model, bias=use_bias_qkv)
-        self.v = nn.Linear(d_model, d_model, bias=use_bias_qkv)
-        self.o = nn.Linear(d_model, d_model, bias=use_bias_o)
+        self.q1 = nn.Linear(d_model, d_model, bias=use_bias_qk)
+        self.k1 = nn.Linear(d_model, d_model, bias=use_bias_qk)
+        self.q2 = nn.Linear(d_model, d_model, bias=use_bias_qk)
+        self.k2 = nn.Linear(d_model, d_model, bias=use_bias_qk)
+        self.v = nn.Linear(d_model, d_model, bias=False)
+        self.o = nn.Linear(d_model, d_model, bias=False)
     
     def forward(self, x: torch.Tensor, return_debug: bool = False):
         """Forward pass with optional debug outputs.
@@ -124,8 +123,7 @@ class QuadraticAttention(nn.Module):
         n_ctx: int,
         scale: float = 1.0,
         use_rmsnorm_qk: bool = False,
-        use_bias_qkv: bool = True,
-        use_bias_o: bool = True,
+        use_bias_qk: bool = True,
         rope_base: int = 10000,
     ) -> None:
         super().__init__()
@@ -141,10 +139,10 @@ class QuadraticAttention(nn.Module):
         causal_mask = torch.tril(torch.ones(n_ctx, n_ctx))
         self.register_buffer("causal_mask", causal_mask, persistent=False)
         
-        self.q = nn.Linear(d_model, d_model, bias=use_bias_qkv)
-        self.k = nn.Linear(d_model, d_model, bias=use_bias_qkv)
-        self.v = nn.Linear(d_model, d_model, bias=use_bias_qkv)
-        self.o = nn.Linear(d_model, d_model, bias=use_bias_o)
+        self.q = nn.Linear(d_model, d_model, bias=use_bias_qk)
+        self.k = nn.Linear(d_model, d_model, bias=use_bias_qk)
+        self.v = nn.Linear(d_model, d_model, bias=False)
+        self.o = nn.Linear(d_model, d_model, bias=False)
     
     def forward(self, x: torch.Tensor, return_debug: bool = False):
         """Forward pass with optional debug outputs.

@@ -226,3 +226,51 @@ def test_tracker_save_load_history(model, dummy_dataloader):
         tracker2.load_history(str(save_path))
         
         assert len(tracker2.metrics_history) == len(tracker.metrics_history)
+
+
+def test_tracker_cache_save_and_load(model, dummy_dataloader):
+    """Test that fit() saves to cache and subsequent fit() loads from cache."""
+    config = TrackerConfig(
+        bigram_compute_every=10,
+        ngram_compute_every=10,
+        bigram_n_samples=10,
+        ngram_max_n=4,
+        ngram_max_val_batches=5,
+    )
+    
+    with tempfile.TemporaryDirectory() as tmpdir:
+        cache_dir = Path(tmpdir) / "cache"
+        
+        # First tracker: fits from data, saves to cache
+        tracker1 = BehaviourTracker(
+            model=model,
+            train_dataloader=dummy_dataloader,
+            val_dataloader=dummy_dataloader,
+            vocab_size=V,
+            run_dir=str(Path(tmpdir) / "run1"),
+            cache_dir=str(cache_dir),
+            config=config,
+        )
+        tracker1.fit(max_fit_samples=20)
+        
+        assert (cache_dir / "bigram.pt").exists()
+        assert (cache_dir / "ngram.pt").exists()
+        
+        orig_bigram_total = tracker1.bigram_analyzer.total_bigrams
+        orig_ngram_ns = sorted(tracker1.ngram_analyzer.common_ngrams.keys())
+        
+        # Second tracker: loads from cache (no dataloader iteration needed)
+        tracker2 = BehaviourTracker(
+            model=model,
+            train_dataloader=dummy_dataloader,
+            val_dataloader=dummy_dataloader,
+            vocab_size=V,
+            run_dir=str(Path(tmpdir) / "run2"),
+            cache_dir=str(cache_dir),
+            config=config,
+        )
+        tracker2.fit(max_fit_samples=20)
+        
+        assert tracker2._is_fitted
+        assert tracker2.bigram_analyzer.total_bigrams == orig_bigram_total
+        assert sorted(tracker2.ngram_analyzer.common_ngrams.keys()) == orig_ngram_ns

@@ -47,8 +47,7 @@ class AttentionLM(nn.Module):
         attn_scale: float = 0.2,
         rope_base: int = 10000,
         use_rmsnorm_qk: bool = False,
-        use_bias_qkv: bool = True,
-        use_bias_o: bool = True,
+        use_bias_qk: bool = True,
         std_embed: float = 0.02,
         std_qkv: float = 0.02,
         std_o: float = 0.01,
@@ -108,8 +107,7 @@ class AttentionLM(nn.Module):
                 n_ctx=n_ctx,
                 scale=attn_scale,
                 use_rmsnorm_qk=use_rmsnorm_qk,
-                use_bias_qkv=use_bias_qkv,
-                use_bias_o=use_bias_o,
+                use_bias_qk=use_bias_qk,
                 rope_base=rope_base,
             )
             for _ in range(n_layers)
@@ -139,10 +137,6 @@ class AttentionLM(nn.Module):
             nn.init.normal_(layer.v.weight, mean=0.0, std=std_qkv)
             nn.init.normal_(layer.o.weight, mean=0.0, std=std_o)
             
-            if layer.v.bias is not None:
-                nn.init.zeros_(layer.v.bias)
-            if layer.o.bias is not None:
-                nn.init.zeros_(layer.o.bias)
     
     def forward(self, input_ids: torch.Tensor, return_debug: bool = False):
         """Forward pass.
@@ -203,8 +197,7 @@ class AttentionLM(nn.Module):
             attn_scale=model_cfg.get("attn_scale", 0.2),
             rope_base=model_cfg.get("rope_base", 10000),
             use_rmsnorm_qk=model_cfg.get("use_rmsnorm_qk", False),
-            use_bias_qkv=model_cfg.get("use_bias_qkv", True),
-            use_bias_o=model_cfg.get("use_bias_o", True),
+            use_bias_qk=model_cfg.get("use_bias_qk", True),
             std_embed=init_cfg.get("std_embed", 0.02),
             std_qkv=init_cfg.get("std_qkv", 0.02),
             std_o=init_cfg.get("std_o", 0.01),

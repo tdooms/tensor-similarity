@@ -16,6 +16,7 @@ def main():
     parser.add_argument("--behaviour-every", type=int, default=100, help="Compute behaviour metrics every N steps")
     parser.add_argument("--no-bigram", action="store_true", help="Disable bigram tracking")
     parser.add_argument("--no-ngram", action="store_true", help="Disable n-gram tracking")
+    parser.add_argument("--behaviour-cache-dir", type=str, default="cache/behaviour", help="Directory for cached bigram/ngram distributions")
     parser.add_argument("--wandb", action="store_true", help="Enable Weights & Biases logging")
     args = parser.parse_args()
     
@@ -70,6 +71,7 @@ def main():
             vocab_size=model_cfg["vocab_size"],
             device=device,
             config=tracker_config,
+            cache_dir=args.behaviour_cache_dir,
         )
         
         print("Fitting behaviour analyzers...")

@@ -56,7 +56,7 @@ class TestMuonParamGrouping:
         assert "unembed.weight" not in muon_names
 
     def test_biases_not_muon(self):
-        model = _make_model(use_bias_qkv=True, use_bias_o=True)
+        model = _make_model(use_bias_qk=True)
         muon_names = [n for n, p in model.named_parameters() if _is_muon_param(n, p)]
         bias_names = [n for n in muon_names if "bias" in n]
         assert len(bias_names) == 0, f"Biases should not be Muon params: {bias_names}"
@@ -68,7 +68,7 @@ class TestMuonParamGrouping:
         assert len(norm_names) == 0, f"Norm weights should not be Muon params: {norm_names}"
 
     def test_muon_param_count(self):
-        model = _make_model(use_bias_qkv=False, use_bias_o=False)
+        model = _make_model(use_bias_qk=False)
         muon_names = [n for n, p in model.named_parameters() if _is_muon_param(n, p)]
         # 4 projections * N_LAYERS
         assert len(muon_names) == 4 * N_LAYERS
@@ -83,7 +83,7 @@ class TestCreateOptimizerMuon:
         assert isinstance(result, Optimizers)
 
     def test_muon_optimizer_has_three_param_groups(self):
-        model = _make_model(use_bias_qkv=True, use_bias_o=True)
+        model = _make_model(use_bias_qk=True)
         result = create_optimizer(model, use_muon=True)
         # 3 groups: muon, adam_decay, adam_nodecay
         assert len(result.muon.param_groups) == 3

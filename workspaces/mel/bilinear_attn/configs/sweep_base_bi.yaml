@@ -13,8 +13,7 @@ model:
   norm_type: layernorm
   norm_places: []
   use_rmsnorm_qk: false
-  use_bias_qkv: true
-  use_bias_o: true
+  use_bias_qk: true
 
 init:
   std_embed: 0.02

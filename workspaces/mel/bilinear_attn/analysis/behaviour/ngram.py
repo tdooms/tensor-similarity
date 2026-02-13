@@ -9,6 +9,7 @@ and l_gram^n is the average loss on predicting final tokens of common n-grams.
 import torch
 import torch.nn.functional as F
 from collections import defaultdict
+from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 from tqdm import tqdm
 
@@ -108,26 +109,44 @@ class NgramAnalyzer:
         Returns:
             self for method chaining
         """
-        # Count all n-grams
+        # Count all n-grams using vectorised unfold per batch
         ngram_counts: Dict[int, Dict[Tuple[int, ...], int]] = {
             n: defaultdict(int) for n in range(2, max_n + 1)
         }
         
         n_samples = 0
         for batch in tqdm(dataloader, desc="Counting n-grams"):
-            input_ids = batch["input_ids"]
+            input_ids = batch["input_ids"]  # (B, T)
+            attn_mask = batch.get("attention_mask", None)  # (B, T) or None
+            batch_size = input_ids.shape[0]
             
-            for seq in input_ids:
-                seq = seq.tolist()
-                for n in range(2, max_n + 1):
-                    for i in range(len(seq) - n + 1):
-                        ngram = tuple(seq[i:i+n])
-                        ngram_counts[n][ngram] += 1
+            # Determine how many sequences to use from this batch
+            if max_samples is not None:
+                take = min(batch_size, max_samples - n_samples)
+                input_ids = input_ids[:take]
+                if attn_mask is not None:
+                    attn_mask = attn_mask[:take]
+            
+            # Use unfold to extract all n-gram windows as tensors
+            for n in range(2, max_n + 1):
+                # windows: (B, T-n+1, n)
+                windows = input_ids.unfold(1, n, 1)
                 
-                n_samples += 1
-                if max_samples is not None and n_samples >= max_samples:
-                    break
+                # Build validity mask: all n positions in the window must be non-padding
+                if attn_mask is not None:
+                    # mask_windows: (B, T-n+1, n) — unfold the mask the same way
+                    mask_windows = attn_mask.unfold(1, n, 1)
+                    # A window is valid only if every position is 1
+                    window_valid = mask_windows.min(dim=2).values.bool()  # (B, T-n+1)
+                    # Select only valid windows
+                    windows = windows[window_valid]  # (num_valid, n)
+                else:
+                    windows = windows.reshape(-1, n)
+                
+                for row in windows.tolist():
+                    ngram_counts[n][tuple(row)] += 1
             
+            n_samples += input_ids.shape[0]
             if max_samples is not None and n_samples >= max_samples:
                 break
         
@@ -319,6 +338,59 @@ class NgramAnalyzer:
             results.update(scores)
         
         return results
+    
+    def save(self, path: str) -> None:
+        """Save the fitted n-gram data to disk.
+        
+        Args:
+            path: File path to save to (e.g. 'cache/ngram.pt')
+        """
+        if not self._is_fitted:
+            raise RuntimeError("Must fit n-grams before saving")
+        
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        
+        # Convert defaultdicts to regular dicts for pickling
+        ngram_counts = {
+            n: dict(counts) for n, counts in self.ngram_counts.items()
+        }
+        
+        torch.save({
+            "vocab_size": self.vocab_size,
+            "max_common_ngrams": self.max_common_ngrams,
+            "common_ngrams": dict(self.common_ngrams),
+            "ngram_counts": ngram_counts,
+        }, path)
+    
+    @classmethod
+    def load(cls, path: str, device: str = "cpu") -> "NgramAnalyzer":
+        """Load fitted n-gram data from disk.
+        
+        Args:
+            path: File path to load from
+            device: Device for computations
+            
+        Returns:
+            Fitted NgramAnalyzer instance
+        """
+        data = torch.load(path, weights_only=False)
+        
+        analyzer = cls(
+            vocab_size=data["vocab_size"],
+            device=device,
+            max_common_ngrams=data["max_common_ngrams"],
+        )
+        
+        analyzer.common_ngrams = data["common_ngrams"]
+        
+        # Restore defaultdicts for ngram_counts
+        analyzer.ngram_counts = defaultdict(lambda: defaultdict(int))
+        for n, counts in data["ngram_counts"].items():
+            analyzer.ngram_counts[n] = defaultdict(int, counts)
+        
+        analyzer._is_fitted = True
+        
+        return analyzer
     
     def get_stats(self) -> Dict:
         """Get statistics about fitted n-grams."""

@@ -1,9 +1,11 @@
 """Tests for n-gram analysis."""
 import pytest
+import tempfile
 import torch
+from pathlib import Path
 
 from analysis.behaviour.ngram import NgramAnalyzer
-from tests.analysis_tests.conftest import V, T, B
+from tests.analysis_tests.conftest import V, T, B, PAD_TOKEN
 
 
 def test_ngram_analyzer_init():
@@ -98,6 +100,46 @@ def test_ngram_stats(dummy_dataloader):
     
     stats_after = analyzer.get_stats()
     assert stats_after["fitted"] == True
+
+
+def test_ngram_save_load(dummy_dataloader):
+    """Test saving and loading n-gram data."""
+    analyzer = NgramAnalyzer(vocab_size=V, max_common_ngrams=50)
+    analyzer.extract_common_ngrams_from_data(
+        dummy_dataloader, max_n=4, max_samples=30
+    )
+    
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = str(Path(tmpdir) / "ngram.pt")
+        analyzer.save(path)
+        
+        loaded = NgramAnalyzer.load(path)
+        
+        assert loaded._is_fitted
+        assert loaded.vocab_size == V
+        assert loaded.max_common_ngrams == 50
+        
+        # Check common_ngrams match for each n
+        for n in analyzer.common_ngrams:
+            assert n in loaded.common_ngrams
+            assert len(loaded.common_ngrams[n]) == len(analyzer.common_ngrams[n])
+
+
+def test_ngram_ignores_padding(padded_dataloader):
+    """Test that n-gram extraction ignores padding tokens."""
+    analyzer = NgramAnalyzer(vocab_size=V, max_common_ngrams=100)
+    analyzer.extract_common_ngrams_from_data(
+        padded_dataloader, max_n=4, max_samples=50
+    )
+    
+    assert analyzer._is_fitted
+    
+    # Real tokens are in [1, V); PAD_TOKEN positions have attention_mask=0.
+    # No extracted n-gram should contain the padding token.
+    for n, ngrams in analyzer.common_ngrams.items():
+        for context, final in ngrams:
+            assert PAD_TOKEN not in context, f"Padding token found in {n}-gram context: {context}"
+            assert final != PAD_TOKEN, f"Padding token found as {n}-gram final token"
 
 
 def test_ngram_not_fitted_raises():
