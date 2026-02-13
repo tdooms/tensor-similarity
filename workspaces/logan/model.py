@@ -39,12 +39,15 @@ class AttnOnlyModel(nn.Module):
 
         # No normalization inside attention
         self.attn.norm = nn.Identity()
+        # No positional encoding (disable RoPE)
+        self.attn.rotary = nn.Identity()
 
         self._init_weights()
 
     def _init_weights(self):
         nn.init.normal_(self.embed.weight, std=0.02)
-        # Normal init for output projection and unembed (PyTorch defaults)
+        nn.init.zeros_(self.attn.o.weight)
+        nn.init.zeros_(self.unembed.weight)
 
     def forward(self, x):
         """x: (batch, seq) token ids -> (batch, seq, vocab) logits"""

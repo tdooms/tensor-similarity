@@ -33,7 +33,7 @@ N_CTX = 256
 VOCAB_SIZE_PADDED = ((VOCAB_SIZE + 63) // 64) * 64
 
 # Training
-BATCH_SIZE = 64
+BATCH_SIZE = 32
 EPOCHS = 1
 NUM_STEPS = None  # set dynamically from data
 
@@ -128,12 +128,16 @@ def train():
     n_params = sum(p.numel() for p in model.parameters())
     print(f"Model params: {n_params:,}")
 
-    # Single AdamW optimizer for all parameters
-    all_params = list(model.parameters())
-    print(f"Total params: {sum(p.numel() for p in all_params):,}")
+    # Optimizers: Muon for 2D attention weights, AdamW for embed/unembed
+    adam_params = [model.embed.weight, model.unembed.weight]
+    muon_params = [p for p in model.attn.parameters() if p.ndim == 2]
 
-    optimizer = torch.optim.AdamW(all_params, lr=3e-4, weight_decay=0.1)
-    optimizers = [optimizer]
+    print(f"Adam params: {sum(p.numel() for p in adam_params):,}")
+    print(f"Muon params: {sum(p.numel() for p in muon_params):,}")
+
+    optimizer_adam = torch.optim.AdamW(adam_params, lr=3e-4, weight_decay=0.0)
+    optimizer_muon = Muon(muon_params, lr=0.02, momentum=0.95)
+    optimizers = [optimizer_adam, optimizer_muon]
 
     schedulers = [
         torch.optim.lr_scheduler.CosineAnnealingLR(opt, total_steps)
@@ -180,7 +184,10 @@ def train():
                 opt.zero_grad()
             loss.backward()
 
+            # Momentum warmup for Muon (first 500 steps)
             global_step += 1
+            frac = min(global_step / 500, 1)
+            optimizer_muon.param_groups[0]['momentum'] = (1 - frac) * 0.85 + frac * 0.95
 
             for opt, sched in zip(optimizers, schedulers):
                 opt.step()

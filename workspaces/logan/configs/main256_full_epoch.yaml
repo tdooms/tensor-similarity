@@ -1,0 +1,42 @@
+name: main256_muon_full_epoch
+seed: 42
+
+model:
+  vocab_size: 4096
+  n_ctx: 512
+  d_model: 256
+  n_head: 8
+  n_layers: 2
+  attn_type: quadratic
+  attn_scale: 0.2
+  rope_base: 10000
+  norm_type: none
+  norm_place: none
+  use_rmsnorm_qk: false
+  use_bias_qkv: true
+  use_bias_o: true
+
+init:
+  std_embed: 0.02
+  std_qkv: 0.02
+  std_o: 0.01
+
+train:
+  batch_size: 64
+  lr: 3.0e-4
+  muon_lr: 0.02
+  use_muon: true
+  betas: [0.9, 0.95]
+  weight_decay: 0.1
+  max_steps: 18537
+  warmup_steps: 200
+  lr_decay_frac: 0.2
+  grad_clip: 1.0
+  dtype: bfloat16
+  debug: true
+  eval_every: 500
+  save_every: 2000
+
+loss:
+  type: next_token_ce
+  label_smoothing: 0.0
