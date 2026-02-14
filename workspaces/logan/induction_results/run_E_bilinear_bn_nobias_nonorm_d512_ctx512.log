@@ -1,0 +1,109 @@
+=== Bilinear + BatchNorm + NO BIAS + NO NORM: ctx=512, d=512 ===
+2L attn-only, d=512, 16 heads (d_head=32), bilinear+BN, no bias, no final norm
+Data: DSIR-filtered Pile (streaming), GPT-2 tokenizer, vocab=5000
+Batch: 96, n_ctx: 512, tokens/step: 49,152
+Max steps: 101,725 (5.0B tokens)
+Pile val cache exists at /workspace/tensor-mars/workspaces/logan/cached_tokens/dsir_pile_val_ctx512.pt
+Model parameters: 8,273,920 (compiled)
+Induction eval: 6919 repeated bigrams in 100 val seqs
+Toy eval: 100 samples of [16 random tokens] x 2
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Token indices sequence length is longer than the specified maximum sequence length for this model (1287 > 1024). Running this sequence through the model will result in indexing errors
+  step 100/101725  loss=8.4578  tokens=0.005B  elapsed=31s
+  step 200/101725  loss=8.0833  tokens=0.010B  elapsed=41s
+  step 300/101725  loss=6.7630  tokens=0.015B  elapsed=52s
+  step 400/101725  loss=6.6097  tokens=0.020B  elapsed=62s
+  step 500/101725  loss=6.5157  tokens=0.025B  elapsed=72s
+  step 600/101725  loss=6.3380  tokens=0.029B  elapsed=83s
+  step 700/101725  loss=6.3446  tokens=0.034B  elapsed=94s
+  step 800/101725  loss=6.4212  tokens=0.039B  elapsed=104s
+  step 900/101725  loss=6.1985  tokens=0.044B  elapsed=114s
+  step 1000/101725  loss=6.2597  tokens=0.049B  elapsed=124s
+/workspace/tensor-mars/.venv/lib/python3.13/site-packages/torch/_inductor/compile_fx.py:321: UserWarning: TensorFloat32 tensor cores for float32 matrix multiplication available but not enabled. Consider setting `torch.set_float32_matmul_precision('high')` for better performance.
+  warnings.warn(
+
+  [step 1000, 0.05B tokens] toy_loss_diff=-0.0023 toy_acc=0.0007 | indist_loss_diff=0.1886 frac+=0.608
+  step 1100/101725  loss=6.1864  tokens=0.054B  elapsed=143s
+  step 1200/101725  loss=6.0589  tokens=0.059B  elapsed=154s
+  step 1300/101725  loss=5.9519  tokens=0.064B  elapsed=164s
+  step 1400/101725  loss=6.0337  tokens=0.069B  elapsed=174s
+  step 1500/101725  loss=6.1492  tokens=0.074B  elapsed=184s
+  step 1600/101725  loss=6.0151  tokens=0.079B  elapsed=195s
+  step 1700/101725  loss=5.9723  tokens=0.084B  elapsed=206s
+  step 1800/101725  loss=5.8884  tokens=0.088B  elapsed=215s
+  step 1900/101725  loss=5.9561  tokens=0.093B  elapsed=225s
+  step 2000/101725  loss=5.9664  tokens=0.098B  elapsed=236s
+
+  [step 2000, 0.10B tokens] toy_loss_diff=0.2829 toy_acc=0.0000 | indist_loss_diff=0.1500 frac+=0.598
+  step 2100/101725  loss=5.8641  tokens=0.103B  elapsed=248s
+  step 2200/101725  loss=5.8199  tokens=0.108B  elapsed=259s
+  step 2300/101725  loss=5.8848  tokens=0.113B  elapsed=269s
+  step 2400/101725  loss=5.7987  tokens=0.118B  elapsed=280s
+  step 2500/101725  loss=5.7812  tokens=0.123B  elapsed=291s
+  step 2600/101725  loss=5.9036  tokens=0.128B  elapsed=302s
+  step 2700/101725  loss=5.6193  tokens=0.133B  elapsed=313s
+  step 2800/101725  loss=5.9573  tokens=0.138B  elapsed=324s
+  step 2900/101725  loss=5.7516  tokens=0.143B  elapsed=334s
+  step 3000/101725  loss=5.7283  tokens=0.147B  elapsed=346s
+
+  [step 3000, 0.15B tokens] toy_loss_diff=0.3321 toy_acc=0.0000 | indist_loss_diff=0.2028 frac+=0.617
+  step 3100/101725  loss=5.5986  tokens=0.152B  elapsed=357s
+  step 3200/101725  loss=5.7696  tokens=0.157B  elapsed=368s
+  step 3300/101725  loss=5.6384  tokens=0.162B  elapsed=378s
+  step 3400/101725  loss=5.6692  tokens=0.167B  elapsed=389s
+  step 3500/101725  loss=5.6703  tokens=0.172B  elapsed=400s
+  step 3600/101725  loss=5.7479  tokens=0.177B  elapsed=410s
+  step 3700/101725  loss=5.6671  tokens=0.182B  elapsed=421s
+  step 3800/101725  loss=5.5639  tokens=0.187B  elapsed=432s
+  step 3900/101725  loss=5.5752  tokens=0.192B  elapsed=443s
+  step 4000/101725  loss=5.6361  tokens=0.197B  elapsed=454s
+
+  [step 4000, 0.20B tokens] toy_loss_diff=0.3353 toy_acc=0.0000 | indist_loss_diff=0.2045 frac+=0.618
+  step 4100/101725  loss=5.6438  tokens=0.202B  elapsed=465s
+  step 4200/101725  loss=5.7207  tokens=0.206B  elapsed=474s
+  step 4300/101725  loss=5.5933  tokens=0.211B  elapsed=485s
+  step 4400/101725  loss=5.7073  tokens=0.216B  elapsed=496s
+  step 4500/101725  loss=5.6180  tokens=0.221B  elapsed=507s
+  step 4600/101725  loss=5.4264  tokens=0.226B  elapsed=517s
+  step 4700/101725  loss=5.5635  tokens=0.231B  elapsed=527s
+  step 4800/101725  loss=5.5940  tokens=0.236B  elapsed=539s
+  step 4900/101725  loss=5.4843  tokens=0.241B  elapsed=550s
+  step 5000/101725  loss=5.6341  tokens=0.246B  elapsed=561s
+
+  [step 5000, 0.25B tokens] toy_loss_diff=0.2955 toy_acc=0.0000 | indist_loss_diff=0.2204 frac+=0.621
+  step 5100/101725  loss=5.5827  tokens=0.251B  elapsed=573s
+  step 5200/101725  loss=5.5499  tokens=0.256B  elapsed=584s
+  step 5300/101725  loss=5.6459  tokens=0.261B  elapsed=593s
+  step 5400/101725  loss=5.4897  tokens=0.265B  elapsed=604s
+  step 5500/101725  loss=5.4870  tokens=0.270B  elapsed=615s
+  step 5600/101725  loss=5.4484  tokens=0.275B  elapsed=626s
+  step 5700/101725  loss=5.5762  tokens=0.280B  elapsed=637s
+  step 5800/101725  loss=5.4999  tokens=0.285B  elapsed=648s
+  step 5900/101725  loss=5.5043  tokens=0.290B  elapsed=658s
+  step 6000/101725  loss=5.5593  tokens=0.295B  elapsed=668s
+
+  [step 6000, 0.29B tokens] toy_loss_diff=0.3267 toy_acc=0.0000 | indist_loss_diff=0.2454 frac+=0.621
+  step 6100/101725  loss=5.5004  tokens=0.300B  elapsed=679s
+  step 6200/101725  loss=5.5275  tokens=0.305B  elapsed=690s
+  step 6300/101725  loss=5.5043  tokens=0.310B  elapsed=701s
+  step 6400/101725  loss=5.4708  tokens=0.315B  elapsed=711s
+  step 6500/101725  loss=5.4760  tokens=0.319B  elapsed=720s
+  step 6600/101725  loss=5.5104  tokens=0.324B  elapsed=731s
+  step 6700/101725  loss=5.4334  tokens=0.329B  elapsed=741s
+  step 6800/101725  loss=5.3877  tokens=0.334B  elapsed=752s
+  step 6900/101725  loss=5.3989  tokens=0.339B  elapsed=762s
+  step 7000/101725  loss=5.4731  tokens=0.344B  elapsed=773s
+
+  [step 7000, 0.34B tokens] toy_loss_diff=0.3475 toy_acc=0.0007 | indist_loss_diff=0.2519 frac+=0.629
+  step 7100/101725  loss=5.4555  tokens=0.349B  elapsed=782s
+  step 7200/101725  loss=5.4678  tokens=0.354B  elapsed=793s
+  step 7300/101725  loss=5.4913  tokens=0.359B  elapsed=804s
+  step 7400/101725  loss=5.4653  tokens=0.364B  elapsed=814s
+  step 7500/101725  loss=5.1583  tokens=0.369B  elapsed=826s
+  step 7600/101725  loss=5.4063  tokens=0.374B  elapsed=837s
+  step 7700/101725  loss=5.3301  tokens=0.378B  elapsed=849s
+  step 7800/101725  loss=5.4165  tokens=0.383B  elapsed=858s
+  step 7900/101725  loss=5.3972  tokens=0.388B  elapsed=868s
+  step 8000/101725  loss=5.5026  tokens=0.393B  elapsed=879s
+
+  [step 8000, 0.39B tokens] toy_loss_diff=0.3794 toy_acc=0.0013 | indist_loss_diff=0.2765 frac+=0.635

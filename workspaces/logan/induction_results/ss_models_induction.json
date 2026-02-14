@@ -1,0 +1,102 @@
+{
+  "SimpleStories/SimpleStories-V2-1.25M": {
+    "first_half_ce": 14.143106460571289,
+    "second_half_ce": 14.013514518737793,
+    "loss_diff": 0.1295919418334961,
+    "accuracy": 0.0,
+    "n_params": 1235968,
+    "vocab_size": 4019,
+    "hidden_size": 128,
+    "n_layers": 4
+  },
+  "SimpleStories/SimpleStories-V2-5M": {
+    "first_half_ce": 13.267240524291992,
+    "second_half_ce": 13.037771224975586,
+    "loss_diff": 0.22946929931640625,
+    "accuracy": 0.0006666666666666666,
+    "n_params": 5354496,
+    "vocab_size": 4019,
+    "hidden_size": 256,
+    "n_layers": 6
+  },
+  "SimpleStories/SimpleStories-V2-11M": {
+    "first_half_ce": 12.933266639709473,
+    "second_half_ce": 12.774463653564453,
+    "loss_diff": 0.15880298614501953,
+    "accuracy": 0.0,
+    "n_params": 10985472,
+    "vocab_size": 4019,
+    "hidden_size": 384,
+    "n_layers": 6
+  },
+  "SimpleStories/SimpleStories-V2-30M": {
+    "first_half_ce": 12.993661880493164,
+    "second_half_ce": 12.833941459655762,
+    "loss_diff": 0.15972042083740234,
+    "accuracy": 0.0,
+    "n_params": 29588480,
+    "vocab_size": 4019,
+    "hidden_size": 512,
+    "n_layers": 10
+  },
+  "SimpleStories/SimpleStories-V2-35M": {
+    "first_half_ce": 12.952544212341309,
+    "second_half_ce": 12.843348503112793,
+    "loss_diff": 0.10919570922851562,
+    "accuracy": 0.0,
+    "n_params": 35094528,
+    "vocab_size": 4019,
+    "hidden_size": 512,
+    "n_layers": 12
+  },
+  "SimpleStories/SimpleStories-1.25M": {
+    "first_half_ce": 14.268781661987305,
+    "second_half_ce": 14.082287788391113,
+    "loss_diff": 0.1864938735961914,
+    "accuracy": 0.0013333333333333333,
+    "n_params": 1245824,
+    "vocab_size": 4096,
+    "hidden_size": 128,
+    "n_layers": 4
+  },
+  "SimpleStories/SimpleStories-5M": {
+    "first_half_ce": 13.45833969116211,
+    "second_half_ce": 13.1426420211792,
+    "loss_diff": 0.31569766998291016,
+    "accuracy": 0.0,
+    "n_params": 5374208,
+    "vocab_size": 4096,
+    "hidden_size": 256,
+    "n_layers": 6
+  },
+  "SimpleStories/SimpleStories-11M": {
+    "first_half_ce": 12.966533660888672,
+    "second_half_ce": 12.813897132873535,
+    "loss_diff": 0.15263652801513672,
+    "accuracy": 0.0,
+    "n_params": 11015040,
+    "vocab_size": 4096,
+    "hidden_size": 384,
+    "n_layers": 6
+  },
+  "SimpleStories/SimpleStories-30M": {
+    "first_half_ce": 13.090341567993164,
+    "second_half_ce": 12.925899505615234,
+    "loss_diff": 0.1644420623779297,
+    "accuracy": 0.0006666666666666666,
+    "n_params": 29627904,
+    "vocab_size": 4096,
+    "hidden_size": 512,
+    "n_layers": 10
+  },
+  "SimpleStories/SimpleStories-35M": {
+    "first_half_ce": 13.064000129699707,
+    "second_half_ce": 12.928956985473633,
+    "loss_diff": 0.13504314422607422,
+    "accuracy": 0.0,
+    "n_params": 35133952,
+    "vocab_size": 4096,
+    "hidden_size": 512,
+    "n_layers": 12
+  }
+}

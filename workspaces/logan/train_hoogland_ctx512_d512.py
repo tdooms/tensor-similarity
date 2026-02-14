@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""Self-contained Hoogland et al. replication for induction head formation.
+"""Hoogland replication variant: shorter context (512) + wider model (d=512).
 
-Architecture: 2L attention-only, d_model=256, 8 heads, standard softmax
+Architecture: 2L attention-only, d_model=512, 16 heads, standard softmax
 Data: DSIR-filtered Pile (streaming), GPT-2 tokenizer truncated to vocab=5000
-Target: ~5B tokens, but stop once induction is clearly learned
-Induction eval every 2500 steps to catch onset (reported at 6.5k-17k steps).
+Hypothesis: shorter context + wider model learns induction faster
+(Hoogland found faster induction with shorter context)
 
 This script is fully self-contained — no external model/training imports needed.
 Requires: torch, einops, transformers, datasets, muon
 
 Usage:
-    python train_hoogland_standalone.py
-    python train_hoogland_standalone.py --batch-size 128
-    python train_hoogland_standalone.py --batch-size 128 --no-compile
+    python train_hoogland_ctx512_d512.py
+    python train_hoogland_ctx512_d512.py --batch-size 128
+    python train_hoogland_ctx512_d512.py --batch-size 128 --no-compile
 """
 import math
 import json
@@ -32,9 +32,9 @@ from einops import rearrange, einsum
 
 
 # =============================================================================
-# Config
+# Config — shorter context, wider model
 # =============================================================================
-N_CTX = 1024
+N_CTX = 512
 VOCAB_SIZE = 5000
 TARGET_TOKENS = 5_000_000_000
 
@@ -305,7 +305,7 @@ def cache_pile_val(n_ctx=N_CTX, vocab_size=VOCAB_SIZE, n_val=500, cache_dir=None
         cache_dir = Path(__file__).parent / "cached_tokens"
     cache_dir = Path(cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
-    val_path = cache_dir / "dsir_pile_val.pt"
+    val_path = cache_dir / f"dsir_pile_val_ctx{n_ctx}.pt"
 
     if val_path.exists():
         print(f"Pile val cache exists at {val_path}")
@@ -314,7 +314,7 @@ def cache_pile_val(n_ctx=N_CTX, vocab_size=VOCAB_SIZE, n_val=500, cache_dir=None
     from datasets import load_dataset
     from transformers import GPT2Tokenizer
 
-    print(f"Caching {n_val} Pile val windows...")
+    print(f"Caching {n_val} Pile val windows (n_ctx={n_ctx})...")
     tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
     ds = load_dataset(
         "stanford-crfm/DSIR-filtered-pile-50M",
@@ -347,7 +347,7 @@ def cache_pile_val(n_ctx=N_CTX, vocab_size=VOCAB_SIZE, n_val=500, cache_dir=None
 # Induction evaluation
 # =============================================================================
 
-def make_repeated_sequences(vocab_size, half_len=512, n_sequences=100, seed=42):
+def make_repeated_sequences(vocab_size, half_len=256, n_sequences=100, seed=42):
     rng = np.random.RandomState(seed)
     seqs = rng.randint(1, vocab_size, size=(n_sequences, half_len))
     doubled = np.concatenate([seqs, seqs], axis=1)
@@ -395,15 +395,15 @@ def eval_induction(model, sequences, half_len, device, batch_size=16):
 # =============================================================================
 
 def main(batch_size=64, use_compile=True):
-    d_model = 256
-    n_head = 8
+    d_model = 512
+    n_head = 16
     n_layers = 2
 
     tokens_per_step = batch_size * N_CTX
     max_steps = TARGET_TOKENS // tokens_per_step
 
-    print(f"=== Hoogland et al. Replication (self-contained) ===")
-    print(f"2L attn-only, d={d_model}, {n_head} heads, softmax, no QK norm")
+    print(f"=== Hoogland Variant: ctx={N_CTX}, d={d_model} (wider + shorter) ===")
+    print(f"2L attn-only, d={d_model}, {n_head} heads (d_head={d_model//n_head}), softmax, no QK norm")
     print(f"Data: DSIR-filtered Pile (streaming), GPT-2 tokenizer, vocab={VOCAB_SIZE}")
     print(f"Batch: {batch_size}, n_ctx: {N_CTX}, tokens/step: {tokens_per_step:,}")
     print(f"Max steps: {max_steps:,} ({max_steps * tokens_per_step / 1e9:.1f}B tokens)")
@@ -436,8 +436,8 @@ def main(batch_size=64, use_compile=True):
     n_params = sum(p.numel() for p in model.parameters())
     print(f"Model parameters: {n_params:,} ({'compiled' if use_compile else 'eager'})")
 
-    # Induction test sequences
-    sequences, half_len = make_repeated_sequences(VOCAB_SIZE, half_len=512, n_sequences=100)
+    # Induction test sequences (half_len=256 since n_ctx=512)
+    sequences, half_len = make_repeated_sequences(VOCAB_SIZE, half_len=256, n_sequences=100)
     print(f"Induction test: {sequences.shape[0]} seqs, half_len={half_len}, vocab={VOCAB_SIZE}")
 
     # Optimizer & scheduler
@@ -447,7 +447,7 @@ def main(batch_size=64, use_compile=True):
 
     # Run dir
     timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-    run_dir = Path(f"runs/{timestamp}_hoogland_replication")
+    run_dir = Path(f"runs/{timestamp}_hoogland_ctx512_d512")
     run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / "checkpoints").mkdir(exist_ok=True)
     metrics_file = run_dir / "metrics.jsonl"

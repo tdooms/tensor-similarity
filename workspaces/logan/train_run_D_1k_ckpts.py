@@ -1,18 +1,12 @@
 #!/usr/bin/env python3
-"""Self-contained Hoogland et al. replication for induction head formation.
+"""Run D retrain: Bilinear+BN, no bias, DSIR Pile (d=512, ctx=512).
 
-Architecture: 2L attention-only, d_model=256, 8 heads, standard softmax
-Data: DSIR-filtered Pile (streaming), GPT-2 tokenizer truncated to vocab=5000
-Target: ~5B tokens, but stop once induction is clearly learned
-Induction eval every 2500 steps to catch onset (reported at 6.5k-17k steps).
-
-This script is fully self-contained — no external model/training imports needed.
-Requires: torch, einops, transformers, datasets, muon
+Same architecture and hyperparameters as Run D, but saves 1000 checkpoints
+in a log-linear schedule (dense at start, including initialization).
+Checkpoints are saved as clean state_dicts for HF upload.
 
 Usage:
-    python train_hoogland_standalone.py
-    python train_hoogland_standalone.py --batch-size 128
-    python train_hoogland_standalone.py --batch-size 128 --no-compile
+    python train_run_D_1k_ckpts.py --batch-size 96
 """
 import math
 import json
@@ -20,7 +14,6 @@ import time
 import argparse
 from pathlib import Path
 from datetime import datetime
-from typing import NamedTuple
 
 import torch
 import torch.nn as nn
@@ -34,13 +27,13 @@ from einops import rearrange, einsum
 # =============================================================================
 # Config
 # =============================================================================
-N_CTX = 1024
+N_CTX = 512
 VOCAB_SIZE = 5000
 TARGET_TOKENS = 5_000_000_000
 
 
 # =============================================================================
-# Model components (inlined from mel's codebase)
+# Model components
 # =============================================================================
 
 class Rotary(nn.Module):
@@ -62,10 +55,14 @@ class Rotary(nn.Module):
         return (x * self.cos_cached[:, :seq_len]) + (y * self.sin_cached[:, :seq_len])
 
 
-class SoftmaxAttention(nn.Module):
-    """Standard softmax attention with causal masking and RoPE."""
-    def __init__(self, d_model, n_head, n_ctx, scale=1.0, use_rmsnorm_qk=False,
-                 use_bias_qkv=True, use_bias_o=True, rope_base=10000):
+class BilinearBatchNormAttention(nn.Module):
+    """Bilinear attention with BatchNorm on Q1,K1,Q2,K2 projections and causal masking.
+
+    pattern = (scores1 * scores2) / d_head^2 * causal_mask
+    where scores1 = q1 @ k1.T, scores2 = q2 @ k2.T
+    BatchNorm1d applied to each projection (flattened B*T dimension).
+    """
+    def __init__(self, d_model, n_head, n_ctx, scale=1.0, rope_base=10000):
         super().__init__()
         self.d_head = d_model // n_head
         self.n_head = n_head
@@ -74,47 +71,57 @@ class SoftmaxAttention(nn.Module):
         self.scale = scale
 
         self.rotary = Rotary(self.d_head, n_ctx, base=rope_base)
-        self.norm_qk = nn.RMSNorm(self.d_head) if use_rmsnorm_qk else nn.Identity()
 
-        causal_mask = torch.triu(torch.full((n_ctx, n_ctx), float("-inf")), diagonal=1)
+        causal_mask = torch.tril(torch.ones(n_ctx, n_ctx))
         self.register_buffer("causal_mask", causal_mask, persistent=False)
 
-        self.q = nn.Linear(d_model, d_model, bias=use_bias_qkv)
-        self.k = nn.Linear(d_model, d_model, bias=use_bias_qkv)
-        self.v = nn.Linear(d_model, d_model, bias=use_bias_qkv)
-        self.o = nn.Linear(d_model, d_model, bias=use_bias_o)
+        self.q1 = nn.Linear(d_model, d_model, bias=False)
+        self.k1 = nn.Linear(d_model, d_model, bias=False)
+        self.q2 = nn.Linear(d_model, d_model, bias=False)
+        self.k2 = nn.Linear(d_model, d_model, bias=False)
+        self.v = nn.Linear(d_model, d_model, bias=False)
+        self.o = nn.Linear(d_model, d_model, bias=False)
 
-    def forward(self, x, return_debug=False):
+        self.bn_q1 = nn.BatchNorm1d(d_model)
+        self.bn_k1 = nn.BatchNorm1d(d_model)
+        self.bn_q2 = nn.BatchNorm1d(d_model)
+        self.bn_k2 = nn.BatchNorm1d(d_model)
+
+    def forward(self, x):
         B, T, _ = x.shape
-        q = rearrange(self.q(x), "b t (n_head d_head) -> b t n_head d_head", n_head=self.n_head)
-        k = rearrange(self.k(x), "b t (n_head d_head) -> b t n_head d_head", n_head=self.n_head)
-        v = rearrange(self.v(x), "b t (n_head d_head) -> b t n_head d_head", n_head=self.n_head)
 
-        q = self.rotary(self.norm_qk(q))
-        k = self.rotary(self.norm_qk(k))
+        q1 = self.bn_q1(self.q1(x).reshape(B * T, -1)).reshape(B, T, -1)
+        k1 = self.bn_k1(self.k1(x).reshape(B * T, -1)).reshape(B, T, -1)
+        q2 = self.bn_q2(self.q2(x).reshape(B * T, -1)).reshape(B, T, -1)
+        k2 = self.bn_k2(self.k2(x).reshape(B * T, -1)).reshape(B, T, -1)
 
-        scores = einsum(q, k, "b sq nh dh, b sk nh dh -> b nh sq sk")
-        scores = scores / (self.d_head ** 0.5)
-        scores = scores + self.causal_mask[None, None, :T, :T]
-        pattern = torch.softmax(scores, dim=-1)
+        q1 = rearrange(q1, "b t (nh dh) -> b t nh dh", nh=self.n_head)
+        k1 = rearrange(k1, "b t (nh dh) -> b t nh dh", nh=self.n_head)
+        q2 = rearrange(q2, "b t (nh dh) -> b t nh dh", nh=self.n_head)
+        k2 = rearrange(k2, "b t (nh dh) -> b t nh dh", nh=self.n_head)
+        v = rearrange(self.v(x), "b t (nh dh) -> b t nh dh", nh=self.n_head)
+
+        q1 = self.rotary(q1)
+        k1 = self.rotary(k1)
+        q2 = self.rotary(q2)
+        k2 = self.rotary(k2)
+
+        scores1 = einsum(q1, k1, "b sq nh dh, b sk nh dh -> b nh sq sk")
+        scores2 = einsum(q2, k2, "b sq nh dh, b sk nh dh -> b nh sq sk")
+
+        pattern = (scores1 * scores2) / (self.d_head ** 2)
+        pattern = pattern * self.causal_mask[None, None, :T, :T]
 
         z = einsum(pattern, v, "b nh sq sk, b sk nh dh -> b sq nh dh")
-        z_merge = rearrange(z, "b seq n_head d_head -> b seq (n_head d_head)")
+        z_merge = rearrange(z, "b seq nh dh -> b seq (nh dh)")
         out = x + self.scale * self.o(z_merge)
-
-        if return_debug:
-            return out, {"q": q, "k": k, "v": v, "scores": scores, "pattern": pattern, "z": z}
         return out
 
 
 class AttentionLM(nn.Module):
-    """Autoregressive attention-only language model.
-
-    Architecture: embed -> n_layers x SoftmaxAttention -> LayerNorm -> unembed
-    """
+    """Autoregressive attention-only LM with bilinear+batchnorm attention."""
     def __init__(self, vocab_size, n_ctx, d_model, n_head, n_layers,
-                 attn_scale=1.0, rope_base=10000, use_rmsnorm_qk=False,
-                 use_bias_qkv=True, use_bias_o=True,
+                 attn_scale=1.0, rope_base=10000,
                  std_embed=0.02, std_qkv=0.02, std_o=0.01,
                  norm_type="layernorm"):
         super().__init__()
@@ -132,11 +139,9 @@ class AttentionLM(nn.Module):
             self.final_norm = nn.Identity()
 
         self.layers = nn.ModuleList([
-            SoftmaxAttention(
+            BilinearBatchNormAttention(
                 d_model=d_model, n_head=n_head, n_ctx=n_ctx,
-                scale=attn_scale, use_rmsnorm_qk=use_rmsnorm_qk,
-                use_bias_qkv=use_bias_qkv, use_bias_o=use_bias_o,
-                rope_base=rope_base,
+                scale=attn_scale, rope_base=rope_base,
             )
             for _ in range(n_layers)
         ])
@@ -148,18 +153,14 @@ class AttentionLM(nn.Module):
         nn.init.normal_(self.embed.weight, mean=0.0, std=std_embed)
         nn.init.normal_(self.unembed.weight, mean=0.0, std=std_embed)
         for layer in self.layers:
-            nn.init.normal_(layer.q.weight, mean=0.0, std=std_qkv)
-            nn.init.normal_(layer.k.weight, mean=0.0, std=std_qkv)
+            nn.init.normal_(layer.q1.weight, mean=0.0, std=std_qkv)
+            nn.init.normal_(layer.k1.weight, mean=0.0, std=std_qkv)
+            nn.init.normal_(layer.q2.weight, mean=0.0, std=std_qkv)
+            nn.init.normal_(layer.k2.weight, mean=0.0, std=std_qkv)
             nn.init.normal_(layer.v.weight, mean=0.0, std=std_qkv)
             nn.init.normal_(layer.o.weight, mean=0.0, std=std_o)
-            if layer.q.bias is not None:
-                nn.init.zeros_(layer.q.bias)
-                nn.init.zeros_(layer.k.bias)
-                nn.init.zeros_(layer.v.bias)
-            if layer.o.bias is not None:
-                nn.init.zeros_(layer.o.bias)
 
-    def forward(self, input_ids, return_debug=False):
+    def forward(self, input_ids):
         x = self.embed(input_ids)
         for layer in self.layers:
             x = layer(x)
@@ -177,7 +178,7 @@ def _is_muon_param(name, param):
         return False
     for prefix in ("layers.",):
         if name.startswith(prefix) and name.endswith(".weight"):
-            if ".norm." not in name:
+            if ".bn_" not in name and ".norm" not in name:
                 return True
     return False
 
@@ -189,7 +190,7 @@ def create_optimizer(model, lr=3e-4, muon_lr=0.02, weight_decay=0.1,
         decay, nodecay = [], []
         for n, p in model.named_parameters():
             if not p.requires_grad: continue
-            if "bias" in n or "norm" in n:
+            if "bias" in n or "norm" in n or "bn_" in n:
                 nodecay.append(p)
             else:
                 decay.append(p)
@@ -204,7 +205,7 @@ def create_optimizer(model, lr=3e-4, muon_lr=0.02, weight_decay=0.1,
         if not param.requires_grad: continue
         if _is_muon_param(name, param):
             muon_params.append(param)
-        elif "bias" in name or "norm" in name:
+        elif "bias" in name or "norm" in name or "bn_" in name:
             adam_nodecay.append(param)
         else:
             adam_decay.append(param)
@@ -253,11 +254,10 @@ def evaluate(model, dataloader, device):
 
 
 # =============================================================================
-# Data: streaming DSIR-filtered Pile with GPT-2 tokenizer, vocab truncated to 5000
+# Data
 # =============================================================================
 
 class DSIRPileStreaming(IterableDataset):
-    """Stream DSIR-filtered Pile, tokenize with GPT-2, truncate vocab to 5000."""
     def __init__(self, n_ctx=N_CTX, vocab_size=VOCAB_SIZE):
         self.n_ctx = n_ctx
         self.vocab_size = vocab_size
@@ -265,19 +265,13 @@ class DSIRPileStreaming(IterableDataset):
     def __iter__(self):
         from datasets import load_dataset
         from transformers import GPT2Tokenizer
-
         tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
-        ds = load_dataset(
-            "stanford-crfm/DSIR-filtered-pile-50M",
-            split="train", streaming=True,
-        )
-
+        ds = load_dataset("stanford-crfm/DSIR-filtered-pile-50M", split="train", streaming=True)
         token_buffer = []
         for example in ds:
             tokens = tokenizer.encode(example["contents"])
             tokens = [t % self.vocab_size for t in tokens]
             token_buffer.extend(tokens)
-
             while len(token_buffer) >= self.n_ctx:
                 chunk = token_buffer[:self.n_ctx]
                 token_buffer = token_buffer[self.n_ctx:]
@@ -285,7 +279,6 @@ class DSIRPileStreaming(IterableDataset):
 
 
 class CachedDataset(Dataset):
-    """Pre-cached token windows."""
     def __init__(self, path, n_ctx=N_CTX, max_samples=None):
         data = torch.load(path, weights_only=True).to(torch.long)[:, :n_ctx]
         if max_samples:
@@ -300,34 +293,24 @@ class CachedDataset(Dataset):
 
 
 def cache_pile_val(n_ctx=N_CTX, vocab_size=VOCAB_SIZE, n_val=500, cache_dir=None):
-    """Cache a validation set from the Pile for periodic eval."""
     if cache_dir is None:
         cache_dir = Path(__file__).parent / "cached_tokens"
     cache_dir = Path(cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
-    val_path = cache_dir / "dsir_pile_val.pt"
-
+    val_path = cache_dir / f"dsir_pile_val_ctx{n_ctx}.pt"
     if val_path.exists():
         print(f"Pile val cache exists at {val_path}")
         return val_path
-
     from datasets import load_dataset
     from transformers import GPT2Tokenizer
-
-    print(f"Caching {n_val} Pile val windows...")
+    print(f"Caching {n_val} Pile val windows (n_ctx={n_ctx})...")
     tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
-    ds = load_dataset(
-        "stanford-crfm/DSIR-filtered-pile-50M",
-        split="train", streaming=True,
-    )
-
-    all_chunks = []
-    token_buffer = []
+    ds = load_dataset("stanford-crfm/DSIR-filtered-pile-50M", split="train", streaming=True)
+    all_chunks, token_buffer = [], []
     for example in ds:
         tokens = tokenizer.encode(example["contents"])
         tokens = [t % vocab_size for t in tokens]
         token_buffer.extend(tokens)
-
         while len(token_buffer) >= n_ctx:
             chunk = token_buffer[:n_ctx]
             token_buffer = token_buffer[n_ctx:]
@@ -336,7 +319,6 @@ def cache_pile_val(n_ctx=N_CTX, vocab_size=VOCAB_SIZE, n_val=500, cache_dir=None
                 break
         if len(all_chunks) >= n_val:
             break
-
     val_data = torch.tensor(all_chunks, dtype=torch.int16)
     torch.save(val_data, val_path)
     print(f"Saved: {val_path} ({val_data.shape})")
@@ -347,23 +329,17 @@ def cache_pile_val(n_ctx=N_CTX, vocab_size=VOCAB_SIZE, n_val=500, cache_dir=None
 # Induction evaluation
 # =============================================================================
 
-def make_repeated_sequences(vocab_size, half_len=512, n_sequences=100, seed=42):
-    rng = np.random.RandomState(seed)
-    seqs = rng.randint(1, vocab_size, size=(n_sequences, half_len))
-    doubled = np.concatenate([seqs, seqs], axis=1)
-    return torch.tensor(doubled, dtype=torch.long), half_len
-
-
 @torch.no_grad()
-def eval_induction(model, sequences, half_len, device, batch_size=16):
+def eval_toy_repeated(model, vocab_size, device, n_samples=100, half_len=16):
     model.eval()
-    n = sequences.shape[0]
+    rng = np.random.RandomState(42)
+    seqs = rng.randint(1, vocab_size, size=(n_samples, half_len))
+    doubled = np.concatenate([seqs, seqs], axis=1)
+    sequences = torch.tensor(doubled, dtype=torch.long)
+    batch_size = 32
     all_losses = []
-    total_correct = 0
-    total_tokens = 0
-
-    for start in range(0, n, batch_size):
-        end = min(start + batch_size, n)
+    for start in range(0, n_samples, batch_size):
+        end = min(start + batch_size, n_samples)
         batch = sequences[start:end].to(device)
         logits = model(batch)
         shift_logits = logits[:, :-1, :]
@@ -371,23 +347,108 @@ def eval_induction(model, sequences, half_len, device, batch_size=16):
         B, T, V = shift_logits.shape
         loss = F.cross_entropy(
             shift_logits.reshape(B * T, V), shift_labels.reshape(B * T),
-            reduction="none",
+            reduction="none"
         ).reshape(B, T)
         all_losses.append(loss.cpu())
-
-        pred_logits = logits[:, half_len:2*half_len-1, :]
-        targets = batch[:, half_len+1:2*half_len]
-        preds = pred_logits.argmax(dim=-1)
-        total_correct += (preds == targets).sum().item()
-        total_tokens += targets.numel()
-
     all_losses = torch.cat(all_losses, dim=0)
-    mean_loss = all_losses.mean(dim=0).numpy()
-    first_half = mean_loss[:half_len - 1].mean()
-    second_half = mean_loss[half_len:].mean()
-    induction_score = float(first_half - second_half)
-    accuracy = total_correct / total_tokens
-    return induction_score, float(first_half), float(second_half), accuracy
+    first_half_loss = all_losses[:, :half_len - 1].mean().item()
+    second_half_loss = all_losses[:, half_len:].mean().item()
+
+    total_correct, total_tokens = 0, 0
+    for start in range(0, n_samples, batch_size):
+        end = min(start + batch_size, n_samples)
+        batch = sequences[start:end].to(device)
+        logits = model(batch)
+        preds = logits[:, half_len:2*half_len-1, :].argmax(dim=-1)
+        tgt = batch[:, half_len+1:2*half_len]
+        total_correct += (preds == tgt).sum().item()
+        total_tokens += tgt.numel()
+
+    return {
+        "toy_loss_diff": first_half_loss - second_half_loss,
+        "toy_first_loss": first_half_loss,
+        "toy_second_loss": second_half_loss,
+        "toy_accuracy": total_correct / total_tokens,
+    }
+
+
+def _find_repeated_bigrams(data, n_ctx):
+    results = []
+    for seq_idx in range(data.shape[0]):
+        seq = data[seq_idx, :n_ctx].numpy()
+        seen = {}
+        for i in range(len(seq) - 1):
+            bg = (int(seq[i]), int(seq[i + 1]))
+            if bg in seen:
+                if i - seen[bg] > 2:
+                    results.append((seq_idx, seen[bg], i, bg[1]))
+            else:
+                seen[bg] = i
+    return results
+
+
+@torch.no_grad()
+def eval_indist_bigrams(model, val_data, n_ctx, bigram_positions, device):
+    model.eval()
+    batch_size = 16
+    n_seqs = val_data.shape[0]
+    all_losses = []
+    for start in range(0, n_seqs, batch_size):
+        end = min(start + batch_size, n_seqs)
+        batch = val_data[start:end, :n_ctx].to(device)
+        logits = model(batch)
+        shift_logits = logits[:, :-1, :]
+        shift_labels = batch[:, 1:]
+        B, T, V = shift_logits.shape
+        loss = F.cross_entropy(
+            shift_logits.reshape(B * T, V), shift_labels.reshape(B * T),
+            reduction="none"
+        ).reshape(B, T)
+        all_losses.append(loss.cpu())
+    all_losses = torch.cat(all_losses, dim=0)
+
+    first_losses, second_losses = [], []
+    for seq_idx, pos1, pos2, _ in bigram_positions:
+        if pos1 < all_losses.shape[1] and pos2 < all_losses.shape[1]:
+            first_losses.append(all_losses[seq_idx, pos1].item())
+            second_losses.append(all_losses[seq_idx, pos2].item())
+
+    first_losses = np.array(first_losses)
+    second_losses = np.array(second_losses)
+    diff = first_losses - second_losses
+
+    return {
+        "indist_n_bigrams": len(first_losses),
+        "indist_loss_diff": float(diff.mean()),
+        "indist_first_loss": float(first_losses.mean()),
+        "indist_second_loss": float(second_losses.mean()),
+        "indist_frac_positive": float((diff > 0).mean()),
+    }
+
+
+# =============================================================================
+# Checkpoint schedule: 1000 log-linear steps
+# =============================================================================
+
+def make_checkpoint_schedule(max_steps, n_checkpoints=1000):
+    """Generate ~n_checkpoints log-linearly spaced steps including 0 and max_steps."""
+    log_steps = np.geomspace(1, max_steps, n_checkpoints + 505)
+    steps = sorted(set([0] + [int(round(s)) for s in log_steps]))
+    if len(steps) > n_checkpoints:
+        idx = np.round(np.linspace(0, len(steps) - 1, n_checkpoints)).astype(int)
+        steps = sorted(set([steps[i] for i in idx]))
+    # Ensure max_steps is included
+    if steps[-1] != max_steps:
+        steps.append(max_steps)
+    return set(steps)
+
+
+def save_checkpoint(model, step, ckpt_dir):
+    """Save clean state_dict (strip _orig_mod. prefix from torch.compile)."""
+    state = {}
+    for k, v in model.state_dict().items():
+        state[k.replace("_orig_mod.", "")] = v
+    torch.save(state, ckpt_dir / f"step_{step:06d}.pt")
 
 
 # =============================================================================
@@ -395,23 +456,23 @@ def eval_induction(model, sequences, half_len, device, batch_size=16):
 # =============================================================================
 
 def main(batch_size=64, use_compile=True):
-    d_model = 256
-    n_head = 8
+    d_model = 512
+    n_head = 16
     n_layers = 2
 
     tokens_per_step = batch_size * N_CTX
     max_steps = TARGET_TOKENS // tokens_per_step
 
-    print(f"=== Hoogland et al. Replication (self-contained) ===")
-    print(f"2L attn-only, d={d_model}, {n_head} heads, softmax, no QK norm")
+    ckpt_steps = make_checkpoint_schedule(max_steps, n_checkpoints=1000)
+    print(f"=== Run D retrain: Bilinear+BN, No Bias, 1000 checkpoints ===")
+    print(f"2L attn-only, d={d_model}, {n_head} heads, bilinear+BN, no bias")
     print(f"Data: DSIR-filtered Pile (streaming), GPT-2 tokenizer, vocab={VOCAB_SIZE}")
     print(f"Batch: {batch_size}, n_ctx: {N_CTX}, tokens/step: {tokens_per_step:,}")
     print(f"Max steps: {max_steps:,} ({max_steps * tokens_per_step / 1e9:.1f}B tokens)")
+    print(f"Checkpoint steps: {len(ckpt_steps)} (first few: {sorted(ckpt_steps)[:10]})")
 
-    # Cache val set
     val_path = cache_pile_val(n_ctx=N_CTX, vocab_size=VOCAB_SIZE, n_val=500)
 
-    # Streaming train, cached val
     train_ds = DSIRPileStreaming(n_ctx=N_CTX, vocab_size=VOCAB_SIZE)
     val_ds = CachedDataset(val_path, n_ctx=N_CTX, max_samples=500)
     train_dl = DataLoader(train_ds, batch_size=batch_size, drop_last=True)
@@ -426,44 +487,54 @@ def main(batch_size=64, use_compile=True):
     model = AttentionLM(
         vocab_size=VOCAB_SIZE, n_ctx=N_CTX, d_model=d_model, n_head=n_head,
         n_layers=n_layers, attn_scale=1.0, rope_base=10000,
-        use_rmsnorm_qk=False, use_bias_qkv=True, use_bias_o=True,
         std_embed=0.02, std_qkv=0.02, std_o=0.01, norm_type="layernorm",
     )
     model = model.to(device)
+
+    # Save step 0 (initialization) BEFORE compile
+    run_dir = Path(f"runs/run_D_1k_ckpts")
+    run_dir.mkdir(parents=True, exist_ok=True)
+    ckpt_dir = run_dir / "checkpoints"
+    ckpt_dir.mkdir(exist_ok=True)
+    metrics_file = run_dir / "metrics.jsonl"
+
+    # Step 0 checkpoint (init)
+    save_checkpoint(model, 0, ckpt_dir)
+    print(f"Saved step 0 (initialization)")
+
     if use_compile:
         model = torch.compile(model)
 
     n_params = sum(p.numel() for p in model.parameters())
     print(f"Model parameters: {n_params:,} ({'compiled' if use_compile else 'eager'})")
 
-    # Induction test sequences
-    sequences, half_len = make_repeated_sequences(VOCAB_SIZE, half_len=512, n_sequences=100)
-    print(f"Induction test: {sequences.shape[0]} seqs, half_len={half_len}, vocab={VOCAB_SIZE}")
+    # Pre-compute induction eval data
+    val_data = torch.load(val_path, weights_only=True).to(torch.long)[:, :N_CTX]
+    bigram_positions = _find_repeated_bigrams(val_data[:100], N_CTX)
+    print(f"Induction eval: {len(bigram_positions)} repeated bigrams in 100 val seqs")
 
-    # Optimizer & scheduler
     optimizer = create_optimizer(model, lr=3e-4, muon_lr=0.02, weight_decay=0.1,
                                  betas=(0.9, 0.95), use_muon=True)
     scheduler = create_scheduler(optimizer, warmup_steps=1000, max_steps=max_steps, lr_decay_frac=0.1)
-
-    # Run dir
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-    run_dir = Path(f"runs/{timestamp}_hoogland_replication")
-    run_dir.mkdir(parents=True, exist_ok=True)
-    (run_dir / "checkpoints").mkdir(exist_ok=True)
-    metrics_file = run_dir / "metrics.jsonl"
 
     def log(d, step):
         d["step"] = step
         with open(metrics_file, "a") as f:
             f.write(json.dumps(d) + "\n")
 
-    # Training
-    induction_found = False
+    # Eval step 0
+    toy0 = eval_toy_repeated(model, VOCAB_SIZE, device, n_samples=100, half_len=16)
+    indist0 = eval_indist_bigrams(model, val_data[:100], N_CTX, bigram_positions, device)
+    log({**toy0, **indist0, "tokens_seen_B": 0.0}, 0)
+    print(f"  [step 0] toy_diff={toy0['toy_loss_diff']:.4f} indist_diff={indist0['indist_loss_diff']:.4f}")
+    model.train()
+
+    saved_count = 1  # already saved step 0
     step = 0
     t0 = time.time()
 
     for batch in train_dl:
-        if step >= max_steps or induction_found:
+        if step >= max_steps:
             break
 
         input_ids = batch["input_ids"].to(device)
@@ -479,70 +550,48 @@ def main(batch_size=64, use_compile=True):
         scheduler.step()
         step += 1
 
-        # Log every 10 steps
+        # Log metrics every 10 steps
         if step % 10 == 0:
+            log({"train_loss": loss.item(), "lr": scheduler.get_last_lr()[0]}, step)
+
+        # Print progress every 100 steps
+        if step % 100 == 0:
             elapsed = time.time() - t0
             tokens_so_far = step * tokens_per_step
-            log({"train_loss": loss.item(), "lr": scheduler.get_last_lr()[0]}, step)
-            if step % 100 == 0:
-                print(f"  step {step}/{max_steps}  loss={loss.item():.4f}  "
-                      f"tokens={tokens_so_far/1e9:.3f}B  elapsed={elapsed:.0f}s")
+            print(f"  step {step}/{max_steps}  loss={loss.item():.4f}  "
+                  f"tokens={tokens_so_far/1e9:.3f}B  ckpts={saved_count}  elapsed={elapsed:.0f}s")
 
-        # Eval + induction every 2500 steps
-        if step % 2500 == 0:
-            val_loss = evaluate(model, val_dl, device)
-            log({"val_loss": val_loss}, step)
+        # Save checkpoint if this step is in the schedule
+        if step in ckpt_steps:
+            save_checkpoint(model, step, ckpt_dir)
+            saved_count += 1
 
-            score, first, second, accuracy = eval_induction(model, sequences, half_len, device)
-            tokens_seen = step * tokens_per_step
-            print(f"\n  [step {step}, {tokens_seen/1e9:.2f}B tokens] "
-                  f"induction_score={score:.4f} "
-                  f"1st={first:.4f} 2nd={second:.4f} "
-                  f"toy_acc={accuracy:.6f} ({accuracy*100:.4f}%)")
-            log({
-                "induction_score": score,
-                "induction_first_half_loss": first,
-                "induction_second_half_loss": second,
-                "toy_induction_accuracy": accuracy,
-                "tokens_seen_B": tokens_seen / 1e9,
-            }, step)
-
-            if accuracy > 0.10:
-                induction_found = True
-                print(f"\n  *** INDUCTION FOUND at step {step} ({tokens_seen/1e9:.2f}B tokens)! ***\n")
-
-            model.train()
-
-        # Save checkpoint every 10000 steps
-        if step % 10000 == 0:
-            torch.save({
-                "step": step,
-                "model_state_dict": model.state_dict(),
-            }, run_dir / "checkpoints" / f"step_{step}.pt")
+            # Run induction eval at checkpoint steps (but not too frequently)
+            # Eval at every checkpoint for first 100 steps, then every ~10 checkpoints
+            sorted_so_far = sorted([s for s in ckpt_steps if s <= step])
+            ckpt_idx = len(sorted_so_far)
+            if step <= 100 or ckpt_idx % 10 == 0 or step == max_steps:
+                tokens_seen = step * tokens_per_step
+                toy = eval_toy_repeated(model, VOCAB_SIZE, device, n_samples=100, half_len=16)
+                indist = eval_indist_bigrams(model, val_data[:100], N_CTX, bigram_positions, device)
+                log({**toy, **indist, "tokens_seen_B": tokens_seen / 1e9}, step)
+                print(f"  [step {step}, {tokens_seen/1e9:.2f}B, ckpt {saved_count}] "
+                      f"toy_diff={toy['toy_loss_diff']:.4f} indist_diff={indist['indist_loss_diff']:.4f}")
+                model.train()
 
     # Final eval
-    if not induction_found:
-        val_loss = evaluate(model, val_dl, device)
-        score, first, second, accuracy = eval_induction(model, sequences, half_len, device)
-        log({"val_loss": val_loss}, step)
-        log({
-            "induction_score": score,
-            "induction_first_half_loss": first,
-            "induction_second_half_loss": second,
-            "toy_induction_accuracy": accuracy,
-            "tokens_seen_B": step * tokens_per_step / 1e9,
-        }, step)
+    val_loss = evaluate(model, val_dl, device)
+    toy = eval_toy_repeated(model, VOCAB_SIZE, device, n_samples=100, half_len=16)
+    indist = eval_indist_bigrams(model, val_data[:100], N_CTX, bigram_positions, device)
+    log({"val_loss": val_loss, **toy, **indist, "tokens_seen_B": step * tokens_per_step / 1e9}, step)
+    print(f"\nFinal: toy_diff={toy['toy_loss_diff']:.4f} indist_diff={indist['indist_loss_diff']:.4f}")
+    print(f"Total checkpoints saved: {saved_count}")
+    print(f"Trained on {step * tokens_per_step / 1e9:.1f}B tokens")
 
-    torch.save({
-        "step": step,
-        "model_state_dict": model.state_dict(),
-    }, run_dir / "checkpoints" / "final.pt")
-
-    print(f"\nDone at step {step}. Run dir: {run_dir}")
-    if induction_found:
-        print(f"Induction was found! Stopping early.")
-    else:
-        print(f"Induction NOT found after {step} steps ({step * tokens_per_step / 1e9:.1f}B tokens)")
+    # Save checkpoint schedule as JSON for reference
+    schedule = sorted(ckpt_steps)
+    with open(run_dir / "checkpoint_schedule.json", "w") as f:
+        json.dump({"steps": schedule, "n_checkpoints": len(schedule)}, f)
 
 
 if __name__ == "__main__":
