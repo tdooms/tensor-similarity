@@ -4,7 +4,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from models.transformer import AttentionLM, NORM_TYPES, VALID_NORM_PLACES
+from models.transformer import AttentionLM, MaxRMSNorm, NORM_TYPES, VALID_NORM_PLACES
 from train.optim import (
     create_optimizer,
     create_scheduler,
@@ -216,6 +216,10 @@ class TestNormType:
     def test_layernorm_uses_layernorm(self):
         model = _make_model(norm_type="layernorm", norm_places=["pre_unembed"])
         assert isinstance(model.final_norm, nn.LayerNorm)
+
+    def test_maxrmsnorm_uses_maxrmsnorm(self):
+        model = _make_model(norm_type="maxrmsnorm", norm_places=["pre_unembed"])
+        assert isinstance(model.final_norm, MaxRMSNorm)
 
     def test_none_uses_identity(self):
         model = _make_model(norm_type="none", norm_places=["pre_unembed"])
