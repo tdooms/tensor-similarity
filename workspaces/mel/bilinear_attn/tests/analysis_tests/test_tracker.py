@@ -274,3 +274,158 @@ def test_tracker_cache_save_and_load(model, dummy_dataloader):
         assert tracker2._is_fitted
         assert tracker2.bigram_analyzer.total_bigrams == orig_bigram_total
         assert sorted(tracker2.ngram_analyzer.common_ngrams.keys()) == orig_ngram_ns
+
+
+def _save_fake_checkpoint(model, path, step):
+    """Helper: save a checkpoint in the same format as Trainer.save_checkpoint."""
+    torch.save({
+        "step": step,
+        "model_state_dict": model.state_dict(),
+        "optimizer_state_dict": {},
+        "scheduler_state_dict": {},
+    }, path)
+
+
+def test_evaluate_checkpoint(model, dummy_dataloader):
+    """Test evaluating a single checkpoint."""
+    config = TrackerConfig(
+        bigram_compute_every=10,
+        ngram_compute_every=10,
+        bigram_n_samples=10,
+        ngram_max_n=3,
+        ngram_max_val_batches=5,
+    )
+    
+    with tempfile.TemporaryDirectory() as tmpdir:
+        ckpt_path = Path(tmpdir) / "step_100.pt"
+        _save_fake_checkpoint(model, ckpt_path, step=100)
+        
+        tracker = BehaviourTracker(
+            model=model,
+            train_dataloader=dummy_dataloader,
+            val_dataloader=dummy_dataloader,
+            vocab_size=V,
+            run_dir=tmpdir,
+            config=config,
+        )
+        tracker.fit(max_fit_samples=20)
+        
+        metrics = tracker.evaluate_checkpoint(ckpt_path)
+        
+        assert metrics["step"] == 100
+        assert "checkpoint" in metrics
+        assert "bigram_score" in metrics
+        assert "bigram_entropy" in metrics
+        assert "bigram_gap" in metrics
+        assert isinstance(metrics["bigram_score"], float)
+
+
+def test_evaluate_checkpoint_unfitted_raises(model, dummy_dataloader):
+    """Test that evaluate_checkpoint raises if tracker is not fitted."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        ckpt_path = Path(tmpdir) / "step_0.pt"
+        _save_fake_checkpoint(model, ckpt_path, step=0)
+        
+        tracker = BehaviourTracker(
+            model=model,
+            train_dataloader=dummy_dataloader,
+            val_dataloader=dummy_dataloader,
+            vocab_size=V,
+            run_dir=tmpdir,
+        )
+        
+        with pytest.raises(RuntimeError, match="fit"):
+            tracker.evaluate_checkpoint(ckpt_path)
+
+
+def test_evaluate_checkpoints_from_dir(model, dummy_dataloader):
+    """Test evaluating all checkpoints found in a run directory."""
+    config = TrackerConfig(
+        bigram_compute_every=10,
+        ngram_enabled=False,
+        bigram_n_samples=10,
+    )
+    
+    with tempfile.TemporaryDirectory() as tmpdir:
+        run_dir = Path(tmpdir)
+        ckpt_dir = run_dir / "checkpoints"
+        ckpt_dir.mkdir()
+        
+        # Save two checkpoints at different steps
+        _save_fake_checkpoint(model, ckpt_dir / "step_500.pt", step=500)
+        _save_fake_checkpoint(model, ckpt_dir / "step_1000.pt", step=1000)
+        
+        tracker = BehaviourTracker(
+            model=model,
+            train_dataloader=dummy_dataloader,
+            val_dataloader=dummy_dataloader,
+            vocab_size=V,
+            run_dir=str(run_dir),
+            config=config,
+        )
+        tracker.fit(max_fit_samples=20)
+        
+        all_metrics = tracker.evaluate_checkpoints(run_dir=run_dir)
+        
+        assert len(all_metrics) == 2
+        assert all_metrics[0]["step"] == 500
+        assert all_metrics[1]["step"] == 1000
+        assert "bigram_score" in all_metrics[0]
+        assert "bigram_score" in all_metrics[1]
+        
+        # Check that history was updated
+        assert len(tracker.metrics_history) == 2
+        
+        # Check that file was written
+        assert (run_dir / "behaviour_metrics.jsonl").exists()
+
+
+def test_evaluate_checkpoints_explicit_paths(model, dummy_dataloader):
+    """Test evaluating an explicit list of checkpoint paths."""
+    config = TrackerConfig(
+        bigram_compute_every=10,
+        ngram_enabled=False,
+        bigram_n_samples=10,
+    )
+    
+    with tempfile.TemporaryDirectory() as tmpdir:
+        ckpt1 = Path(tmpdir) / "a.pt"
+        ckpt2 = Path(tmpdir) / "b.pt"
+        _save_fake_checkpoint(model, ckpt1, step=200)
+        _save_fake_checkpoint(model, ckpt2, step=100)
+        
+        tracker = BehaviourTracker(
+            model=model,
+            train_dataloader=dummy_dataloader,
+            val_dataloader=dummy_dataloader,
+            vocab_size=V,
+            run_dir=tmpdir,
+            config=config,
+        )
+        tracker.fit(max_fit_samples=20)
+        
+        all_metrics = tracker.evaluate_checkpoints(
+            checkpoint_paths=[ckpt1, ckpt2],
+            save=False,
+        )
+        
+        # Should be sorted by step
+        assert all_metrics[0]["step"] == 100
+        assert all_metrics[1]["step"] == 200
+
+
+def test_evaluate_checkpoints_no_dir_raises(model, dummy_dataloader):
+    """Test that evaluate_checkpoints raises without run_dir or paths."""
+    config = TrackerConfig(ngram_enabled=False, bigram_n_samples=10)
+    
+    tracker = BehaviourTracker(
+        model=model,
+        train_dataloader=dummy_dataloader,
+        val_dataloader=dummy_dataloader,
+        vocab_size=V,
+        config=config,
+    )
+    tracker.fit(max_fit_samples=20)
+    
+    with pytest.raises(ValueError, match="checkpoint_paths or run_dir"):
+        tracker.evaluate_checkpoints()

@@ -1,4 +1,5 @@
 import json
+import yaml
 import torch
 from datetime import datetime
 from pathlib import Path
@@ -92,6 +93,10 @@ class Trainer:
         self.run_dir.mkdir(parents=True, exist_ok=True)
         (self.run_dir / "checkpoints").mkdir(exist_ok=True)
         (self.run_dir / "errors").mkdir(exist_ok=True)
+        
+        # Save config for reproducibility and post-hoc analysis
+        with open(self.run_dir / "config.yaml", "w") as f:
+            yaml.dump(self.cfg, f, default_flow_style=False)
         
         self.step = 0
         self.metrics_file = self.run_dir / "metrics.jsonl"

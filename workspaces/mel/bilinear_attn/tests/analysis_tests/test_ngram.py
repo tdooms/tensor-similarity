@@ -35,19 +35,19 @@ def test_ngram_loss_computation(model, dummy_dataloader):
         dummy_dataloader, max_n=3, max_samples=30
     )
     
-    loss = analyzer.compute_ngram_loss(model, n=2, batch_size=8)
+    loss = analyzer.compute_ngram_loss(model, n=2, bos_token_id=0, batch_size=8)
     
     assert isinstance(loss, float)
     assert loss > 0
     assert loss < float('inf')
 
 
-def test_position_loss_computation(model, dummy_dataloader):
-    """Test computing position loss."""
+def test_test_loss_computation(model, dummy_dataloader):
+    """Test computing test loss (l_test)."""
     analyzer = NgramAnalyzer(vocab_size=V)
     
-    loss = analyzer.compute_position_loss(
-        model, dummy_dataloader, position=1, max_batches=5
+    loss = analyzer.compute_test_loss(
+        model, dummy_dataloader, n=2, bos_token_id=0, max_batches=5
     )
     
     assert isinstance(loss, float)
@@ -63,11 +63,11 @@ def test_ngram_score_computation(model, dummy_dataloader):
     )
     
     scores = analyzer.compute_ngram_score(
-        model, dummy_dataloader, n=2, max_val_batches=5
+        model, dummy_dataloader, n=2, bos_token_id=0, max_val_batches=5
     )
     
     assert "2gram_loss" in scores
-    assert "position_2_loss" in scores
+    assert "2gram_test_loss" in scores
     assert "2gram_score" in scores
     assert scores["2gram_score"] > 0
 
@@ -80,7 +80,7 @@ def test_all_ngram_scores(model, dummy_dataloader):
     )
     
     all_scores = analyzer.compute_all_ngram_scores(
-        model, dummy_dataloader, max_val_batches=5
+        model, dummy_dataloader, bos_token_id=0, max_val_batches=5
     )
     
     assert "2gram_score" in all_scores
@@ -151,4 +151,4 @@ def test_ngram_not_fitted_raises():
     model = nn.Linear(V, V)
     
     with pytest.raises(RuntimeError):
-        analyzer.compute_ngram_loss(model, n=2)
+        analyzer.compute_ngram_loss(model, n=2, bos_token_id=0)
