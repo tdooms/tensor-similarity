@@ -1,3 +1,4 @@
+import math
 import torch
 import torch.nn as nn
 from .attention_kernels.bilinear import BilinearAttention, QuadraticAttention
@@ -81,6 +82,8 @@ class AttentionLM(nn.Module):
         attn_type: str = "quadratic",
         norm_type: str = "rmsnorm",
         norm_places: list[str] | None = None,
+        init_type: str = "normal",
+        init_gain: float = 1.0,
     ) -> None:
         super().__init__()
         if norm_places is None:
@@ -96,6 +99,7 @@ class AttentionLM(nn.Module):
         self.attn_type = attn_type
         self.norm_type = norm_type
         self.norm_places = norm_places
+        self.init_type = init_type
         
         attn_cls = ATTN_REGISTRY[attn_type]
         
@@ -144,28 +148,86 @@ class AttentionLM(nn.Module):
         
         self.unembed = nn.Linear(d_model, vocab_size, bias=False)
         
-        self._init_weights(std_embed, std_qkv, std_o)
+        self._init_weights(std_embed, std_qkv, std_o, init_type, init_gain)
     
-    def _init_weights(self, std_embed: float, std_qkv: float, std_o: float) -> None:
-        """Initialize weights with specified standard deviations."""
-        nn.init.normal_(self.embed.weight, mean=0.0, std=std_embed)
-        nn.init.normal_(self.unembed.weight, mean=0.0, std=std_embed)
+    def _init_weights(
+        self,
+        std_embed: float,
+        std_qkv: float,
+        std_o: float,
+        init_type: str = "normal",
+        init_gain: float = 1.0,
+    ) -> None:
+        """Initialize weights.
         
-        for layer in self.layers:
+        init_type:
+            'normal'     – Gaussian init with per-group std (default, original behaviour)
+            'orthogonal' – Orthogonal init (nn.init.orthogonal_) with configurable gain
+            'mup'        – muP-style: QK std=1/√d_head, V std=1/√d_model, O std=1/(√d_model·√n_layers)
+        """
+        assert init_type in ("normal", "orthogonal", "mup"), (
+            f"init_type must be 'normal', 'orthogonal', or 'mup', got {init_type!r}"
+        )
+        
+        if init_type == "normal":
+            nn.init.normal_(self.embed.weight, mean=0.0, std=std_embed)
+            nn.init.normal_(self.unembed.weight, mean=0.0, std=std_embed)
+            
+            for layer in self.layers:
             # BilinearAttention has q1,k1,q2,k2; others have q,k
-            if hasattr(layer, "q1"):
-                qk_projs = [layer.q1, layer.k1, layer.q2, layer.k2]
-            else:
-                qk_projs = [layer.q, layer.k]
+                if hasattr(layer, "q1"):
+                    qk_projs = [layer.q1, layer.k1, layer.q2, layer.k2]
+                else:
+                    qk_projs = [layer.q, layer.k]
+                
+                for proj in qk_projs:
+                    nn.init.normal_(proj.weight, mean=0.0, std=std_qkv)
+                    if proj.bias is not None:
+                        nn.init.zeros_(proj.bias)
+                
+                nn.init.normal_(layer.v.weight, mean=0.0, std=std_qkv)
+                nn.init.normal_(layer.o.weight, mean=0.0, std=std_o)
+        
+        elif init_type == "orthogonal":
+            nn.init.normal_(self.embed.weight, mean=0.0, std=std_embed)
+            nn.init.normal_(self.unembed.weight, mean=0.0, std=std_embed)
             
-            for proj in qk_projs:
-                nn.init.normal_(proj.weight, mean=0.0, std=std_qkv)
-                if proj.bias is not None:
-                    nn.init.zeros_(proj.bias)
+            for layer in self.layers:
+                if hasattr(layer, "q1"):
+                    qk_projs = [layer.q1, layer.k1, layer.q2, layer.k2]
+                else:
+                    qk_projs = [layer.q, layer.k]
+                
+                for proj in qk_projs:
+                    nn.init.orthogonal_(proj.weight, gain=init_gain)
+                    if proj.bias is not None:
+                        nn.init.zeros_(proj.bias)
+                
+                nn.init.orthogonal_(layer.v.weight, gain=init_gain)
+                nn.init.orthogonal_(layer.o.weight, gain=init_gain)
+        
+        else:  # mup
+            nn.init.normal_(self.embed.weight, mean=0.0, std=std_embed)
+            nn.init.normal_(self.unembed.weight, mean=0.0, std=std_embed)
             
-            nn.init.normal_(layer.v.weight, mean=0.0, std=std_qkv)
-            nn.init.normal_(layer.o.weight, mean=0.0, std=std_o)
+            d_head = self.d_model // self.n_head
+            std_qk = 1.0 / math.sqrt(d_head)
+            std_v = 1.0 / math.sqrt(self.d_model)
+            std_o_mup = 1.0 / (math.sqrt(self.d_model) * math.sqrt(self.n_layers))
             
+            for layer in self.layers:
+                if hasattr(layer, "q1"):
+                    qk_projs = [layer.q1, layer.k1, layer.q2, layer.k2]
+                else:
+                    qk_projs = [layer.q, layer.k]
+                
+                for proj in qk_projs:
+                    nn.init.normal_(proj.weight, mean=0.0, std=std_qk)
+                    if proj.bias is not None:
+                        nn.init.zeros_(proj.bias)
+                
+                nn.init.normal_(layer.v.weight, mean=0.0, std=std_v)
+                nn.init.normal_(layer.o.weight, mean=0.0, std=std_o_mup)
     
     def forward(self, input_ids: torch.Tensor, return_debug: bool = False):
         """Forward pass.
@@ -233,4 +295,6 @@ class AttentionLM(nn.Module):
             attn_type=model_cfg.get("attn_type", "quadratic"),
             norm_type=model_cfg.get("norm_type", "rmsnorm"),
             norm_places=model_cfg.get("norm_places", []),
+            init_type=init_cfg.get("init_type", "normal"),
+            init_gain=init_cfg.get("init_gain", 1.0),
         )
