@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 
 from .bigram import BigramAnalyzer
 from .ngram import NgramAnalyzer
+from .ablation import compute_ablated_loss, compute_val_loss
 
 
 @dataclass
@@ -31,6 +32,11 @@ class TrackerConfig:
     
     # Loss tracking
     loss_enabled: bool = True
+    
+    # Position-ablated loss
+    ablation_enabled: bool = True
+    ablation_compute_every: int = 500
+    ablation_max_val_batches: int = 50
     
     # General
     seed: int = 42
@@ -216,6 +222,24 @@ class BehaviourTracker:
             )
             metrics.update(ngram_metrics)
         
+        # Position-ablated loss
+        if (self.config.ablation_enabled and
+            step % self.config.ablation_compute_every == 0):
+            
+            val_loss = compute_val_loss(
+                self.model, self.val_dataloader,
+                device=self.device,
+                max_batches=self.config.ablation_max_val_batches,
+            )
+            ablated_loss = compute_ablated_loss(
+                self.model, self.val_dataloader,
+                device=self.device,
+                max_batches=self.config.ablation_max_val_batches,
+            )
+            metrics["val_loss"] = val_loss
+            metrics["ablated_loss"] = ablated_loss
+            metrics["ablation_gap"] = ablated_loss - val_loss
+        
         return metrics
     
     def should_compute(self, step: int) -> bool:
@@ -230,6 +254,8 @@ class BehaviourTracker:
         if self.config.bigram_enabled and step % self.config.bigram_compute_every == 0:
             return True
         if self.config.ngram_enabled and step % self.config.ngram_compute_every == 0:
+            return True
+        if self.config.ablation_enabled and step % self.config.ablation_compute_every == 0:
             return True
         return False
     
@@ -400,6 +426,21 @@ class BehaviourTracker:
                 max_val_batches=self.config.ngram_max_val_batches,
             )
             metrics.update(ngram_metrics)
+        
+        if self.config.ablation_enabled:
+            val_loss = compute_val_loss(
+                self.model, self.val_dataloader,
+                device=self.device,
+                max_batches=self.config.ablation_max_val_batches,
+            )
+            ablated_loss = compute_ablated_loss(
+                self.model, self.val_dataloader,
+                device=self.device,
+                max_batches=self.config.ablation_max_val_batches,
+            )
+            metrics["val_loss"] = val_loss
+            metrics["ablated_loss"] = ablated_loss
+            metrics["ablation_gap"] = ablated_loss - val_loss
         
         return metrics
     
