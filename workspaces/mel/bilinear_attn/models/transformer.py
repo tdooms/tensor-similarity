@@ -3,6 +3,32 @@ import torch.nn as nn
 from .attention_kernels.bilinear import BilinearAttention, QuadraticAttention
 from .attention_kernels.softmax import SoftmaxAttention
 
+
+class MaxRMSNorm(nn.Module):
+    """Normalize by the largest per-token RMS in the sequence.
+
+    For input x of shape (B, T, D):
+        e_t   = mean_d(x_{t,d}^2)          # (B, T, 1)
+        m     = max_t(e_t)                  # (B, 1, 1)
+        scale = 1 / sqrt(m + eps)           # (B, 1, 1)
+        out   = scale * x                    # (B, T, D)
+    """
+
+    def __init__(self, normalized_shape: int, eps: float = 1e-6) -> None:
+        super().__init__()
+        self.normalized_shape = normalized_shape
+        self.eps = eps
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        assert x.shape[-1] == self.normalized_shape, (
+            f"expected last dim {self.normalized_shape}, got {x.shape[-1]}"
+        )
+        energy = x.pow(2).mean(dim=-1, keepdim=True)        # (B, T, 1)
+        max_energy = energy.max(dim=-2, keepdim=True).values # (B, 1, 1)
+        scale = (max_energy + self.eps).rsqrt()              # (B, 1, 1)
+        return x * scale
+
+
 ATTN_REGISTRY = {
     "bilinear": BilinearAttention,
     "quadratic": QuadraticAttention,
@@ -10,7 +36,7 @@ ATTN_REGISTRY = {
 }
 
 
-NORM_TYPES = ("none", "rmsnorm", "layernorm")
+NORM_TYPES = ("none", "rmsnorm", "layernorm", "maxrmsnorm")
 VALID_NORM_PLACES = ("post_embed", "pre_layer", "pre_unembed")
 
 
@@ -25,9 +51,10 @@ class AttentionLM(nn.Module):
     Supports attn_type: 'quadratic' (default) or 'softmax'.
     
     norm_type selects the normalisation function:
-        'none'      – no normalization
-        'rmsnorm'   – RMSNorm (default)
-        'layernorm' – LayerNorm
+        'none'       – no normalization
+        'rmsnorm'    – RMSNorm (default)
+        'layernorm'  – LayerNorm
+        'maxrmsnorm' – scale by the largest per-token RMS in the sequence
     
     norm_places controls where normalisation is applied (list):
         []                          – no normalization anywhere
@@ -77,6 +104,8 @@ class AttentionLM(nn.Module):
                 return nn.RMSNorm(d_model)
             elif norm_type == "layernorm":
                 return nn.LayerNorm(d_model)
+            elif norm_type == "maxrmsnorm":
+                return MaxRMSNorm(d_model)
             else:
                 return nn.Identity()
         
