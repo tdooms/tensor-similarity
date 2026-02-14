@@ -239,53 +239,11 @@ def plot_metrics(
     return fig
 
 
-def plot_ablated_loss(
-    metrics: List[Dict],
-    save_path: Optional[str] = None,
-    title: str = "Validation Loss vs Position-Ablated Loss",
-    figsize: Tuple[int, int] = (10, 6),
-) -> plt.Figure:
-    """Plot validation loss and position-ablated loss on the same axes.
-    
-    Args:
-        metrics: List of metric dictionaries
-        save_path: Path to save the figure (optional)
-        title: Plot title
-        figsize: Figure size
-        
-    Returns:
-        Matplotlib figure
-    """
-    fig, ax = plt.subplots(figsize=figsize)
-    
-    val_steps, val_loss = extract_series(metrics, "val_loss")
-    abl_steps, abl_loss = extract_series(metrics, "ablated_loss")
-    
-    if val_steps:
-        ax.plot(val_steps, val_loss, label="Val Loss", marker='o', markersize=3)
-    if abl_steps:
-        ax.plot(abl_steps, abl_loss, label="Ablated Loss (no RoPE)",
-                marker='s', markersize=3, linestyle='--')
-    
-    ax.set_xlabel("Step")
-    ax.set_ylabel("Loss")
-    ax.set_title(title)
-    ax.legend()
-    ax.grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    
-    if save_path:
-        fig.savefig(save_path, dpi=150, bbox_inches='tight')
-    
-    return fig
-
-
 def plot_all_metrics(
     metrics: List[Dict],
     save_path: Optional[str] = None,
     title: str = "Training Metrics Overview",
-    figsize: Tuple[int, int] = (16, 16),
+    figsize: Tuple[int, int] = (16, 12),
     max_n: int = 4,
 ) -> plt.Figure:
     """Create a combined plot with all metrics.
@@ -301,7 +259,7 @@ def plot_all_metrics(
         Matplotlib figure
     """
     fig = plt.figure(figsize=figsize)
-    gs = gridspec.GridSpec(4, 2, figure=fig, hspace=0.35, wspace=0.25)
+    gs = gridspec.GridSpec(3, 2, figure=fig, hspace=0.3, wspace=0.25)
     
     # 1. Loss plot (top left)
     ax1 = fig.add_subplot(gs[0, 0])
@@ -319,20 +277,20 @@ def plot_all_metrics(
     ax1.legend()
     ax1.grid(True, alpha=0.3)
     
-    # 2. Bigram score + entropy (top right)
+    # 2. Bigram score (top right)
     ax2 = fig.add_subplot(gs[0, 1])
     score_steps, bigram_score = extract_series(metrics, "bigram_score")
     entropy_steps, bigram_entropy = extract_series(metrics, "bigram_entropy")
     
     if score_steps:
-        ax2.plot(score_steps, bigram_score, label="Bigram Score", marker='o', markersize=3)
+        ax2.plot(score_steps, bigram_score, label="Score", marker='o', markersize=3)
     if entropy_steps:
-        ax2.plot(entropy_steps, bigram_entropy, label="Bigram Entropy", 
+        ax2.plot(entropy_steps, bigram_entropy, label="Entropy (baseline)", 
                 linestyle='--', alpha=0.7)
     
     ax2.set_xlabel("Step")
-    ax2.set_ylabel("nats")
-    ax2.set_title("Bigram Score & Entropy")
+    ax2.set_ylabel("Bigram Score (nats)")
+    ax2.set_title("Bigram Score")
     ax2.legend()
     ax2.grid(True, alpha=0.3)
     
@@ -370,7 +328,7 @@ def plot_all_metrics(
     ax4.legend()
     ax4.grid(True, alpha=0.3)
     
-    # 5. Position losses (row 3 left)
+    # 5. Position losses (bottom left)
     ax5 = fig.add_subplot(gs[2, 0])
     
     for i, n in enumerate(range(2, max_n + 1)):
@@ -386,7 +344,7 @@ def plot_all_metrics(
     ax5.legend()
     ax5.grid(True, alpha=0.3)
     
-    # 6. Bigram gap (row 3 right)
+    # 6. Bigram gap (bottom right)
     ax6 = fig.add_subplot(gs[2, 1])
     gap_steps, bigram_gap = extract_series(metrics, "bigram_gap")
     
@@ -398,36 +356,6 @@ def plot_all_metrics(
     ax6.set_ylabel("Gap (nats)")
     ax6.set_title("Bigram Gap (score - entropy)")
     ax6.grid(True, alpha=0.3)
-    
-    # 7. Val loss vs Ablated loss (row 4 left)
-    ax7 = fig.add_subplot(gs[3, 0])
-    val_steps2, val_loss2 = extract_series(metrics, "val_loss")
-    abl_steps, abl_loss = extract_series(metrics, "ablated_loss")
-    
-    if val_steps2:
-        ax7.plot(val_steps2, val_loss2, label="Val Loss", marker='o', markersize=3)
-    if abl_steps:
-        ax7.plot(abl_steps, abl_loss, label="Ablated Loss (no RoPE)",
-                marker='s', markersize=3, linestyle='--')
-    
-    ax7.set_xlabel("Step")
-    ax7.set_ylabel("Loss")
-    ax7.set_title("Val Loss vs Position-Ablated Loss")
-    ax7.legend()
-    ax7.grid(True, alpha=0.3)
-    
-    # 8. Ablation gap (row 4 right)
-    ax8 = fig.add_subplot(gs[3, 1])
-    agap_steps, agap = extract_series(metrics, "ablation_gap")
-    
-    if agap_steps:
-        ax8.plot(agap_steps, agap, marker='o', markersize=3, color='teal')
-        ax8.axhline(y=0, color='gray', linestyle='--', alpha=0.5)
-    
-    ax8.set_xlabel("Step")
-    ax8.set_ylabel("Gap (loss units)")
-    ax8.set_title("Ablation Gap (ablated - val)")
-    ax8.grid(True, alpha=0.3)
     
     fig.suptitle(title, fontsize=16, y=1.02)
     
@@ -463,9 +391,6 @@ def create_all_plots(
     plt.close()
     
     plot_ngram_scores(metrics, save_path=output_dir / "ngram_scores.png", max_n=max_n)
-    plt.close()
-    
-    plot_ablated_loss(metrics, save_path=output_dir / "ablated_loss.png")
     plt.close()
     
     # Create combined plot

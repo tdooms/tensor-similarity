@@ -16,7 +16,6 @@ def main():
     parser.add_argument("--behaviour-every", type=int, default=100, help="Compute behaviour metrics every N steps")
     parser.add_argument("--no-bigram", action="store_true", help="Disable bigram tracking")
     parser.add_argument("--no-ngram", action="store_true", help="Disable n-gram tracking")
-    parser.add_argument("--no-ablation", action="store_true", help="Disable position-ablated loss tracking")
     parser.add_argument("--behaviour-cache-dir", type=str, default="cache/behaviour", help="Directory for cached bigram/ngram distributions")
     parser.add_argument("--wandb", action="store_true", help="Enable Weights & Biases logging")
     args = parser.parse_args()
@@ -63,8 +62,6 @@ def main():
             ngram_compute_every=args.behaviour_every,
             ngram_max_n=4,
             ngram_max_val_batches=20,
-            ablation_enabled=not args.no_ablation,
-            ablation_compute_every=args.behaviour_every,
         )
         
         behaviour_tracker = BehaviourTracker(
