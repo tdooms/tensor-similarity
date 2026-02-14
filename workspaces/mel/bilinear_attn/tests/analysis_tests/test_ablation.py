@@ -34,6 +34,69 @@ def test_ablate_rotary_is_identity(model):
     assert torch.allclose(normal_out, restored_out), "Rotary should be restored after context exit"
 
 
+def test_forced_rotary_changes_logits(tiny_config):
+    """Force reversed-frequency rotation on q/k and verify logits change, then revert.
+    
+    Replaces each Rotary.forward with one that flips the cos/sin cache
+    along the frequency dimension, producing a valid but obviously wrong
+    rotation.  Uses softmax attention with large init so the attention
+    contribution is non-negligible.
+    """
+    from models import AttentionLM
+    from models.attention_kernels.rotary import Rotary
+
+    cfg = {
+        **tiny_config,
+        "model": {**tiny_config["model"], "attn_type": "softmax"},
+        "init": {"std_embed": 0.5, "std_qkv": 0.5, "std_o": 0.5},
+    }
+    torch.manual_seed(42)
+    sm_model = AttentionLM.from_config(cfg)
+    sm_model.eval()
+
+    x = torch.randint(0, V, (1, 8))
+
+    # Normal forward
+    with torch.no_grad():
+        normal_logits = sm_model(x).clone()
+
+    # Patch each Rotary to use reversed frequencies (flip cos/sin along d_head)
+    originals = {}
+    for name, m in sm_model.named_modules():
+        if isinstance(m, Rotary):
+            originals[name] = m.forward
+            # Capture the module's own cos/sin but flip along the last dim
+            flipped_cos = m.cos_cached.flip(-1)
+            flipped_sin = m.sin_cached.flip(-1)
+
+            def _reversed_rotary(x, _cos=flipped_cos, _sin=flipped_sin):
+                seq_len = x.size(1)
+                a, b = x.chunk(2, dim=-1)
+                y = torch.cat((-b, a), dim=-1)
+                return (x * _cos[:, :seq_len]) + (y * _sin[:, :seq_len])
+
+            m.forward = _reversed_rotary
+
+    with torch.no_grad():
+        altered_logits = sm_model(x)
+
+    max_diff = (normal_logits - altered_logits).abs().max().item()
+    assert max_diff > 1e-2, \
+        f"Reversed-frequency rotation should change logits, but max diff was {max_diff}"
+
+    # Restore original forwards
+    for name, m in sm_model.named_modules():
+        if name in originals:
+            m.forward = originals[name]
+
+    # Verify restoration
+    with torch.no_grad():
+        restored_logits = sm_model(x)
+
+    assert torch.allclose(normal_logits, restored_logits, atol=1e-6), \
+        "Logits should match after restoring rotary forwards"
+
+
 def test_compute_val_loss(model, dummy_dataloader):
     """Test that compute_val_loss returns a finite float."""
     loss = compute_val_loss(model, dummy_dataloader, device="cpu", max_batches=5)

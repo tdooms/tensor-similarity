@@ -88,6 +88,9 @@ class BehaviourTracker:
         self.config = config or TrackerConfig()
         self.tokenizer = tokenizer
         
+        # BOS token id for n-gram evaluation
+        self.bos_token_id = getattr(tokenizer, "bos_token_id", 0) if tokenizer else 0
+        
         # Set up run directory
         if run_dir is not None:
             self.run_dir = Path(run_dir)
@@ -173,6 +176,7 @@ class BehaviourTracker:
                 )
                 self.ngram_analyzer.extract_common_ngrams_from_data(
                     self.train_dataloader,
+                    tokenizer=self.tokenizer,
                     max_n=self.config.ngram_max_n,
                     max_samples=max_fit_samples,
                 )
@@ -218,6 +222,7 @@ class BehaviourTracker:
             ngram_metrics = self.ngram_analyzer.compute_all_ngram_scores(
                 self.model,
                 self.val_dataloader,
+                bos_token_id=self.bos_token_id,
                 max_val_batches=self.config.ngram_max_val_batches,
             )
             metrics.update(ngram_metrics)
@@ -423,6 +428,7 @@ class BehaviourTracker:
             ngram_metrics = self.ngram_analyzer.compute_all_ngram_scores(
                 self.model,
                 self.val_dataloader,
+                bos_token_id=self.bos_token_id,
                 max_val_batches=self.config.ngram_max_val_batches,
             )
             metrics.update(ngram_metrics)

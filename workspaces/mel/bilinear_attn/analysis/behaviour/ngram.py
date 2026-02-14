@@ -96,19 +96,34 @@ class NgramAnalyzer:
     def extract_common_ngrams_from_data(
         self,
         dataloader,
+        tokenizer=None,
         max_n: int = 5,
-        max_samples: Optional[int] = 10000,
+        max_samples: Optional[int] = None,
     ) -> "NgramAnalyzer":
         """Extract common n-grams from training data by frequency.
         
+        N-grams containing special tokens (BOS, EOS, PAD, UNK) are excluded.
+        
         Args:
             dataloader: DataLoader yielding batches with 'input_ids'
+            tokenizer: HuggingFace tokenizer (used to identify special token ids).
+                       If None, falls back to self.tokenizer.
             max_n: Maximum n to consider
-            max_samples: Maximum samples to process
+            max_samples: Maximum samples to process (None = full corpus)
             
         Returns:
             self for method chaining
         """
+        tok = tokenizer or self.tokenizer
+        
+        # Collect special token ids to exclude
+        special_ids: Set[int] = set()
+        if tok is not None:
+            for attr in ("bos_token_id", "eos_token_id", "pad_token_id", "unk_token_id"):
+                tid = getattr(tok, attr, None)
+                if tid is not None:
+                    special_ids.add(tid)
+        
         # Count all n-grams using vectorised unfold per batch
         ngram_counts: Dict[int, Dict[Tuple[int, ...], int]] = {
             n: defaultdict(int) for n in range(2, max_n + 1)
@@ -127,23 +142,23 @@ class NgramAnalyzer:
                 if attn_mask is not None:
                     attn_mask = attn_mask[:take]
             
+            # Build a boolean mask: True where token is NOT special
+            not_special = torch.ones_like(input_ids, dtype=torch.bool)
+            for sid in special_ids:
+                not_special &= (input_ids != sid)
+            # Also respect attention_mask (padding)
+            if attn_mask is not None:
+                not_special &= attn_mask.bool()
+            
             # Use unfold to extract all n-gram windows as tensors
             for n in range(2, max_n + 1):
                 # windows: (B, T-n+1, n)
                 windows = input_ids.unfold(1, n, 1)
+                # validity: every position in the window must be non-special
+                valid_windows = not_special.unfold(1, n, 1).min(dim=2).values.bool()
+                valid = windows[valid_windows]  # (num_valid, n)
                 
-                # Build validity mask: all n positions in the window must be non-padding
-                if attn_mask is not None:
-                    # mask_windows: (B, T-n+1, n) — unfold the mask the same way
-                    mask_windows = attn_mask.unfold(1, n, 1)
-                    # A window is valid only if every position is 1
-                    window_valid = mask_windows.min(dim=2).values.bool()  # (B, T-n+1)
-                    # Select only valid windows
-                    windows = windows[window_valid]  # (num_valid, n)
-                else:
-                    windows = windows.reshape(-1, n)
-                
-                for row in windows.tolist():
+                for row in valid.tolist():
                     ngram_counts[n][tuple(row)] += 1
             
             n_samples += input_ids.shape[0]
@@ -173,13 +188,20 @@ class NgramAnalyzer:
         self,
         model: torch.nn.Module,
         n: int,
-        batch_size: int = 32,
+        bos_token_id: int,
+        batch_size: int = 128,
     ) -> float:
-        """Compute average loss on predicting final tokens of common n-grams.
+        """Compute l_ngram(n): avg CE predicting t_n given [BOS, t_1, ..., t_{n-1}].
+        
+        For each n-gram (t_1, ..., t_n) in the probe set:
+          - input:  [BOS, t_1, ..., t_{n-1}]   (length n)
+          - target: t_n
+          - loss:   CE(logits[:, -1, :], t_n)
         
         Args:
             model: The language model
             n: The n-gram size (e.g., 2 for bigrams)
+            bos_token_id: BOS token id to prepend
             batch_size: Batch size for processing
             
         Returns:
@@ -197,51 +219,50 @@ class NgramAnalyzer:
         n_samples = 0
         
         with torch.no_grad():
-            # Process in batches
             for i in range(0, len(ngrams), batch_size):
                 batch_ngrams = ngrams[i:i+batch_size]
+                bs = len(batch_ngrams)
                 
-                # Pad contexts to same length (n-1)
-                max_ctx_len = n - 1
-                contexts = []
+                # Build input: [BOS, t_1, ..., t_{n-1}]  (length n)
+                inputs = []
                 targets = []
-                
                 for context, final in batch_ngrams:
-                    # Pad context if needed
-                    padded = [0] * (max_ctx_len - len(context)) + context
-                    contexts.append(padded)
+                    inputs.append([bos_token_id] + context)
                     targets.append(final)
                 
-                input_ids = torch.tensor(contexts, device=self.device)
-                target_ids = torch.tensor(targets, device=self.device)
+                input_ids = torch.tensor(inputs, device=self.device)   # (bs, n)
+                target_ids = torch.tensor(targets, device=self.device)  # (bs,)
                 
-                # Get model predictions
-                logits = model(input_ids)  # (batch, ctx_len, vocab)
+                logits = model(input_ids)  # (bs, n, vocab)
+                final_logits = logits[:, -1, :]  # (bs, vocab)
                 
-                # Get logits for final position (predicting the n-gram's last token)
-                final_logits = logits[:, -1, :]  # (batch, vocab)
-                
-                # Compute cross-entropy loss
                 loss = F.cross_entropy(final_logits, target_ids, reduction='sum')
                 total_loss += loss.item()
-                n_samples += len(batch_ngrams)
+                n_samples += bs
         
         return total_loss / n_samples if n_samples > 0 else float('nan')
     
-    def compute_position_loss(
+    def compute_test_loss(
         self,
         model: torch.nn.Module,
         dataloader,
-        position: int,
-        max_batches: Optional[int] = 100,
+        n: int,
+        bos_token_id: int,
+        max_batches: Optional[int] = None,
     ) -> float:
-        """Compute average loss at a specific position in validation sequences.
+        """Compute l_test(n): avg CE predicting x_n given [BOS, x_1, ..., x_{n-1}].
+        
+        For each validation sequence with at least n real tokens:
+          - input:  [BOS, x_1, ..., x_{n-1}]   (length n)
+          - target: x_n
+          - loss:   CE(logits[:, -1, :], x_n)
         
         Args:
             model: The language model
             dataloader: Validation dataloader
-            position: Position n to evaluate (0-indexed)
-            max_batches: Maximum batches to process
+            n: The n-gram size (number of real tokens needed)
+            bos_token_id: BOS token id to prepend
+            max_batches: Maximum batches to process (None = all)
             
         Returns:
             Average cross-entropy loss at position n
@@ -255,23 +276,34 @@ class NgramAnalyzer:
                 if max_batches is not None and i >= max_batches:
                     break
                 
-                input_ids = batch["input_ids"].to(self.device)
-                batch_size, seq_len = input_ids.shape
+                input_ids = batch["input_ids"].to(self.device)  # (B, T)
+                attn_mask = batch.get("attention_mask")
+                if attn_mask is not None:
+                    attn_mask = attn_mask.to(self.device)
                 
-                if position >= seq_len - 1:
+                B, T = input_ids.shape
+                if T < n:
                     continue
                 
-                # Get model predictions
-                logits = model(input_ids)
+                # Only keep sequences with at least n real tokens
+                if attn_mask is not None:
+                    real_len = attn_mask.sum(dim=1)  # (B,)
+                    valid = real_len >= n
+                    if not valid.any():
+                        continue
+                    input_ids = input_ids[valid]
+                    B = input_ids.shape[0]
                 
-                # Get logits at position (predicting position+1)
-                pos_logits = logits[:, position, :]
-                targets = input_ids[:, position + 1]
+                # Build input: [BOS, x_1, ..., x_{n-1}]  (length n)
+                first_n = input_ids[:, :n]  # (B, n)
+                bos_col = torch.full((B, 1), bos_token_id, dtype=torch.long, device=self.device)
+                inp = torch.cat([bos_col, first_n[:, :-1]], dim=1)  # (B, n)
+                targets = first_n[:, -1]  # (B,)  i.e. x_n
                 
-                # Compute loss
-                loss = F.cross_entropy(pos_logits, targets, reduction='sum')
+                logits = model(inp)  # (B, n, V)
+                loss = F.cross_entropy(logits[:, -1, :], targets, reduction='sum')
                 total_loss += loss.item()
-                n_samples += batch_size
+                n_samples += B
         
         return total_loss / n_samples if n_samples > 0 else float('nan')
     
@@ -280,36 +312,34 @@ class NgramAnalyzer:
         model: torch.nn.Module,
         val_dataloader,
         n: int,
-        max_val_batches: int = 100,
+        bos_token_id: int,
+        max_val_batches: Optional[int] = None,
     ) -> Dict[str, float]:
-        """Compute the n-gram score: l_test^n / l_gram^n.
+        """Compute the n-gram score: l_test^n / l_ngram^n.
         
         Args:
             model: The language model
             val_dataloader: Validation dataloader
             n: The n-gram size
-            max_val_batches: Max batches for validation loss
+            bos_token_id: BOS token id to prepend
+            max_val_batches: Max batches for validation loss (None = all)
             
         Returns:
-            Dict with ngram_loss, position_loss, and ngram_score
+            Dict with ngram_loss, test_loss, and ngram_score
         """
-        # Loss on predicting final tokens of common n-grams
-        ngram_loss = self.compute_ngram_loss(model, n)
-        
-        # Loss at position n-1 on validation data (0-indexed, so position n-1 predicts token n)
-        position_loss = self.compute_position_loss(
-            model, val_dataloader, position=n-1, max_batches=max_val_batches
+        ngram_loss = self.compute_ngram_loss(model, n, bos_token_id)
+        test_loss = self.compute_test_loss(
+            model, val_dataloader, n, bos_token_id, max_batches=max_val_batches
         )
         
-        # N-gram score is the ratio
         if ngram_loss > 0:
-            score = position_loss / ngram_loss
+            score = test_loss / ngram_loss
         else:
             score = float('nan')
         
         return {
             f"{n}gram_loss": ngram_loss,
-            f"position_{n}_loss": position_loss,
+            f"{n}gram_test_loss": test_loss,
             f"{n}gram_score": score,
         }
     
@@ -317,14 +347,16 @@ class NgramAnalyzer:
         self,
         model: torch.nn.Module,
         val_dataloader,
-        max_val_batches: int = 100,
+        bos_token_id: int,
+        max_val_batches: Optional[int] = None,
     ) -> Dict[str, float]:
         """Compute n-gram scores for all fitted n values.
         
         Args:
             model: The language model
             val_dataloader: Validation dataloader
-            max_val_batches: Max batches for validation loss
+            bos_token_id: BOS token id to prepend
+            max_val_batches: Max batches for validation loss (None = all)
             
         Returns:
             Dict with all metrics
@@ -334,7 +366,9 @@ class NgramAnalyzer:
         
         results = {}
         for n in sorted(self.common_ngrams.keys()):
-            scores = self.compute_ngram_score(model, val_dataloader, n, max_val_batches)
+            scores = self.compute_ngram_score(
+                model, val_dataloader, n, bos_token_id, max_val_batches
+            )
             results.update(scores)
         
         return results
