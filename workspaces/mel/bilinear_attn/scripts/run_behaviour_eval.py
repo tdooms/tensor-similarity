@@ -39,12 +39,16 @@ def main():
                         help="Disable bigram tracking")
     parser.add_argument("--no-ngram", action="store_true",
                         help="Disable n-gram tracking")
+    parser.add_argument("--no-ablation", action="store_true",
+                        help="Disable position-ablated loss tracking")
     parser.add_argument("--bigram-n-samples", type=int, default=500,
                         help="Number of samples for bigram scoring")
     parser.add_argument("--ngram-max-n", type=int, default=4,
                         help="Maximum n for n-gram scoring")
     parser.add_argument("--ngram-max-val-batches", type=int, default=20,
                         help="Max validation batches for n-gram position loss")
+    parser.add_argument("--ablation-max-val-batches", type=int, default=50,
+                        help="Max validation batches for ablated loss")
     parser.add_argument("--max-fit-samples", type=int, default=5000,
                         help="Max samples for fitting analyzers")
     
@@ -79,6 +83,9 @@ def main():
         ngram_compute_every=1,
         ngram_max_n=args.ngram_max_n,
         ngram_max_val_batches=args.ngram_max_val_batches,
+        ablation_enabled=not args.no_ablation,
+        ablation_compute_every=1,
+        ablation_max_val_batches=args.ablation_max_val_batches,
     )
     
     # Determine output directory
