@@ -1,12 +1,14 @@
 """Behaviour tracker for monitoring model metrics during training.
 
 Provides a unified interface for computing and logging various behavioral
-metrics that can be toggled on/off during training.
+metrics that can be toggled on/off during training or evaluated post-hoc
+on saved checkpoints.
 """
 import json
 import torch
+import yaml
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Callable
+from typing import Dict, List, Optional, Any, Callable, Union
 from dataclasses import dataclass, field
 
 from .bigram import BigramAnalyzer
@@ -346,3 +348,207 @@ class BehaviourTracker:
             self.config.ngram_compute_every = interval
         else:
             raise ValueError(f"Unknown metric: {metric}")
+    
+    # ------------------------------------------------------------------
+    # Checkpoint evaluation
+    # ------------------------------------------------------------------
+    
+    def evaluate_checkpoint(
+        self,
+        checkpoint_path: Union[str, Path],
+    ) -> Dict[str, Any]:
+        """Load model weights from a checkpoint and compute all enabled metrics.
+        
+        The checkpoint must contain a 'model_state_dict' key (the format
+        produced by Trainer.save_checkpoint).  The training step is read
+        from the checkpoint's 'step' key when present.
+        
+        Args:
+            checkpoint_path: Path to a .pt checkpoint file
+            
+        Returns:
+            Dictionary of computed metrics (includes 'step' and 'checkpoint')
+        """
+        if not self._is_fitted:
+            raise RuntimeError("Must call fit() before evaluating checkpoints")
+        
+        checkpoint_path = Path(checkpoint_path)
+        ckpt = torch.load(checkpoint_path, map_location=self.device, weights_only=False)
+        self.model.load_state_dict(ckpt["model_state_dict"])
+        self.model.to(self.device)
+        
+        step = ckpt.get("step", 0)
+        
+        # Force-compute all enabled metrics regardless of interval
+        metrics: Dict[str, Any] = {"step": step, "checkpoint": str(checkpoint_path)}
+        
+        if self.config.bigram_enabled and self.bigram_analyzer is not None:
+            bigram_score, bigram_entropy = self.bigram_analyzer.compute_average_bigram_score(
+                self.model,
+                self.val_dataloader.dataset,
+                n_samples=self.config.bigram_n_samples,
+                seed=self.config.seed,
+            )
+            metrics["bigram_score"] = bigram_score
+            metrics["bigram_entropy"] = bigram_entropy
+            metrics["bigram_gap"] = bigram_score - bigram_entropy
+        
+        if self.config.ngram_enabled and self.ngram_analyzer is not None:
+            ngram_metrics = self.ngram_analyzer.compute_all_ngram_scores(
+                self.model,
+                self.val_dataloader,
+                max_val_batches=self.config.ngram_max_val_batches,
+            )
+            metrics.update(ngram_metrics)
+        
+        return metrics
+    
+    def evaluate_checkpoints(
+        self,
+        checkpoint_paths: Optional[List[Union[str, Path]]] = None,
+        run_dir: Optional[Union[str, Path]] = None,
+        save: bool = True,
+        verbose: bool = True,
+    ) -> List[Dict[str, Any]]:
+        """Evaluate behaviour metrics across multiple checkpoints.
+        
+        Either provide an explicit list of checkpoint paths, or a run_dir
+        whose ``checkpoints/`` subdirectory will be scanned for ``*.pt``
+        files (sorted by training step).
+        
+        Args:
+            checkpoint_paths: Explicit list of checkpoint files
+            run_dir: Run directory containing a checkpoints/ folder.
+                     Ignored when checkpoint_paths is given.
+            save: If True, save results to run_dir or self.run_dir
+            verbose: Print progress
+            
+        Returns:
+            List of metric dicts, one per checkpoint, sorted by step
+        """
+        if not self._is_fitted:
+            raise RuntimeError("Must call fit() before evaluating checkpoints")
+        
+        # Resolve checkpoint list
+        if checkpoint_paths is None:
+            scan_dir = Path(run_dir) if run_dir else self.run_dir
+            if scan_dir is None:
+                raise ValueError("Provide checkpoint_paths or run_dir")
+            ckpt_dir = scan_dir / "checkpoints"
+            if not ckpt_dir.exists():
+                raise FileNotFoundError(f"No checkpoints directory at {ckpt_dir}")
+            checkpoint_paths = sorted(ckpt_dir.glob("*.pt"))
+            if not checkpoint_paths:
+                raise FileNotFoundError(f"No .pt files found in {ckpt_dir}")
+        
+        all_metrics: List[Dict[str, Any]] = []
+        for i, ckpt_path in enumerate(checkpoint_paths):
+            if verbose:
+                print(f"[{i+1}/{len(checkpoint_paths)}] Evaluating {Path(ckpt_path).name} ...")
+            metrics = self.evaluate_checkpoint(ckpt_path)
+            all_metrics.append(metrics)
+            if verbose:
+                summary = {k: f"{v:.4f}" if isinstance(v, float) else v
+                           for k, v in metrics.items() if k != "checkpoint"}
+                print(f"  {summary}")
+        
+        # Sort by step
+        all_metrics.sort(key=lambda m: m["step"])
+        
+        # Merge into history
+        self.metrics_history.extend(all_metrics)
+        
+        # Save
+        if save:
+            save_dir = Path(run_dir) if run_dir else self.run_dir
+            if save_dir is not None:
+                save_dir.mkdir(parents=True, exist_ok=True)
+                out_path = save_dir / "behaviour_metrics.jsonl"
+                with open(out_path, "a") as f:
+                    for m in all_metrics:
+                        f.write(json.dumps(m) + "\n")
+                if verbose:
+                    print(f"Metrics appended to {out_path}")
+        
+        return all_metrics
+    
+    @classmethod
+    def from_run_dir(
+        cls,
+        run_dir: Union[str, Path],
+        config: Optional["TrackerConfig"] = None,
+        device: Optional[str] = None,
+        cache_dir: Optional[str] = None,
+        cfg_path: Optional[Union[str, Path]] = None,
+    ) -> "BehaviourTracker":
+        """Construct a BehaviourTracker from a saved training run.
+        
+        Rebuilds the model from the config, creates dataloaders, and
+        sets up analyzer caches so that ``fit()`` can load from cache.
+        
+        The config YAML is located by searching (in order):
+          1. ``cfg_path`` if provided
+          2. ``<run_dir>/config.yaml``
+          3. The first ``.yaml`` file found in ``run_dir``
+        
+        Args:
+            run_dir: Path to the training run directory
+            config: TrackerConfig override (uses defaults if None)
+            device: Device string (auto-detected if None)
+            cache_dir: Cache directory for analyzers (defaults to
+                       ``<run_dir>/behaviour_cache``)
+            cfg_path: Explicit path to the config YAML
+            
+        Returns:
+            A BehaviourTracker ready for ``fit()`` and checkpoint evaluation
+        """
+        from models import AttentionLM
+        from data import create_dataloaders
+        
+        run_dir = Path(run_dir)
+        device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        
+        # Locate config
+        if cfg_path is not None:
+            cfg_file = Path(cfg_path)
+        elif (run_dir / "config.yaml").exists():
+            cfg_file = run_dir / "config.yaml"
+        else:
+            yamls = list(run_dir.glob("*.yaml"))
+            if not yamls:
+                raise FileNotFoundError(
+                    f"No config YAML found in {run_dir}. Pass cfg_path explicitly."
+                )
+            cfg_file = yamls[0]
+        
+        with open(cfg_file) as f:
+            cfg = yaml.safe_load(f)
+        
+        model_cfg = cfg["model"]
+        train_cfg = cfg.get("train", {})
+        
+        # Build model and dataloaders
+        model = AttentionLM.from_config(cfg)
+        model.to(device)
+        
+        train_dataloader, val_dataloader = create_dataloaders(
+            n_ctx=model_cfg["n_ctx"],
+            batch_size=train_cfg.get("batch_size", 16),
+            max_train_samples=train_cfg.get("max_train_samples"),
+            max_val_samples=train_cfg.get("max_val_samples", 1000),
+        )
+        
+        cache_dir = cache_dir or str(run_dir / "behaviour_cache")
+        
+        tracker = cls(
+            model=model,
+            train_dataloader=train_dataloader,
+            val_dataloader=val_dataloader,
+            vocab_size=model_cfg["vocab_size"],
+            device=device,
+            config=config or TrackerConfig(),
+            run_dir=str(run_dir),
+            cache_dir=cache_dir,
+        )
+        
+        return tracker
