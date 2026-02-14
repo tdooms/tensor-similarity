@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from .bigram import BigramAnalyzer
 from .ngram import NgramAnalyzer
 from .ablation import compute_ablated_loss, compute_val_loss
+from .icl import compute_icl_score
 
 
 @dataclass
@@ -37,6 +38,13 @@ class TrackerConfig:
     ablation_enabled: bool = True
     ablation_compute_every: int = 500
     ablation_max_val_batches: int = 50
+    
+    # ICL score
+    icl_enabled: bool = True
+    icl_compute_every: int = 500
+    icl_k1: int = 50
+    icl_k2: int = 500
+    icl_max_val_batches: Optional[int] = None
     
     # General
     seed: int = 42
@@ -227,6 +235,21 @@ class BehaviourTracker:
             )
             metrics.update(ngram_metrics)
         
+        # ICL score
+        if (self.config.icl_enabled and
+            step % self.config.icl_compute_every == 0):
+            
+            icl_metrics = compute_icl_score(
+                self.model,
+                self.val_dataloader,
+                bos_token_id=self.bos_token_id,
+                k1=self.config.icl_k1,
+                k2=self.config.icl_k2,
+                device=self.device,
+                max_batches=self.config.icl_max_val_batches,
+            )
+            metrics.update(icl_metrics)
+        
         # Position-ablated loss
         if (self.config.ablation_enabled and
             step % self.config.ablation_compute_every == 0):
@@ -261,6 +284,8 @@ class BehaviourTracker:
         if self.config.ngram_enabled and step % self.config.ngram_compute_every == 0:
             return True
         if self.config.ablation_enabled and step % self.config.ablation_compute_every == 0:
+            return True
+        if self.config.icl_enabled and step % self.config.icl_compute_every == 0:
             return True
         return False
     
@@ -447,6 +472,18 @@ class BehaviourTracker:
             metrics["val_loss"] = val_loss
             metrics["ablated_loss"] = ablated_loss
             metrics["ablation_gap"] = ablated_loss - val_loss
+        
+        if self.config.icl_enabled:
+            icl_metrics = compute_icl_score(
+                self.model,
+                self.val_dataloader,
+                bos_token_id=self.bos_token_id,
+                k1=self.config.icl_k1,
+                k2=self.config.icl_k2,
+                device=self.device,
+                max_batches=self.config.icl_max_val_batches,
+            )
+            metrics.update(icl_metrics)
         
         return metrics
     
