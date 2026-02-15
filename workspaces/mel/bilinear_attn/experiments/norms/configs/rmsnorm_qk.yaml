@@ -1,4 +1,4 @@
-name: main256_maxrmsnorm
+name: rmsnorm_qk
 seed: 42
 
 model:
@@ -10,9 +10,11 @@ model:
   attn_type: bilinear
   attn_scale: 0.35
   rope_base: 10000
-  norm_type: layernorm
-  norm_places: [pre_unembed]
-  use_rmsnorm_qk: false
+  # Residual stream normalization (existing)
+  norm_type: rmsnorm
+  norm_places: [pre_layer, pre_unembed]
+  # Q/K vector normalization (existing approach)
+  qk_norm_type: rmsnorm
   use_bias_qk: true
 
 init:
@@ -21,7 +23,6 @@ init:
   std_o: 0.01
   init_type: normal
 
-
 train:
   batch_size: 64
   lr: 3.0e-4
@@ -29,14 +30,14 @@ train:
   use_muon: true
   betas: [0.9, 0.95]
   weight_decay: 0.1
-  max_steps: 10000
+  max_steps: 2500
   warmup_steps: 100
   lr_decay_frac: 0.1
   grad_clip: 1.0
   dtype: bfloat16
-  debug: true
+  debug: false
   eval_every: 100
-  checkpoint_every: 100
+  checkpoint_every: 500
 
 loss:
   type: next_token_ce
