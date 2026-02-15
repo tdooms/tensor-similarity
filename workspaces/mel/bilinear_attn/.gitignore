@@ -3,6 +3,7 @@
 .venv2/
 env/
 venv/
+!data/
 
 uv.lock
 *.egg-info/
