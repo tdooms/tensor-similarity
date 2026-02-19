@@ -28,14 +28,14 @@ from functions.tn_sim import get_interaction_matrix, tensor_similarity, model_si
 device = "mps" if torch.backends.mps.is_available() else "cpu"
 device = "cpu"
 
-#%%
+
 # Create figures directory
 figures_dir = Path("figures")
 figures_dir.mkdir(exist_ok=True)
 savefigBool = False
 print(f"Saving figures to: {figures_dir.absolute()}")
 
-ForgetBool = False  # If True, only train on newly added digit at each stage
+#%% KEY VARIABLES
 
 # Set global sizes
 plt.rcParams.update({
@@ -47,7 +47,8 @@ plt.rcParams.update({
     'legend.fontsize': 18
 })
 
-
+ForgetBool = False  # If True, only train on newly added digit at each stage
+N_SimSteps = 250 # Number of checkpoints to sample for the 500x500 heatmap (uniformly sampled across all stages)
 epoch_setup = 20 # 60
 d_hidden_setup = 128
 d_embed_setup = 256
@@ -331,7 +332,7 @@ plt.show()
 
 # 
 #%%
-# Plot: Progressive digit addition - Tensor similarity and accuracy across seeds
+# PLOT SIMILARITY VS ACCURACY
 fig, ax1 = plt.subplots(figsize=(16, 8))
 
 # Primary y-axis: Tensor Similarity (left)
@@ -407,97 +408,9 @@ plt.show()
 
 
 
-#%%
-# Create heatmap of tensor similarities at key checkpoints across stages
-print("\n=== Computing similarity heatmap at key checkpoints ===")
-
-reference_seed = 42
-
-# Select checkpoints: start (0), middle (50%), end (100%) of each stage
-checkpoint_labels = []
-checkpoint_models = []
-
-for stage_config in digit_curriculum:
-    stage_name = stage_config['name']
-    checkpoints = progressive_checkpoints[reference_seed][stage_name]
-    
-    n_checkpoints = len(checkpoints)
-    
-    # Start, middle, end indices
-    start_idx = 0
-    mid_idx = n_checkpoints // 2
-    end_idx = n_checkpoints - 1
-    
-    for label_suffix, idx in [('start', start_idx), ('mid', mid_idx), ('end', end_idx)]:
-        checkpoint_labels.append(f"{stage_name} ({label_suffix})")
-        
-        # Load model at this checkpoint
-        model_temp = Model.from_config(**base_model_config).to(device)
-        model_temp.load_state_dict(checkpoints[idx]['state_dict'])
-        checkpoint_models.append(model_temp)
-
-# Compute pairwise similarity matrix
-n_checkpoints = len(checkpoint_models)
-similarity_matrix = np.zeros((n_checkpoints, n_checkpoints))
-
-print(f"Computing {n_checkpoints}x{n_checkpoints} similarity matrix...")
-for i in tqdm(range(n_checkpoints), desc="Computing similarities"):
-    for j in range(n_checkpoints):
-        sim = model_similarity(
-            checkpoint_models[i],
-            checkpoint_models[j],
-            include_embedding=True,
-            symmetrize=True
-        )
-        similarity_matrix[i, j] = sim
 
 #%%
-# Plot heatmap
-fig, ax = plt.subplots(figsize=(16, 14))
-
-im = ax.imshow(similarity_matrix, cmap='RdYlBu_r', aspect='auto', vmin=0, vmax=1)
-
-# Set ticks and labels
-ax.set_xticks(range(n_checkpoints))
-ax.set_yticks(range(n_checkpoints))
-ax.set_xticklabels(checkpoint_labels, rotation=90, ha='right')
-ax.set_yticklabels(checkpoint_labels)
-
-# Add colorbar
-cbar = plt.colorbar(im, ax=ax, label='Tensor Similarity', fraction=0.046, pad=0.04)
-
-# Add text annotations (optional - can be commented out if too cluttered)
-for i in range(n_checkpoints):
-    for j in range(n_checkpoints):
-        text = ax.text(j, i, f'{similarity_matrix[i, j]:.2f}',
-                      ha="center", va="center", 
-                      color="black" if similarity_matrix[i, j] > 0.5 else "white",
-                      fontsize=10)
-
-# Add gridlines to separate stages
-stage_boundaries = []
-cumulative = 0
-for stage_config in digit_curriculum:
-    cumulative += 3  # 3 checkpoints per stage (start, mid, end)
-    stage_boundaries.append(cumulative - 0.5)
-
-for boundary in stage_boundaries[:-1]:  # Don't draw line after last stage
-    ax.axhline(y=boundary, color='black', linewidth=2, alpha=0.7)
-    ax.axvline(x=boundary, color='black', linewidth=2, alpha=0.7)
-
-ax.set_xlabel('Checkpoint')
-ax.set_ylabel('Checkpoint')
-# ax.set_title('Pairwise Tensor Similarity: Progressive Training Checkpoints', fontsize=14)
-
-plt.tight_layout()
-if savefigBool:
-    plt.savefig(figures_dir / "progressive_similarity_heatmap.png", dpi=300, bbox_inches='tight')
-plt.show()
-
-
-
-#%%
-# Create heatmap of tensor similarities at key checkpoints across stages
+# CALCUALTE COARSE HEATMAP (AT KEY CHECKPOINTS ONLY)
 print("\n=== Computing similarity heatmap at key checkpoints ===")
 
 reference_seed = 42
@@ -548,7 +461,7 @@ for i in tqdm(range(n_checkpoints), desc="Computing similarities"):
         similarity_matrix[i, j] = sim
 
 #%%
-# Plot heatmap (lower triangle only, excluding diagonal)
+# PLOT COARSE HEATMAP
 fig, ax = plt.subplots(figsize=(16, 14))
 
 # Mask upper triangle and diagonal
@@ -597,6 +510,152 @@ ax.set_ylabel('Checkpoint')
 plt.tight_layout()
 if savefigBool:
     plt.savefig(figures_dir / "progressive_similarity_heatmap.png", dpi=300, bbox_inches='tight')
+plt.show()
+
+
+#%%
+# CALCUALTE FINE-GRAINED HEATMAP SIMILARITY
+
+print("\n=== Computing 500x500 similarity heatmap (uniformly sampled, optimized) ===")
+
+reference_seed = 42
+
+# Collect ALL checkpoints with CUMULATIVE batch numbers
+all_checkpoints = []
+all_stage_names = []
+all_cumulative_batches = []
+
+cumulative_batch = 0
+for stage_config in digit_curriculum:
+    stage_name = stage_config['name']
+    checkpoints = progressive_checkpoints[reference_seed][stage_name]
+    
+    for cp in checkpoints:
+        all_checkpoints.append(cp)
+        all_stage_names.append(stage_name)
+        # Add this checkpoint's batch to cumulative total
+        all_cumulative_batches.append(cumulative_batch + cp['batch'])
+    
+    # Update cumulative for next stage (last checkpoint's batch in this stage)
+    if len(checkpoints) > 0:
+        cumulative_batch += checkpoints[-1]['batch']
+
+total_checkpoints = len(all_checkpoints)
+print(f"Total available checkpoints: {total_checkpoints}")
+print(f"Total cumulative batches: {cumulative_batch}")
+
+# Sample exactly N checkpoints uniformly
+n_sample = min(N_SimSteps, total_checkpoints)
+sample_indices = np.linspace(0, total_checkpoints-1, n_sample, dtype=int)
+
+print(f"Sampling {n_sample} checkpoints uniformly...")
+
+checkpoint_models = []
+checkpoint_labels = []
+sampled_stages = []
+sampled_batches = []
+
+for idx in tqdm(sample_indices, desc="Loading sampled checkpoints"):
+    cp = all_checkpoints[idx]
+    
+    # Load model at this checkpoint
+    model_temp = Model.from_config(**base_model_config).to(device)
+    model_temp.load_state_dict(cp['state_dict'])
+    checkpoint_models.append(model_temp)
+    
+    checkpoint_labels.append(f"{all_stage_names[idx]} #{idx}")
+    sampled_stages.append(all_stage_names[idx])
+    sampled_batches.append(all_cumulative_batches[idx])  # Use cumulative batches
+
+# Identify stage boundaries in the sampled checkpoints
+stage_boundaries = [0]
+stage_boundary_batches = [sampled_batches[0]]
+current_stage = sampled_stages[0]
+
+for i, stage in enumerate(sampled_stages):
+    if stage != current_stage:
+        stage_boundaries.append(i)
+        stage_boundary_batches.append(sampled_batches[i])
+        current_stage = stage
+        
+stage_boundaries.append(len(sampled_stages))
+stage_boundary_batches.append(sampled_batches[-1])
+
+# Compute pairwise similarity matrix (OPTIMIZED: only lower triangle)
+n_checkpoints = len(checkpoint_models)
+similarity_matrix = np.zeros((n_checkpoints, n_checkpoints))
+
+# Only compute lower triangle (including diagonal)
+total_comparisons = (n_checkpoints * (n_checkpoints + 1)) // 2
+print(f"Computing {total_comparisons} similarities (lower triangle only)...")
+
+comparison_count = 0
+for i in tqdm(range(n_checkpoints), desc="Computing similarities"):
+    for j in range(i + 1):  # Only compute j <= i (lower triangle + diagonal)
+        sim = model_similarity(
+            checkpoint_models[i],
+            checkpoint_models[j],
+            include_embedding=True,
+            symmetrize=True
+        )
+        similarity_matrix[i, j] = sim
+        similarity_matrix[j, i] = sim  # Mirror to upper triangle
+        comparison_count += 1
+
+print(f"Computed {comparison_count} similarities (saved {250000 - comparison_count} redundant calculations)")
+
+
+
+#%%
+# PLOT FINE-GRAINED HEATMAP
+fig, ax = plt.subplots(figsize=(20, 18))
+
+# Get batch numbers for extent
+batch_min = sampled_batches[0]
+batch_max = sampled_batches[-1]
+
+# Use extent to map checkpoint indices to batch numbers
+im = ax.imshow(similarity_matrix, cmap='RdYlBu_r', aspect='auto', vmin=0, vmax=1,
+              extent=[batch_min, batch_max, batch_max, batch_min],
+              origin='upper')
+
+# Add colorbar
+cbar = plt.colorbar(im, ax=ax, label='Tensor Similarity', fraction=0.046, pad=0.04)
+
+# Add bright colored lines to separate stages (in batch coordinates)
+colors_boundaries = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'cyan', 'magenta']
+
+for i, boundary_batch in enumerate(stage_boundary_batches[1:-1]):
+    color = colors_boundaries[i % len(colors_boundaries)]
+    
+    # Draw thick bright lines at batch positions
+    ax.axhline(y=boundary_batch, color=color, linewidth=3, alpha=0.9)
+    ax.axvline(x=boundary_batch, color=color, linewidth=3, alpha=0.9)
+
+# Add stage labels on the side (in batch coordinates)
+for i in range(len(stage_boundary_batches) - 1):
+    start_batch = stage_boundary_batches[i]
+    end_batch = stage_boundary_batches[i+1]
+    mid_batch = (start_batch + end_batch) / 2
+    
+    if i < len(digit_curriculum):
+        stage_name = digit_curriculum[i]['name']
+        color = colors_boundaries[i % len(colors_boundaries)]
+        
+        # Label on top
+        ax.text(mid_batch, batch_min - (batch_max - batch_min)*0.05, stage_name, 
+               ha='center', va='bottom', fontsize=16, fontweight='bold', color=color, rotation=45)
+
+ax.set_xlabel('Cumulative Batch Step')
+ax.set_ylabel('Cumulative Batch Step')
+
+# Set proper axis limits
+ax.set_xlim([batch_min, batch_max])
+ax.set_ylim([batch_max, batch_min])
+
+plt.tight_layout()
+if savefigBool:
+    plt.savefig(figures_dir / "progressive_similarity_heatmap_500x500.png", dpi=300, bbox_inches='tight')
 plt.show()
 
 
