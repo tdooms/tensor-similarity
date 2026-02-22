@@ -1,0 +1,37 @@
+program: experiments/norm_sweep/run.py
+method: grid
+metric:
+  name: val_loss
+  goal: minimize
+
+parameters:
+  norm-type:
+    values:
+      - seq_max
+      - causal_seq_max
+      - stochastic_seq_max
+      - tok1
+      - tok1_batch
+      - seq_max_batch
+      - tok1_ghost
+      - tok1_bn
+      - tok1_bn_ghost
+      - seq_mean
+  
+  dataset:
+    values:
+      - induction
+      - stories
+  
+  wandb:
+    value: true
+
+command:
+  - ${env}
+  - python
+  - ${program}
+  - --norm-type
+  - ${norm-type}
+  - --dataset
+  - ${dataset}
+  - --wandb
