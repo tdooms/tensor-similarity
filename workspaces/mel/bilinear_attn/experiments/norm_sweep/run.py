@@ -39,7 +39,38 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from experiments.norm_sweep.model import NormSweepLM
-from experiments.norm_sweep.norms import make_norm, SeqMean
+from experiments.norm_sweep.norms import (
+    make_norm,
+    SeqMean,
+    Tok1Batch,
+    Tok190,
+    Tok190Clamp,
+    SeqMaxMeanBatch,
+    SeqMaxMedianBatch,
+    SeqMeanBatch,
+    SeqPowerMeanBatch,
+)
+
+# Norms that support dual eval modes (batch stats vs running stats)
+BATCH_STAT_NORMS = {
+    "tok1_batch",
+    "tok190",
+    "tok190_clamp",
+    "seq_max_mean_batch",
+    "seq_max_median_batch",
+    "seq_mean_batch",
+    "seq_power_mean_batch",
+}
+
+BATCH_STAT_CLASSES = (
+    Tok1Batch,
+    Tok190,
+    Tok190Clamp,
+    SeqMaxMeanBatch,
+    SeqMaxMedianBatch,
+    SeqMeanBatch,
+    SeqPowerMeanBatch,
+)
 from train.optim import create_optimizer, create_scheduler, Optimizers
 from experiments.induction_heads.data import create_repeated_token_dataloaders
 from data import create_dataloaders as create_stories_dataloaders
@@ -133,10 +164,11 @@ def swap_norms(model: NormSweepLM, new_norm_type: str, norm_kwargs: dict | None 
 
 
 def force_eval_running_stats(model: NormSweepLM):
-    """For SeqMean norms: force eval mode to use running stats."""
+    """For batch-stat norms: force eval mode to use running stats."""
     for module in model.modules():
-        if isinstance(module, SeqMean):
-            module.use_running_stats = True
+        if isinstance(module, (SeqMean, *BATCH_STAT_CLASSES)):
+            if hasattr(module, "use_running_stats"):
+                module.use_running_stats = True
 
 
 # ── main ──────────────────────────────────────────────────────────────────────
@@ -416,49 +448,57 @@ def main():
         print(f"  val_loss={orig_loss:.4f}")
 
     # ══════════════════════════════════════════════════════════════════════
-    # SEQ_MEAN RUNNING STATS COMPARISON
+    # BATCH-STAT NORMS: DUAL EVAL (batch stats vs running stats)
     # ══════════════════════════════════════════════════════════════════════
-    if norm_type == "seq_mean":
+    if norm_type in BATCH_STAT_NORMS or norm_type == "seq_mean":
         print(f"\n{'='*60}")
-        print("seq_mean: comparing live stats vs running stats at eval")
+        print(f"{norm_type}: comparing eval-as-train (batch stats) vs eval-as-inference (running stats)")
 
-        # Eval with live batch stats (default eval behaviour when running stats disabled)
+        # Determine which classes to check
+        if norm_type == "seq_mean":
+            target_classes = (SeqMean,)
+        else:
+            target_classes = BATCH_STAT_CLASSES
+
+        # Eval-as-train: use batch stats (disable running stats)
         for m in model.modules():
-            if isinstance(m, SeqMean):
+            if isinstance(m, target_classes) and hasattr(m, "use_running_stats"):
                 m.use_running_stats = False
         if args.dataset == "induction":
-            live_loss, live_acc = evaluate_induction(model, val_dl, seq_len, device)
-            print(f"  Live batch stats:    val_loss={live_loss:.4f}  val_acc={live_acc:.3f}")
+            batch_loss, batch_acc = evaluate_induction(model, val_dl, seq_len, device)
+            print(f"  Eval-as-train (batch stats):     val_loss={batch_loss:.4f}  val_acc={batch_acc:.3f}")
         else:
-            live_loss = evaluate_stories(model, val_dl, device)
-            live_acc = None
-            print(f"  Live batch stats:    val_loss={live_loss:.4f}")
+            batch_loss = evaluate_stories(model, val_dl, device)
+            batch_acc = None
+            print(f"  Eval-as-train (batch stats):     val_loss={batch_loss:.4f}")
 
-        # Eval with running stats
-        force_eval_running_stats(model)
+        # Eval-as-inference: use running stats (enable running stats)
+        for m in model.modules():
+            if isinstance(m, target_classes) and hasattr(m, "use_running_stats"):
+                m.use_running_stats = True
         if args.dataset == "induction":
             run_loss, run_acc = evaluate_induction(model, val_dl, seq_len, device)
-            print(f"  Running stats:       val_loss={run_loss:.4f}  val_acc={run_acc:.3f}")
+            print(f"  Eval-as-inference (running stats): val_loss={run_loss:.4f}  val_acc={run_acc:.3f}")
         else:
             run_loss = evaluate_stories(model, val_dl, device)
             run_acc = None
-            print(f"  Running stats:       val_loss={run_loss:.4f}")
+            print(f"  Eval-as-inference (running stats): val_loss={run_loss:.4f}")
 
-        delta = run_loss - live_loss
-        print(f"  Δ loss (running-live): {delta:+.4f}")
+        delta = run_loss - batch_loss
+        print(f"  Δ loss (running - batch): {delta:+.4f}")
 
-        summary_sm = {
-            "seq_mean_live_val_loss": live_loss,
-            "seq_mean_running_val_loss": run_loss,
-            "seq_mean_delta_loss": delta,
+        summary_dual = {
+            f"{norm_type}_batch_val_loss": batch_loss,
+            f"{norm_type}_running_val_loss": run_loss,
+            f"{norm_type}_delta_loss": delta,
         }
-        if live_acc is not None:
-            summary_sm["seq_mean_live_val_acc"] = live_acc
-            summary_sm["seq_mean_running_val_acc"] = run_acc
+        if batch_acc is not None:
+            summary_dual[f"{norm_type}_batch_val_acc"] = batch_acc
+            summary_dual[f"{norm_type}_running_val_acc"] = run_acc
         with open(metrics_file, "a") as f:
-            f.write(json.dumps({"phase": "seq_mean_comparison", **summary_sm}) + "\n")
+            f.write(json.dumps({"phase": "dual_eval_comparison", **summary_dual}) + "\n")
         if wandb_run is not None:
-            wandb_run.log({f"comparison/{k}": v for k, v in summary_sm.items()})
+            wandb_run.log({f"comparison/{k}": v for k, v in summary_dual.items()})
 
     # ══════════════════════════════════════════════════════════════════════
     # POST-HOC SWAP EXPERIMENT

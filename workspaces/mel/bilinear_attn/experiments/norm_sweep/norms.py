@@ -11,6 +11,15 @@ Concise names:
     tok1_bn           – Token-1 batch norm with running stats for eval
     tok1_bn_ghost     – tok1_bn + ghost noise perturbation (training only)
     seq_mean          – Normalize by mean energy across sequence; supports running stats
+
+    # Set 2 (new)
+    tok190            – tok1 but batch aggregate via Q0.90 quantile
+    tok190_clamp      – tok190 with clamped energies (Q0.05, Q0.95)
+    seq_max_mean_batch– seq_max per sample, then mean across batch
+    seq_max_median_batch – seq_max per sample, then median across batch
+    seq_power_mean    – power-mean (p=2) over sequence per sample
+    seq_mean_batch    – mean energy over batch+time, BN-style running scalar at eval
+    seq_power_mean_batch – power-mean (p=2) over batch+time, BN-style running scalar
 """
 
 import torch
@@ -86,18 +95,47 @@ class Tok1(nn.Module):
 
 
 class Tok1Batch(nn.Module):
-    """Normalize by RMS of first token averaged across the batch."""
+    """Normalize by RMS of first token averaged across the batch.
 
-    def __init__(self, normalized_shape: int, eps: float = 1e-6) -> None:
+    Supports dual eval modes:
+        - use_running_stats=False: use batch stats at eval (eval-as-train)
+        - use_running_stats=True: use running stats at eval (eval-as-inference)
+    """
+
+    def __init__(
+        self,
+        normalized_shape: int,
+        eps: float = 1e-6,
+        momentum: float = 0.1,
+        use_running_stats: bool = True,
+    ) -> None:
         super().__init__()
         self.normalized_shape = normalized_shape
         self.eps = eps
+        self.momentum = momentum
+        self.use_running_stats = use_running_stats
+
+        self.register_buffer("running_mean_energy", torch.ones(1))
+        self.register_buffer("num_batches_tracked", torch.tensor(0, dtype=torch.long))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x: (B, T, D)
-        energy_t0 = x[:, 0, :].pow(2).mean(dim=-1)          # (B,)
-        batch_energy = energy_t0.mean()                        # scalar
-        scale = (batch_energy + self.eps).rsqrt()              # scalar
+        energy_t0 = x[:, 0, :].pow(2).mean(dim=-1)  # (B,)
+        m_batch = energy_t0.mean()  # scalar
+
+        if self.training:
+            scale = (m_batch + self.eps).rsqrt()
+            # update running stats
+            self.num_batches_tracked += 1
+            self.running_mean_energy.mul_(1 - self.momentum).add_(
+                m_batch.detach() * self.momentum
+            )
+        else:
+            if self.use_running_stats and self.num_batches_tracked > 0:
+                scale = (self.running_mean_energy + self.eps).rsqrt()
+            else:
+                scale = (m_batch + self.eps).rsqrt()
+
         return x * scale
 
 
@@ -310,9 +348,341 @@ class SeqMean(nn.Module):
         return x * scale
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# SET 2: New norm variants
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class Tok190(nn.Module):
+    """Tok1 with Q0.90 quantile batch aggregation.
+
+    1. Compute token-1 energy per sample: e_b = mean_d(x_{b,0,d}^2) → (B,)
+    2. Batch aggregate: m = Q0.90({e_b}) → scalar
+    3. Scale: x ← x / sqrt(m + eps)
+
+    Supports dual eval modes:
+        - use_running_stats=False: use batch stats at eval (eval-as-train)
+        - use_running_stats=True: use running stats at eval (eval-as-inference)
+    """
+
+    def __init__(
+        self,
+        normalized_shape: int,
+        eps: float = 1e-6,
+        momentum: float = 0.1,
+        use_running_stats: bool = True,
+    ) -> None:
+        super().__init__()
+        self.normalized_shape = normalized_shape
+        self.eps = eps
+        self.momentum = momentum
+        self.use_running_stats = use_running_stats
+
+        self.register_buffer("running_mean_energy", torch.ones(1))
+        self.register_buffer("num_batches_tracked", torch.tensor(0, dtype=torch.long))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        energy_t0 = x[:, 0, :].pow(2).mean(dim=-1)  # (B,)
+        m_batch = torch.quantile(energy_t0, 0.90)  # scalar
+
+        if self.training:
+            scale = (m_batch + self.eps).rsqrt()
+            # update running stats
+            self.num_batches_tracked += 1
+            self.running_mean_energy.mul_(1 - self.momentum).add_(
+                m_batch.detach() * self.momentum
+            )
+        else:
+            if self.use_running_stats and self.num_batches_tracked > 0:
+                scale = (self.running_mean_energy + self.eps).rsqrt()
+            else:
+                scale = (m_batch + self.eps).rsqrt()
+
+        return x * scale
+
+
+class Tok190Clamp(nn.Module):
+    """Tok190 with clamped energies before aggregation.
+
+    1. Compute token-1 energy per sample: e_b = mean_d(x_{b,0,d}^2) → (B,)
+    2. Compute clamp bounds: l = Q0.05(e), u = Q0.95(e) → scalars
+    3. Clamp energies: e_tilde_b = clamp(e_b, l, u) → (B,)
+    4. Batch aggregate: m = Q0.90({e_tilde_b}) → scalar
+    5. Scale: x ← x / sqrt(m + eps)
+
+    Supports dual eval modes:
+        - use_running_stats=False: use batch stats at eval (eval-as-train)
+        - use_running_stats=True: use running stats at eval (eval-as-inference)
+    """
+
+    def __init__(
+        self,
+        normalized_shape: int,
+        eps: float = 1e-6,
+        momentum: float = 0.1,
+        use_running_stats: bool = True,
+    ) -> None:
+        super().__init__()
+        self.normalized_shape = normalized_shape
+        self.eps = eps
+        self.momentum = momentum
+        self.use_running_stats = use_running_stats
+
+        self.register_buffer("running_mean_energy", torch.ones(1))
+        self.register_buffer("num_batches_tracked", torch.tensor(0, dtype=torch.long))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        energy_t0 = x[:, 0, :].pow(2).mean(dim=-1)  # (B,)
+        lower = torch.quantile(energy_t0, 0.05)
+        upper = torch.quantile(energy_t0, 0.95)
+        clamped = energy_t0.clamp(min=lower, max=upper)  # (B,)
+        m_batch = torch.quantile(clamped, 0.90)  # scalar
+
+        if self.training:
+            scale = (m_batch + self.eps).rsqrt()
+            # update running stats
+            self.num_batches_tracked += 1
+            self.running_mean_energy.mul_(1 - self.momentum).add_(
+                m_batch.detach() * self.momentum
+            )
+        else:
+            if self.use_running_stats and self.num_batches_tracked > 0:
+                scale = (self.running_mean_energy + self.eps).rsqrt()
+            else:
+                scale = (m_batch + self.eps).rsqrt()
+
+        return x * scale
+
+
+class SeqMaxMeanBatch(nn.Module):
+    """SeqMax per sample, then mean across batch.
+
+    1. Compute per-token energy: e_{b,t} = mean_d(x_{b,t,d}^2) → (B, T)
+    2. Per-sample sequence max: m_b = max_t(e_{b,t}) → (B,)
+    3. Batch aggregate: m = mean_b(m_b) → scalar
+    4. Scale: x ← x / sqrt(m + eps)
+
+    Supports dual eval modes:
+        - use_running_stats=False: use batch stats at eval (eval-as-train)
+        - use_running_stats=True: use running stats at eval (eval-as-inference)
+    """
+
+    def __init__(
+        self,
+        normalized_shape: int,
+        eps: float = 1e-6,
+        momentum: float = 0.1,
+        use_running_stats: bool = True,
+    ) -> None:
+        super().__init__()
+        self.normalized_shape = normalized_shape
+        self.eps = eps
+        self.momentum = momentum
+        self.use_running_stats = use_running_stats
+
+        self.register_buffer("running_mean_energy", torch.ones(1))
+        self.register_buffer("num_batches_tracked", torch.tensor(0, dtype=torch.long))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        energy = x.pow(2).mean(dim=-1)  # (B, T)
+        seq_max = energy.max(dim=-1).values  # (B,)
+        m_batch = seq_max.mean()  # scalar
+
+        if self.training:
+            scale = (m_batch + self.eps).rsqrt()
+            # update running stats
+            self.num_batches_tracked += 1
+            self.running_mean_energy.mul_(1 - self.momentum).add_(
+                m_batch.detach() * self.momentum
+            )
+        else:
+            if self.use_running_stats and self.num_batches_tracked > 0:
+                scale = (self.running_mean_energy + self.eps).rsqrt()
+            else:
+                scale = (m_batch + self.eps).rsqrt()
+
+        return x * scale
+
+
+class SeqMaxMedianBatch(nn.Module):
+    """SeqMax per sample, then median across batch.
+
+    1. Compute per-token energy: e_{b,t} = mean_d(x_{b,t,d}^2) → (B, T)
+    2. Per-sample sequence max: m_b = max_t(e_{b,t}) → (B,)
+    3. Batch aggregate: m = median_b(m_b) → scalar
+    4. Scale: x ← x / sqrt(m + eps)
+
+    Supports dual eval modes:
+        - use_running_stats=False: use batch stats at eval (eval-as-train)
+        - use_running_stats=True: use running stats at eval (eval-as-inference)
+    """
+
+    def __init__(
+        self,
+        normalized_shape: int,
+        eps: float = 1e-6,
+        momentum: float = 0.1,
+        use_running_stats: bool = True,
+    ) -> None:
+        super().__init__()
+        self.normalized_shape = normalized_shape
+        self.eps = eps
+        self.momentum = momentum
+        self.use_running_stats = use_running_stats
+
+        self.register_buffer("running_mean_energy", torch.ones(1))
+        self.register_buffer("num_batches_tracked", torch.tensor(0, dtype=torch.long))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        energy = x.pow(2).mean(dim=-1)  # (B, T)
+        seq_max = energy.max(dim=-1).values  # (B,)
+        m_batch = seq_max.median()  # scalar
+
+        if self.training:
+            scale = (m_batch + self.eps).rsqrt()
+            # update running stats
+            self.num_batches_tracked += 1
+            self.running_mean_energy.mul_(1 - self.momentum).add_(
+                m_batch.detach() * self.momentum
+            )
+        else:
+            if self.use_running_stats and self.num_batches_tracked > 0:
+                scale = (self.running_mean_energy + self.eps).rsqrt()
+            else:
+                scale = (m_batch + self.eps).rsqrt()
+
+        return x * scale
+
+
+class SeqPowerMean(nn.Module):
+    """Power-mean (p=2) over sequence, per sample.
+
+    1. Compute per-token energy: e_{b,t} = mean_d(x_{b,t,d}^2) → (B, T)
+    2. Power-mean over time with p=2: m_b = (1/T * sum_t(e_{b,t}^2))^{1/2} → (B,)
+    3. Scale per sample: x_{b,:,:} ← x_{b,:,:} / sqrt(m_b + eps)
+    """
+
+    def __init__(self, normalized_shape: int, eps: float = 1e-6, p: float = 2.0) -> None:
+        super().__init__()
+        self.normalized_shape = normalized_shape
+        self.eps = eps
+        self.p = p
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        energy = x.pow(2).mean(dim=-1)  # (B, T)
+        # power-mean: (mean(e^p))^{1/p}
+        power_mean = energy.pow(self.p).mean(dim=-1).pow(1.0 / self.p)  # (B,)
+        scale = (power_mean + self.eps).rsqrt()  # (B,)
+        return x * scale.unsqueeze(-1).unsqueeze(-1)  # (B, 1, 1)
+
+
+class SeqMeanBatch(nn.Module):
+    """Mean energy over batch+time, BN-style running scalar at eval.
+
+    Train:
+        1. Compute per-token energy: e_{b,t} = mean_d(x_{b,t,d}^2) → (B, T)
+        2. Batch mean energy: m_batch = mean_{b,t}(e_{b,t}) → scalar
+        3. Scale: x ← x / sqrt(m_batch + eps)
+        4. Update running scalar: m_run ← (1-β)*m_run + β*m_batch with β=0.1
+
+    Supports dual eval modes:
+        - use_running_stats=False: use batch stats at eval (eval-as-train)
+        - use_running_stats=True: use running stats at eval (eval-as-inference)
+    """
+
+    def __init__(
+        self,
+        normalized_shape: int,
+        eps: float = 1e-6,
+        momentum: float = 0.1,
+        use_running_stats: bool = True,
+    ) -> None:
+        super().__init__()
+        self.normalized_shape = normalized_shape
+        self.eps = eps
+        self.momentum = momentum
+        self.use_running_stats = use_running_stats
+
+        self.register_buffer("running_mean_energy", torch.ones(1))
+        self.register_buffer("num_batches_tracked", torch.tensor(0, dtype=torch.long))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        energy = x.pow(2).mean(dim=-1)  # (B, T)
+        m_batch = energy.mean()  # scalar over B and T
+
+        if self.training:
+            scale = (m_batch + self.eps).rsqrt()
+            # update running stats
+            self.num_batches_tracked += 1
+            self.running_mean_energy.mul_(1 - self.momentum).add_(
+                m_batch.detach() * self.momentum
+            )
+        else:
+            if self.use_running_stats and self.num_batches_tracked > 0:
+                scale = (self.running_mean_energy + self.eps).rsqrt()
+            else:
+                scale = (m_batch + self.eps).rsqrt()
+
+        return x * scale
+
+
+class SeqPowerMeanBatch(nn.Module):
+    """Power-mean (p=2) over batch+time, BN-style running scalar at eval.
+
+    Train:
+        1. Compute per-token energy: e_{b,t} = mean_d(x_{b,t,d}^2) → (B, T)
+        2. Power-mean over b,t with p=2: m_batch = (1/(BT) * sum_{b,t}(e_{b,t}^2))^{1/2} → scalar
+        3. Scale: x ← x / sqrt(m_batch + eps)
+        4. Update running scalar: m_run ← (1-β)*m_run + β*m_batch with β=0.1
+
+    Supports dual eval modes:
+        - use_running_stats=False: use batch stats at eval (eval-as-train)
+        - use_running_stats=True: use running stats at eval (eval-as-inference)
+    """
+
+    def __init__(
+        self,
+        normalized_shape: int,
+        eps: float = 1e-6,
+        momentum: float = 0.1,
+        p: float = 2.0,
+        use_running_stats: bool = True,
+    ) -> None:
+        super().__init__()
+        self.normalized_shape = normalized_shape
+        self.eps = eps
+        self.momentum = momentum
+        self.p = p
+        self.use_running_stats = use_running_stats
+
+        self.register_buffer("running_mean_energy", torch.ones(1))
+        self.register_buffer("num_batches_tracked", torch.tensor(0, dtype=torch.long))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        energy = x.pow(2).mean(dim=-1)  # (B, T)
+        # power-mean over all elements: (mean(e^p))^{1/p}
+        m_batch = energy.pow(self.p).mean().pow(1.0 / self.p)  # scalar
+
+        if self.training:
+            scale = (m_batch + self.eps).rsqrt()
+            # update running stats
+            self.num_batches_tracked += 1
+            self.running_mean_energy.mul_(1 - self.momentum).add_(
+                m_batch.detach() * self.momentum
+            )
+        else:
+            if self.use_running_stats and self.num_batches_tracked > 0:
+                scale = (self.running_mean_energy + self.eps).rsqrt()
+            else:
+                scale = (m_batch + self.eps).rsqrt()
+
+        return x * scale
+
+
 # ── Registry ──────────────────────────────────────────────────────────────────
 
 NORM_SWEEP_REGISTRY = {
+    # Set 1 (original)
     "seq_max": SeqMax,
     "causal_seq_max": CausalSeqMax,
     "stochastic_seq_max": StochasticSeqMax,
@@ -323,6 +693,14 @@ NORM_SWEEP_REGISTRY = {
     "tok1_bn": Tok1BN,
     "tok1_bn_ghost": Tok1BNGhost,
     "seq_mean": SeqMean,
+    # Set 2 (new)
+    "tok190": Tok190,
+    "tok190_clamp": Tok190Clamp,
+    "seq_max_mean_batch": SeqMaxMeanBatch,
+    "seq_max_median_batch": SeqMaxMedianBatch,
+    "seq_power_mean": SeqPowerMean,
+    "seq_mean_batch": SeqMeanBatch,
+    "seq_power_mean_batch": SeqPowerMeanBatch,
     # standard norms for baseline comparison
     "rmsnorm": None,       # handled via nn.RMSNorm
     "layernorm": None,     # handled via nn.LayerNorm

@@ -25,8 +25,10 @@ Compare normalization strategies for bilinear attention transformers.
 
 ### `tok1_batch`
 1. Compute first-token energy per sample: `e_b = mean_d(x_{b,0,d}^2)` → `(B,)`
-2. Average across batch: `e = mean_b(e_b)` → scalar
-3. Scale entire batch: `x / sqrt(e + eps)`
+2. Average across batch: `m_batch = mean_b(e_b)` → scalar
+3. **Train**: scale by `1/sqrt(m_batch + eps)`, update running scalar: `m_run ← (1-β)*m_run + β*m_batch` with `β=0.1`
+4. **Eval-as-train**: use `m_batch` (batch stats)
+5. **Eval-as-inference**: use `m_run` (precomputed running stats)
 
 ### `seq_max_batch`
 1. Compute per-token energy: `e_{b,t} = mean_d(x_{b,t,d}^2)` → `(B,T,1)`
@@ -55,6 +57,63 @@ Compare normalization strategies for bilinear attention transformers.
 2. Mean over sequence: `m = mean_t(e_t)` → `(B,1,1)`
 3. **Train**: scale by `1/sqrt(m)`, update running mean energy
 4. **Eval**: use running mean energy if available
+
+---
+
+## Set 2 (New Variants)
+
+### `tok190`
+1. Compute token-1 energy per sample: `e_b = mean_d(x_{b,0,d}^2)` → `(B,)`
+2. Batch aggregate: `m_batch = Q0.90({e_b})` → scalar
+3. **Train**: scale by `1/sqrt(m_batch + eps)`, update running scalar: `m_run ← (1-β)*m_run + β*m_batch` with `β=0.1`
+4. **Eval-as-train**: use `m_batch` (batch stats)
+5. **Eval-as-inference**: use `m_run` (precomputed running stats)
+
+### `tok190_clamp`
+1. Compute token-1 energy per sample: `e_b = mean_d(x_{b,0,d}^2)` → `(B,)`
+2. Compute clamp bounds: `l = Q0.05(e)`, `u = Q0.95(e)` → scalars
+3. Clamp energies: `e_tilde_b = clamp(e_b, l, u)` → `(B,)`
+4. Batch aggregate: `m_batch = Q0.90({e_tilde_b})` → scalar
+5. **Train**: scale by `1/sqrt(m_batch + eps)`, update running scalar: `m_run ← (1-β)*m_run + β*m_batch` with `β=0.1`
+6. **Eval-as-train**: use `m_batch` (batch stats)
+7. **Eval-as-inference**: use `m_run` (precomputed running stats)
+
+### `seq_max_mean_batch`
+1. Compute per-token energy: `e_{b,t} = mean_d(x_{b,t,d}^2)` → `(B,T)`
+2. Per-sample sequence max: `m_b = max_t(e_{b,t})` → `(B,)`
+3. Batch aggregate: `m_batch = mean_b(m_b)` → scalar
+4. **Train**: scale by `1/sqrt(m_batch + eps)`, update running scalar: `m_run ← (1-β)*m_run + β*m_batch` with `β=0.1`
+5. **Eval-as-train**: use `m_batch` (batch stats)
+6. **Eval-as-inference**: use `m_run` (precomputed running stats)
+
+### `seq_max_median_batch`
+1. Compute per-token energy: `e_{b,t} = mean_d(x_{b,t,d}^2)` → `(B,T)`
+2. Per-sample sequence max: `m_b = max_t(e_{b,t})` → `(B,)`
+3. Batch aggregate: `m_batch = median_b(m_b)` → scalar
+4. **Train**: scale by `1/sqrt(m_batch + eps)`, update running scalar: `m_run ← (1-β)*m_run + β*m_batch` with `β=0.1`
+5. **Eval-as-train**: use `m_batch` (batch stats)
+6. **Eval-as-inference**: use `m_run` (precomputed running stats)
+
+### `seq_power_mean`
+1. Compute per-token energy: `e_{b,t} = mean_d(x_{b,t,d}^2)` → `(B,T)`
+2. Power-mean over time with `p=2`: `m_b = (1/T * sum_t(e_{b,t}^2))^{1/2}` → `(B,)`
+3. Scale per sample: `x_{b,:,:} ← x_{b,:,:} / sqrt(m_b + eps)` (broadcast `m_b` over `T,D`)
+
+### `seq_mean_batch`
+1. Compute per-token energy: `e_{b,t} = mean_d(x_{b,t,d}^2)` → `(B,T)`
+2. Batch mean energy: `m_batch = mean_{b,t}(e_{b,t})` → scalar
+3. **Train**: scale by `1/sqrt(m_batch + eps)`, update running scalar: `m_run ← (1-β)*m_run + β*m_batch` with `β=0.1`
+4. **Eval-as-train**: use `m_batch` (batch stats)
+5. **Eval-as-inference**: use `m_run` (precomputed running stats)
+
+### `seq_power_mean_batch`
+1. Compute per-token energy: `e_{b,t} = mean_d(x_{b,t,d}^2)` → `(B,T)`
+2. Power-mean over `b,t` with `p=2`: `m_batch = (1/(BT) * sum_{b,t}(e_{b,t}^2))^{1/2}` → scalar
+3. **Train**: scale by `1/sqrt(m_batch + eps)`, update running scalar: `m_run ← (1-β)*m_run + β*m_batch` with `β=0.1`
+4. **Eval-as-train**: use `m_batch` (batch stats)
+5. **Eval-as-inference**: use `m_run` (precomputed running stats)
+
+---
 
 ## Swap Experiments
 

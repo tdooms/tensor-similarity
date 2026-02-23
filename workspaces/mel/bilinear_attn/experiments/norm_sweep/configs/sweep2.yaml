@@ -7,16 +7,13 @@ metric:
 parameters:
   norm-type:
     values:
-      - seq_max
-      - causal_seq_max
-      - stochastic_seq_max
-      - tok1
-      - tok1_batch
-      - seq_max_batch
-      - tok1_ghost
-      - tok1_bn
-      - tok1_bn_ghost
-      - seq_mean
+      - tok190
+      - tok190_clamp
+      - seq_max_mean_batch
+      - seq_max_median_batch
+      - seq_power_mean
+      - seq_mean_batch
+      - seq_power_mean_batch
   
   dataset:
     values:
