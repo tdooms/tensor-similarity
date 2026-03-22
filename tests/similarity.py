@@ -7,6 +7,15 @@ from src.components.attention import Attention
 from src.components.similarity import State, similarity
 
 
+def inner_product(state):
+    return torch.einsum('ijij->', state.S_ab[:, 1:, :, 1:]).item()
+
+
+def cosine(state):
+    tr = lambda S: torch.einsum('ijij->', S[:, 1:, :, 1:])
+    return (tr(state.S_ab) / (tr(state.S_aa) * tr(state.S_bb)) ** 0.5).item()
+
+
 def mc_inner_product(model_a, model_b, d_input, n_samples=1_000_000, **like):
     """Monte Carlo estimate of E[f_a(x)^T f_b(x)] for x ~ N(0, I)."""
     x = torch.randn(n_samples, d_input, **like)
@@ -69,11 +78,11 @@ class TestLinearOnly:
         model = SimpleModel(6, 4).double()
         state = similarity(model, model)
 
-        exact = state.inner_product()
+        exact = inner_product(state)
         mc = mc_inner_product(model, model, 6, **LIKE)
 
         assert abs(exact - mc) / abs(mc) < 0.02, f"exact={exact:.6f}, mc={mc:.6f}"
-        assert abs(state.cosine() - 1.0) < 1e-10
+        assert abs(cosine(state) - 1.0) < 1e-10
 
     def test_cross_similarity(self):
         torch.manual_seed(0)
@@ -82,7 +91,7 @@ class TestLinearOnly:
         model_b = SimpleModel(6, 4).double()
 
         state = similarity(model_a, model_b)
-        exact = state.inner_product()
+        exact = inner_product(state)
         mc = mc_inner_product(model_a, model_b, 6, **LIKE)
 
         assert abs(exact - mc) / max(abs(mc), 1e-8) < 0.02, f"exact={exact:.6f}, mc={mc:.6f}"
@@ -96,11 +105,11 @@ class TestBilinearNoResidual:
         model = ToyModel(4, 8, 16, 3, scale=1.0).double()
         state = similarity(model, model)
 
-        exact = state.inner_product()
+        exact = inner_product(state)
         mc = mc_inner_product(model, model, 4, **LIKE)
 
         assert abs(exact - mc) / abs(mc) < 0.02, f"exact={exact:.6f}, mc={mc:.6f}"
-        assert abs(state.cosine() - 1.0) < 1e-10
+        assert abs(cosine(state) - 1.0) < 1e-10
 
     def test_cross_similarity(self):
         torch.manual_seed(42)
@@ -109,7 +118,7 @@ class TestBilinearNoResidual:
         model_b = ToyModel(4, 8, 16, 3, scale=1.0).double()
 
         state = similarity(model_a, model_b)
-        exact = state.inner_product()
+        exact = inner_product(state)
         mc = mc_inner_product(model_a, model_b, 4, **LIKE)
 
         assert abs(exact - mc) / max(abs(mc), 1e-8) < 0.02, f"exact={exact:.6f}, mc={mc:.6f}"
@@ -123,11 +132,11 @@ class TestBilinearWithResidual:
         model = ToyModel(4, 8, 16, 3, scale=0.5).double()
         state = similarity(model, model)
 
-        exact = state.inner_product()
+        exact = inner_product(state)
         mc = mc_inner_product(model, model, 4, **LIKE)
 
         assert abs(exact - mc) / abs(mc) < 0.02, f"exact={exact:.6f}, mc={mc:.6f}"
-        assert abs(state.cosine() - 1.0) < 1e-10
+        assert abs(cosine(state) - 1.0) < 1e-10
 
     def test_cross_similarity(self):
         torch.manual_seed(42)
@@ -136,7 +145,7 @@ class TestBilinearWithResidual:
         model_b = ToyModel(4, 8, 16, 3, scale=0.5).double()
 
         state = similarity(model_a, model_b)
-        exact = state.inner_product()
+        exact = inner_product(state)
         mc = mc_inner_product(model_a, model_b, 4, **LIKE)
 
         assert abs(exact - mc) / max(abs(mc), 1e-8) < 0.02, f"exact={exact:.6f}, mc={mc:.6f}"
@@ -150,7 +159,7 @@ class TestPureResidual:
         model = ToyModel(4, 8, 16, 3, scale=0.0).double()
         state = similarity(model, model)
 
-        exact = state.inner_product()
+        exact = inner_product(state)
         mc = mc_inner_product(model, model, 4, **LIKE)
 
         assert abs(exact - mc) / abs(mc) < 0.02, f"exact={exact:.6f}, mc={mc:.6f}"
@@ -164,11 +173,11 @@ class TestWithBias:
         model = ToyModel(4, 8, 16, 3, scale=0.7, bias=True).double()
         state = similarity(model, model)
 
-        exact = state.inner_product()
+        exact = inner_product(state)
         mc = mc_inner_product(model, model, 4, **LIKE)
 
         assert abs(exact - mc) / abs(mc) < 0.02, f"exact={exact:.6f}, mc={mc:.6f}"
-        assert abs(state.cosine() - 1.0) < 1e-10
+        assert abs(cosine(state) - 1.0) < 1e-10
 
     def test_cross_similarity(self):
         torch.manual_seed(42)
@@ -177,7 +186,7 @@ class TestWithBias:
         model_b = ToyModel(4, 8, 16, 3, scale=0.7, bias=True).double()
 
         state = similarity(model_a, model_b)
-        exact = state.inner_product()
+        exact = inner_product(state)
         mc = mc_inner_product(model_a, model_b, 4, **LIKE)
 
         assert abs(exact - mc) / max(abs(mc), 1e-8) < 0.02, f"exact={exact:.6f}, mc={mc:.6f}"
@@ -191,7 +200,7 @@ class TestTwoLayer:
         model = TwoLayerModel(4, 8, 16, 3, scale=0.5).double()
         state = similarity(model, model)
 
-        exact = state.inner_product()
+        exact = inner_product(state)
         mc = mc_inner_product(model, model, 4, **LIKE)
 
         rel_err = abs(exact - mc) / abs(mc)
@@ -204,7 +213,7 @@ class TestTwoLayer:
         model_b = TwoLayerModel(4, 8, 16, 3, scale=0.5).double()
 
         state = similarity(model_a, model_b)
-        exact = state.inner_product()
+        exact = inner_product(state)
         mc = mc_inner_product(model_a, model_b, 4, **LIKE)
 
         rel_err = abs(exact - mc) / max(abs(mc), 1e-8)
@@ -264,13 +273,13 @@ class TestTransformerLayer:
         model = TransformerModel(4, 8, 2, 2, 16, 3, scale=0.5).double()
         state = similarity(model, model)
 
-        exact = state.inner_product()
+        exact = inner_product(state)
         mc = mc_inner_product_seq(model, model, 4, 2, **LIKE)
 
         rel_err = abs(exact - mc) / abs(mc)
         # Gaussian approximation after attention, so wider tolerance
         assert rel_err < 0.2, f"exact={exact:.6f}, mc={mc:.6f}, rel_err={rel_err:.4%}"
-        assert abs(state.cosine() - 1.0) < 1e-6
+        assert abs(cosine(state) - 1.0) < 1e-6
 
     def test_cross_similarity(self):
         torch.manual_seed(42)
@@ -279,7 +288,7 @@ class TestTransformerLayer:
         model_b = TransformerModel(4, 8, 2, 2, 16, 3, scale=0.5).double()
 
         state = similarity(model_a, model_b)
-        exact = state.inner_product()
+        exact = inner_product(state)
         mc = mc_inner_product_seq(model_a, model_b, 4, 2, n_samples=500_000, **LIKE)
 
         # Cross-similarity is small; use absolute tolerance
@@ -294,7 +303,7 @@ class TestAttentionNoResidual:
         model = AttnModel(4, 8, 2, 3, 3, scale=1.0).double()
         state = similarity(model, model)
 
-        exact = state.inner_product()
+        exact = inner_product(state)
         mc = mc_inner_product_seq(model, model, 4, 3, **LIKE)
 
         rel_err = abs(exact - mc) / abs(mc)
@@ -307,7 +316,7 @@ class TestAttentionNoResidual:
         model_b = AttnModel(4, 8, 2, 3, 3, scale=1.0).double()
 
         state = similarity(model_a, model_b)
-        exact = state.inner_product()
+        exact = inner_product(state)
         mc = mc_inner_product_seq(model_a, model_b, 4, 3, n_samples=500_000, **LIKE)
 
         # Cross-similarity of random attention is near zero; use absolute tolerance
@@ -322,7 +331,7 @@ class TestAttentionWithResidual:
         model = AttnModel(4, 8, 2, 3, 3, scale=0.5).double()
         state = similarity(model, model)
 
-        exact = state.inner_product()
+        exact = inner_product(state)
         mc = mc_inner_product_seq(model, model, 4, 3, **LIKE)
 
         rel_err = abs(exact - mc) / abs(mc)
