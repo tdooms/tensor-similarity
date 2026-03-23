@@ -34,3 +34,5 @@ old/
 
 
 uv.lock
+src/paper/artifacts/
+_data/

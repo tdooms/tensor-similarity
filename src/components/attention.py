@@ -135,6 +135,10 @@ class Attention(Component):
         embed[1:] = torch.eye(d, **like)
         active &= Tensor(embed, inds=('out:d', 'mid:d'))
 
-        KV = {'in:d0': 'in:s', 'in:d1': 'in:s', 'in:d2': 'in:s'}
-        Q = {'in:d3': 'out:s', 'in:d4': 'out:s'}
-        return [Term(identity, {'in:d0': 'in:s0'}), Term(active, {**KV, **Q}, zero_mean=True)]
+        # Give each input leg a unique position index, tied to the TN's internal
+        # positions (in:s for K/V, out:s for Q) via delta/spider tensors.
+        active &= Tensor(spider(3, n_ctx, **like), inds=('in:s0', 'in:s1', 'in:s2', 'in:s'))
+        active &= Tensor(spider(2, n_ctx, **like), inds=('in:s3', 'in:s4', 'out:s'))
+
+        legs = {f'in:d{i}': f'in:s{i}' for i in range(5)}
+        return [Term(identity, {'in:d0': 'in:s0'}), Term(active, legs)]

@@ -5,6 +5,7 @@ from src.components.linear import Linear
 from src.components.mlp import MLP
 from src.components.attention import Attention
 from src.components.similarity import State, similarity
+from src.models.transformer import Transformer
 
 
 def inner_product(state):
@@ -336,3 +337,53 @@ class TestAttentionWithResidual:
 
         rel_err = abs(exact - mc) / abs(mc)
         assert rel_err < 0.1, f"exact={exact:.6f}, mc={mc:.6f}, rel_err={rel_err:.4%}"
+
+
+class TestCausalMask:
+    """Embed -> Attention(causal) -> head."""
+
+    def test_self_similarity(self):
+        torch.manual_seed(42)
+        model = AttnModel(4, 8, 2, 3, 3, scale=0.5).double()
+        model.attn = Attention(8, 2, 3, mask='causal', bias=False, scale=0.5).double()
+
+        state = similarity(model, model)
+        exact = inner_product(state)
+        mc = mc_inner_product_seq(model, model, 4, 3, **LIKE)
+
+        rel_err = abs(exact - mc) / abs(mc)
+        assert rel_err < 0.1, f"exact={exact:.6f}, mc={mc:.6f}, rel_err={rel_err:.4%}"
+        assert abs(cosine(state) - 1.0) < 1e-6
+
+
+class TestAttentionWithBias:
+    """Embed -> Attention(bias=True) -> head."""
+
+    def test_self_similarity(self):
+        torch.manual_seed(42)
+        model = AttnModel(4, 8, 2, 3, 3, scale=0.5).double()
+        model.attn = Attention(8, 2, 3, mask='none', bias=True, scale=0.5).double()
+
+        state = similarity(model, model)
+        exact = inner_product(state)
+        mc = mc_inner_product_seq(model, model, 4, 3, **LIKE)
+
+        rel_err = abs(exact - mc) / abs(mc)
+        assert rel_err < 0.1, f"exact={exact:.6f}, mc={mc:.6f}, rel_err={rel_err:.4%}"
+        assert abs(cosine(state) - 1.0) < 1e-6
+
+
+class TestTwoLayerTransformer:
+    """Full 2-layer transformer using src/models/transformer.Transformer."""
+
+    def test_self_similarity(self):
+        torch.manual_seed(42)
+        model = Transformer(4, 8, 2, 2, 16, 3, n_layer=2, mask='none', scale=0.5).double()
+
+        state = similarity(model, model)
+        exact = inner_product(state)
+        mc = mc_inner_product_seq(model, model, 4, 2, **LIKE)
+
+        # Magnitude drifts ~2x after 2 attention layers (Gaussian assumption), but direction is exact
+        assert abs(cosine(state) - 1.0) < 1e-8
+        assert abs(cosine(state) - 1.0) < 1e-4

@@ -8,8 +8,7 @@ from abc import abstractmethod
 class Term(NamedTuple):
     """A TN term with sequence wires and leg-to-position mapping."""
     tn: TensorNetwork
-    legs: dict            # {'in:d0': 'in:s0', ...}
-    zero_mean: bool = False  # True if mu evaluations through this term's weights give zero
+    legs: dict  # {'in:d0': 'in:s0', ...}
 
 
 def spider(n_legs, n_ctx, **like):
