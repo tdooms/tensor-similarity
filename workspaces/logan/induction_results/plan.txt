@@ -1,0 +1,125 @@
+INDUCTION EXPERIMENT PLAN
+=========================
+Date: 2026-02-13
+
+GOAL
+----
+Verify that the Hoogland et al. softmax baseline learns induction heads,
+then test whether shorter context + wider model learns induction faster.
+If both work, swap softmax for bilinear QK attention (with QK norm, then batchnorm).
+
+PHASE 1: TWO PARALLEL SOFTMAX RUNS (current session)
+-----------------------------------------------------
+
+Run A — Hoogland Replication (GPU 0)
+  Script: train_hoogland_standalone.py
+  Architecture:
+    - 2L attention-only (no MLP)
+    - d_model=256, n_head=8, d_head=32
+    - Standard softmax attention, causal mask, RoPE
+    - No QK norm
+    - LayerNorm before unembed
+    - ~2.8M parameters
+  Data:
+    - DSIR-filtered Pile (streaming from HuggingFace)
+    - GPT-2 tokenizer, vocab truncated to 5000 (yes, 5k not 50k — token_id % 5000)
+    - n_ctx=1024
+  Training:
+    - batch_size=64 (15.4GB peak — max that fits on 16GB RTX 5080)
+    - tokens/step = 64 * 1024 = 65,536
+    - Target: 5B tokens = ~76k steps
+    - Muon optimizer (attn weights) + AdamW (embed/bias/norm)
+    - lr=3e-4 (AdamW), muon_lr=0.02
+    - Linear warmup 1000 steps, cosine decay to 0.1x
+    - bf16 autocast, torch.compile
+  Induction detection:
+    - 100 repeated random sequences, each 1024 tokens (half_len=512)
+    - Tokens drawn from [1, 5000) — works fine with 5k vocab
+    - Eval every 2500 steps
+    - Success threshold: toy_induction_accuracy > 10%
+    - Expected onset: steps 6.5k-17k (per Hoogland paper)
+  Logging:
+    - metrics.jsonl: train loss every 10 steps, val+induction every 2500 steps
+    - stdout: progress print every 100 steps
+
+Run B — Wider + Shorter Context (GPU 1)
+  Script: train_hoogland_ctx512_d512.py
+  Architecture:
+    - 2L attention-only (no MLP)
+    - d_model=512, n_head=16, d_head=32
+    - Standard softmax attention, causal mask, RoPE
+    - No QK norm
+    - LayerNorm before unembed
+    - ~10M parameters (4x more than Run A)
+  Data:
+    - Same DSIR-filtered Pile, GPT-2 tokenizer, vocab=5000
+    - n_ctx=512 (half of Run A)
+  Training:
+    - batch_size=96 (12.1GB peak — safe margin on 16GB RTX 5080)
+    - tokens/step = 96 * 512 = 49,152
+    - Target: 5B tokens = ~101k steps
+    - Same optimizer/scheduler as Run A
+    - bf16 autocast, torch.compile
+  Induction detection:
+    - 100 repeated random sequences, each 512 tokens (half_len=256)
+    - Same success threshold (>10% accuracy)
+  Hypothesis:
+    - Shorter context should speed up induction onset (Hoogland finding)
+    - Wider model (more capacity) may also help
+
+CANNOT increase batch size beyond these — empirically tested:
+  - Config A: bs=64 uses 15.4GB (bs=96 OOMs)
+  - Config B: bs=96 uses 12.1GB (bs=128 OOMs)
+
+PHASE 2: BILINEAR QK ATTENTION (if Phase 1 succeeds)
+-----------------------------------------------------
+Replace softmax attention with bilinear (two QK pairs):
+  pattern = (q1·k1) * (q2·k2) / d_head^2 * causal_mask
+
+Variant 2a: Bilinear + QK RMSNorm
+  - Use existing BilinearAttention class from mel's codebase
+  - Enable use_rmsnorm_qk=True
+  - Same data/training setup as whichever Phase 1 run worked
+
+Variant 2b: Bilinear + BatchNorm on Q,K projections
+  - Use BilinearBatchNorm class from train_induction_static_norm.py
+  - BatchNorm1d on Q1,K1,Q2,K2 projections (flattened B*T dimension)
+  - At inference, BN becomes a fixed affine transform (static norm)
+  - This worked on toy induction task (100% accuracy)
+
+Key question: Does the norm technique that works on toy also work on real data?
+
+ARCHITECTURE VERIFICATION (Hoogland baseline)
+----------------------------------------------
+Confirmed from train_hoogland_standalone.py:
+  ✓ 2L attention-only (no MLP, no FFN)
+  ✓ embed → 2x SoftmaxAttention → LayerNorm → unembed
+  ✓ d_model=256, n_head=8, d_head=32
+  ✓ Softmax with causal mask (upper triangular -inf)
+  ✓ RoPE (base=10000)
+  ✓ No QK norm (use_rmsnorm_qk=False)
+  ✓ QKV bias=True, O bias=True
+  ✓ Residual connection: out = x + scale * O(attn(x))
+  ✓ Init: embed/unembed std=0.02, QKV std=0.02, O std=0.01, biases=0
+  ✓ Muon+AdamW optimizer, grad clip=1.0
+  ✓ GPT-2 tokenizer truncated to vocab=5000 via modulo
+  ✓ DSIR-filtered Pile (streaming)
+
+INDUCTION DETECTION WITH 5K VOCAB
+----------------------------------
+The induction test uses randomly generated repeated sequences:
+  seq = [random tokens from 1..4999] repeated twice
+The model must predict the second copy by attending to the first.
+This is vocab-size agnostic — it works with any vocab ≥ 2.
+Random baseline accuracy = 1/4999 ≈ 0.02%, so 10% threshold is very clear signal.
+
+FILES
+-----
+  train_hoogland_standalone.py       — Run A script (modified: log every 10 steps)
+  train_hoogland_ctx512_d512.py      — Run B script (new)
+  induction_results/plan.txt         — This file
+  induction_results/                 — Will contain results analysis
+
+  Reference code for Phase 2:
+  train_induction_static_norm.py     — BilinearBatchNorm class
+  mel's bilinear_attn/models/attention_kernels/bilinear.py — BilinearAttention class

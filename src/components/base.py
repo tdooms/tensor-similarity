@@ -1,6 +1,23 @@
+import torch
 from torch import nn
+from typing import NamedTuple
 from quimb.tensor import Tensor, TensorNetwork
 from abc import abstractmethod
+
+
+class Term(NamedTuple):
+    """A TN term with sequence wires and leg-to-position mapping."""
+    tn: TensorNetwork
+    legs: dict  # {'in:d0': 'in:s0', ...}
+
+
+def spider(n_legs, n_ctx, **like):
+    """(N+1)-way delta tensor: 1 iff all position indices are equal."""
+    shape = (n_ctx,) * (n_legs + 1)
+    data = torch.zeros(shape, **like)
+    for s in range(n_ctx):
+        data[(s,) * (n_legs + 1)] = 1
+    return data
    
 class Component(nn.Module):
     """A wrapper class for all compositional modules.
@@ -17,14 +34,14 @@ class Component(nn.Module):
 
     @abstractmethod
     def network(self):
-        """Returns a list of tensor networks representing the component."""
+        """Returns a list of tensor networks representing the component's layer."""
         return NotImplemented
     
-    def make_inputs(self, input, modes=['b']):
+    def make_inputs(self, input, modes=('b',)):
         n = len(self.input_inds())
         return [Tensor(input, inds=[*modes, f'in:d{i}']) for i in range(n)]
         
-    def evaluate(self, input, extra=[], modes=['b']):
+    def evaluate(self, input, extra=(), modes=('b',)):
         """Contracts a given input into the component tensor network and evaluates it.
         
         extra: any additional (Quimb) Tensors to be contracted (e.g. normalisation vectors).
@@ -46,31 +63,58 @@ class Component(nn.Module):
         """Returns the hidden wire names of the component."""
         return [idx for idx in self.network().ind_map.keys() if idx.startswith('h:d' if only_dims else 'h:')]
     
-    def contract(self, other=None, inner=None, out: str = 'out:d'):
-        """Self-contract the inputs of the component leaving only one specified wire.
+    def terms(self, n_ctx, **like):
+        """TN terms with sequence wires. f(x) = sum of terms."""
+        tn = self.network()
+        legs = sorted(idx for idx in tn.outer_inds() if idx.startswith('in:d'))
+        n = len(legs)
+        s_inds = [f'in:s{i}' for i in range(n)] + ['out:s']
+        tn &= Tensor(spider(n, n_ctx, **like), inds=s_inds)
+        return [Term(tn, {f'in:d{i}': f'in:s{i}' for i in range(n)})]
 
-        bra | ket: The two tensor networks (following module conventions) to be contracted.
-        inner: the optional matrix to fold between the traced indices.
-        out: the name of the output wire to keep on both sides.
-        
-        This function does not currently support including a matrix in the output index.
-        Returns a (PyTorch) matrix.
+    def permutations(self):
+        """Returns all Wick matchings (perfect matchings) of the input legs.
+
+        Each matching is a list of (idx_a, idx_b) pairs specifying which indices
+        to identify. By default, generates all (2N)!! matchings over the N input
+        legs and their starred counterparts. Subclasses may override to provide
+        a sparse subset.
         """
-        
-        bra, ket = self.network(), self.network() if other is None else other.network()
-        # assert bra.input_inds() == ket.input_inds(), "Both tensor networks must have the same input indices."
-        n = len(self.input_inds())
-        
-        # Make a list of matrices to fold between the trace OR fold in no matrices.
+        legs = self.input_inds()
+        all_legs = legs + [f'{l}*' for l in legs]
+
+        def match(l):
+            if not l: return [[]]
+            return [[(l[0], l[i])] + r for i in range(1, len(l)) for r in match(l[1:i] + l[i+1:])]
+
+        return match(all_legs)
+
+    def contract(self, other=None, inner=None, out='out:d'):
+        """Contract this component with another, summing over permutations.
+
+        When inner is None: uses permutation-based contraction, starring other's
+        outer indices and summing over self.permutations().
+        When inner is provided: gauge-propagation mode, folding the inner matrix
+        between traced indices (used by Model.norm/similarity).
+        """
+        other = other or self
+
         if inner is not None:
-            inputs = [Tensor(inner, inds=[f'in:d{i}', f'in:d{i}*'], tags=['F']) for i in range(n)]
+            bra, ket = self.network(), other.network()
+            n = len(self.input_inds())
+            inputs = [Tensor(inner, inds=(f'in:d{i}', f'in:d{i}*'), tags=('F',)) for i in range(n)]
             bra = bra.reindex({idx: idx + '*' for idx in bra.all_inds()})
-        else:
-            inputs = []
-            bra = bra.reindex({out: out + '*'})
-        
-        # Construct and contract the traced network and return the gram matrix.
-        # The contraction strips tensor exponents (e.g. normalizes them) to avoid numerical issues.
-        cross = TensorNetwork([bra, ket, *inputs])
-        gram, exp = cross.contract_tags(all, output_inds=[out, out + '*'], equalize_norms=True, strip_exponent=True)
-        return gram.data, exp
+            cross = TensorNetwork([bra, ket, *inputs])
+            gram, exp = cross.contract_tags(all, output_inds=(out, f'{out}*'), equalize_norms=True, strip_exponent=True)
+            return gram.data, exp
+
+        net_a = self.network()
+        net_b = other.network().reindex({leg: f'{leg}*' for leg in other.network().outer_inds()})
+
+        return sum(
+            (net_a.copy() & net_b.copy())
+            .reindex(dict(perm))
+            .contract(output_inds=(out, f'{out}*'))
+            .data
+            for perm in self.permutations()
+        )

@@ -1,0 +1,1233 @@
+=== Run D retrain: Bilinear+BN, No Bias, 1000 checkpoints ===
+2L attn-only, d=512, 16 heads, bilinear+BN, no bias
+Data: DSIR-filtered Pile (streaming), GPT-2 tokenizer, vocab=5000
+Batch: 96, n_ctx: 512, tokens/step: 49,152
+Max steps: 101,725 (5.0B tokens)
+Checkpoint steps: 1000 (first few: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+Pile val cache exists at /workspace/tensor-mars/workspaces/logan/cached_tokens/dsir_pile_val_ctx512.pt
+Saved step 0 (initialization)
+Model parameters: 8,274,944 (compiled)
+Induction eval: 6919 repeated bigrams in 100 val seqs
+/workspace/tensor-mars/.venv/lib/python3.13/site-packages/torch/_inductor/compile_fx.py:321: UserWarning: TensorFloat32 tensor cores for float32 matrix multiplication available but not enabled. Consider setting `torch.set_float32_matmul_precision('high')` for better performance.
+  warnings.warn(
+  [step 0] toy_diff=0.0000 indist_diff=0.0000
+  [step 1, 0.00B, ckpt 2] toy_diff=0.0000 indist_diff=-0.0000
+  [step 2, 0.00B, ckpt 3] toy_diff=0.0000 indist_diff=-0.0000
+  [step 3, 0.00B, ckpt 4] toy_diff=0.0000 indist_diff=0.0000
+  [step 4, 0.00B, ckpt 5] toy_diff=0.0000 indist_diff=0.0000
+  [step 5, 0.00B, ckpt 6] toy_diff=0.0000 indist_diff=-0.0000
+  [step 6, 0.00B, ckpt 7] toy_diff=0.0000 indist_diff=0.0000
+  [step 7, 0.00B, ckpt 8] toy_diff=0.0000 indist_diff=-0.0000
+  [step 8, 0.00B, ckpt 9] toy_diff=0.0000 indist_diff=0.0000
+  [step 9, 0.00B, ckpt 10] toy_diff=0.0000 indist_diff=-0.0000
+  [step 10, 0.00B, ckpt 11] toy_diff=0.0000 indist_diff=0.0000
+  [step 11, 0.00B, ckpt 12] toy_diff=0.0000 indist_diff=-0.0000
+  [step 12, 0.00B, ckpt 13] toy_diff=0.0000 indist_diff=-0.0000
+  [step 13, 0.00B, ckpt 14] toy_diff=0.0000 indist_diff=-0.0000
+  [step 14, 0.00B, ckpt 15] toy_diff=0.0000 indist_diff=0.0000
+  [step 15, 0.00B, ckpt 16] toy_diff=0.0000 indist_diff=-0.0000
+  [step 16, 0.00B, ckpt 17] toy_diff=0.0000 indist_diff=0.0000
+  [step 17, 0.00B, ckpt 18] toy_diff=0.0000 indist_diff=0.0000
+  [step 18, 0.00B, ckpt 19] toy_diff=0.0000 indist_diff=0.0000
+  [step 19, 0.00B, ckpt 20] toy_diff=0.0000 indist_diff=0.0000
+  [step 20, 0.00B, ckpt 21] toy_diff=0.0000 indist_diff=-0.0000
+  [step 21, 0.00B, ckpt 22] toy_diff=0.0000 indist_diff=0.0000
+  [step 22, 0.00B, ckpt 23] toy_diff=0.0000 indist_diff=0.0000
+  [step 23, 0.00B, ckpt 24] toy_diff=0.0000 indist_diff=0.0000
+  [step 24, 0.00B, ckpt 25] toy_diff=0.0000 indist_diff=0.0000
+  [step 25, 0.00B, ckpt 26] toy_diff=0.0000 indist_diff=0.0000
+  [step 26, 0.00B, ckpt 27] toy_diff=0.0000 indist_diff=0.0000
+  [step 27, 0.00B, ckpt 28] toy_diff=0.0000 indist_diff=0.0000
+  [step 28, 0.00B, ckpt 29] toy_diff=0.0000 indist_diff=0.0000
+  [step 29, 0.00B, ckpt 30] toy_diff=0.0000 indist_diff=0.0000
+  [step 30, 0.00B, ckpt 31] toy_diff=0.0000 indist_diff=0.0000
+  [step 31, 0.00B, ckpt 32] toy_diff=0.0000 indist_diff=0.0000
+  [step 32, 0.00B, ckpt 33] toy_diff=0.0000 indist_diff=0.0000
+  [step 33, 0.00B, ckpt 34] toy_diff=0.0000 indist_diff=0.0000
+  [step 34, 0.00B, ckpt 35] toy_diff=0.0000 indist_diff=0.0000
+  [step 35, 0.00B, ckpt 36] toy_diff=0.0000 indist_diff=0.0000
+  [step 36, 0.00B, ckpt 37] toy_diff=0.0000 indist_diff=0.0000
+  [step 37, 0.00B, ckpt 38] toy_diff=-0.0000 indist_diff=0.0000
+  [step 38, 0.00B, ckpt 39] toy_diff=0.0000 indist_diff=0.0000
+  [step 39, 0.00B, ckpt 40] toy_diff=0.0000 indist_diff=0.0000
+  [step 40, 0.00B, ckpt 41] toy_diff=0.0000 indist_diff=0.0000
+Token indices sequence length is longer than the specified maximum sequence length for this model (1287 > 1024). Running this sequence through the model will result in indexing errors
+  [step 41, 0.00B, ckpt 42] toy_diff=0.0000 indist_diff=0.0000
+  [step 42, 0.00B, ckpt 43] toy_diff=0.0000 indist_diff=0.0000
+  [step 43, 0.00B, ckpt 44] toy_diff=0.0000 indist_diff=0.0000
+  [step 44, 0.00B, ckpt 45] toy_diff=0.0000 indist_diff=0.0000
+  [step 45, 0.00B, ckpt 46] toy_diff=0.0000 indist_diff=0.0000
+  [step 46, 0.00B, ckpt 47] toy_diff=0.0000 indist_diff=0.0000
+  [step 47, 0.00B, ckpt 48] toy_diff=0.0000 indist_diff=0.0000
+  [step 48, 0.00B, ckpt 49] toy_diff=0.0000 indist_diff=0.0000
+  [step 49, 0.00B, ckpt 50] toy_diff=0.0000 indist_diff=0.0000
+  [step 50, 0.00B, ckpt 51] toy_diff=0.0000 indist_diff=0.0000
+  [step 51, 0.00B, ckpt 52] toy_diff=0.0000 indist_diff=0.0001
+  [step 52, 0.00B, ckpt 53] toy_diff=0.0000 indist_diff=0.0001
+  [step 53, 0.00B, ckpt 54] toy_diff=0.0000 indist_diff=0.0001
+  [step 54, 0.00B, ckpt 55] toy_diff=-0.0000 indist_diff=0.0002
+  [step 55, 0.00B, ckpt 56] toy_diff=-0.0000 indist_diff=0.0002
+  [step 56, 0.00B, ckpt 57] toy_diff=0.0000 indist_diff=0.0003
+  [step 57, 0.00B, ckpt 58] toy_diff=0.0000 indist_diff=0.0004
+  [step 58, 0.00B, ckpt 59] toy_diff=0.0000 indist_diff=0.0005
+  [step 59, 0.00B, ckpt 60] toy_diff=0.0000 indist_diff=0.0007
+  [step 60, 0.00B, ckpt 61] toy_diff=0.0000 indist_diff=0.0009
+  [step 61, 0.00B, ckpt 62] toy_diff=0.0000 indist_diff=0.0012
+  [step 62, 0.00B, ckpt 63] toy_diff=0.0000 indist_diff=0.0015
+  [step 63, 0.00B, ckpt 64] toy_diff=-0.0000 indist_diff=0.0021
+  [step 64, 0.00B, ckpt 65] toy_diff=0.0000 indist_diff=0.0027
+  [step 65, 0.00B, ckpt 66] toy_diff=0.0000 indist_diff=0.0036
+  [step 66, 0.00B, ckpt 67] toy_diff=0.0000 indist_diff=0.0048
+  [step 67, 0.00B, ckpt 68] toy_diff=0.0000 indist_diff=0.0064
+  [step 68, 0.00B, ckpt 69] toy_diff=0.0000 indist_diff=0.0084
+  [step 69, 0.00B, ckpt 70] toy_diff=0.0000 indist_diff=0.0111
+  [step 70, 0.00B, ckpt 71] toy_diff=0.0000 indist_diff=0.0145
+  [step 71, 0.00B, ckpt 72] toy_diff=0.0000 indist_diff=0.0189
+  [step 72, 0.00B, ckpt 73] toy_diff=0.0000 indist_diff=0.0246
+  [step 73, 0.00B, ckpt 74] toy_diff=0.0000 indist_diff=0.0319
+  [step 74, 0.00B, ckpt 75] toy_diff=0.0000 indist_diff=0.0413
+  [step 75, 0.00B, ckpt 76] toy_diff=0.0000 indist_diff=0.0531
+  [step 76, 0.00B, ckpt 77] toy_diff=0.0000 indist_diff=0.0679
+  [step 77, 0.00B, ckpt 78] toy_diff=0.0000 indist_diff=0.0865
+  [step 78, 0.00B, ckpt 79] toy_diff=0.0000 indist_diff=0.1093
+  [step 79, 0.00B, ckpt 80] toy_diff=0.0000 indist_diff=0.1373
+  [step 80, 0.00B, ckpt 81] toy_diff=0.0000 indist_diff=0.1710
+  [step 81, 0.00B, ckpt 82] toy_diff=0.0000 indist_diff=0.2111
+  [step 82, 0.00B, ckpt 83] toy_diff=0.0000 indist_diff=0.2581
+  [step 83, 0.00B, ckpt 84] toy_diff=0.0000 indist_diff=0.3121
+  [step 84, 0.00B, ckpt 85] toy_diff=0.0000 indist_diff=0.3721
+  [step 85, 0.00B, ckpt 86] toy_diff=0.0000 indist_diff=0.4371
+  [step 86, 0.00B, ckpt 87] toy_diff=0.0000 indist_diff=0.5044
+  [step 87, 0.00B, ckpt 88] toy_diff=0.0000 indist_diff=0.5743
+  [step 88, 0.00B, ckpt 89] toy_diff=0.0001 indist_diff=0.6417
+  [step 89, 0.00B, ckpt 90] toy_diff=0.0001 indist_diff=0.7052
+  [step 90, 0.00B, ckpt 91] toy_diff=0.0001 indist_diff=0.7641
+  [step 91, 0.00B, ckpt 92] toy_diff=0.0001 indist_diff=0.8150
+  [step 92, 0.00B, ckpt 93] toy_diff=0.0001 indist_diff=0.8574
+  [step 93, 0.00B, ckpt 94] toy_diff=0.0001 indist_diff=0.8914
+  [step 94, 0.00B, ckpt 95] toy_diff=0.0001 indist_diff=0.9172
+  [step 95, 0.00B, ckpt 96] toy_diff=0.0001 indist_diff=0.9359
+  [step 96, 0.00B, ckpt 97] toy_diff=0.0001 indist_diff=0.9473
+  [step 97, 0.00B, ckpt 98] toy_diff=0.0001 indist_diff=0.9529
+  [step 98, 0.00B, ckpt 99] toy_diff=0.0001 indist_diff=0.9522
+  [step 99, 0.00B, ckpt 100] toy_diff=0.0001 indist_diff=0.9469
+  step 100/101725  loss=8.1628  tokens=0.005B  ckpts=100  elapsed=50s
+  [step 100, 0.00B, ckpt 101] toy_diff=0.0001 indist_diff=0.9369
+  [step 109, 0.01B, ckpt 110] toy_diff=0.0002 indist_diff=0.7686
+  [step 119, 0.01B, ckpt 120] toy_diff=0.0002 indist_diff=0.5455
+  [step 129, 0.01B, ckpt 130] toy_diff=0.0002 indist_diff=0.2133
+  [step 139, 0.01B, ckpt 140] toy_diff=0.0006 indist_diff=0.0281
+  [step 150, 0.01B, ckpt 150] toy_diff=0.0025 indist_diff=0.0124
+  [step 162, 0.01B, ckpt 160] toy_diff=0.0050 indist_diff=0.1815
+  [step 175, 0.01B, ckpt 170] toy_diff=0.0051 indist_diff=0.1615
+  [step 189, 0.01B, ckpt 180] toy_diff=0.0047 indist_diff=0.1689
+  step 200/101725  loss=6.6591  tokens=0.010B  ckpts=186  elapsed=69s
+  [step 204, 0.01B, ckpt 190] toy_diff=0.0036 indist_diff=0.1239
+  [step 221, 0.01B, ckpt 200] toy_diff=0.0030 indist_diff=0.1153
+  [step 238, 0.01B, ckpt 210] toy_diff=0.0028 indist_diff=0.1056
+  [step 257, 0.01B, ckpt 220] toy_diff=0.0027 indist_diff=0.1148
+  [step 278, 0.01B, ckpt 230] toy_diff=0.0017 indist_diff=0.0901
+  step 300/101725  loss=6.3771  tokens=0.015B  ckpts=239  elapsed=83s
+  [step 300, 0.01B, ckpt 240] toy_diff=0.0017 indist_diff=0.1230
+'The read operation timed out' thrown while requesting GET https://huggingface.co/datasets/stanford-crfm/DSIR-filtered-pile-50M/resolve/2b07626eba22fbb8ac936faa385767e06cba6593/train_1.jsonl
+Retrying in 1s [Retry 1/5].
+  [step 324, 0.02B, ckpt 250] toy_diff=0.0011 indist_diff=0.0868
+  [step 350, 0.02B, ckpt 260] toy_diff=0.0003 indist_diff=0.1191
+  [step 378, 0.02B, ckpt 270] toy_diff=0.0000 indist_diff=0.0835
+  step 400/101725  loss=6.2532  tokens=0.020B  ckpts=277  elapsed=110s
+  [step 408, 0.02B, ckpt 280] toy_diff=-0.0000 indist_diff=0.0778
+'The read operation timed out' thrown while requesting GET https://huggingface.co/datasets/stanford-crfm/DSIR-filtered-pile-50M/resolve/2b07626eba22fbb8ac936faa385767e06cba6593/train_1.jsonl
+Retrying in 1s [Retry 1/5].
+  [step 440, 0.02B, ckpt 290] toy_diff=0.0000 indist_diff=0.1067
+  [step 475, 0.02B, ckpt 300] toy_diff=0.0006 indist_diff=0.0909
+  step 500/101725  loss=6.2068  tokens=0.025B  ckpts=306  elapsed=134s
+  [step 513, 0.03B, ckpt 310] toy_diff=0.0003 indist_diff=0.1151
+  [step 554, 0.03B, ckpt 320] toy_diff=-0.0010 indist_diff=0.0941
+  [step 598, 0.03B, ckpt 330] toy_diff=-0.0016 indist_diff=0.0903
+  step 600/101725  loss=6.0315  tokens=0.029B  ckpts=330  elapsed=147s
+  [step 646, 0.03B, ckpt 340] toy_diff=-0.0029 indist_diff=0.0833
+  [step 697, 0.03B, ckpt 350] toy_diff=-0.0091 indist_diff=0.1073
+  step 700/101725  loss=6.0242  tokens=0.034B  ckpts=350  elapsed=159s
+  [step 753, 0.04B, ckpt 360] toy_diff=-0.0115 indist_diff=0.1055
+  step 800/101725  loss=6.1271  tokens=0.039B  ckpts=367  elapsed=171s
+  [step 813, 0.04B, ckpt 370] toy_diff=-0.0186 indist_diff=0.0969
+  [step 877, 0.04B, ckpt 380] toy_diff=-0.0202 indist_diff=0.1057
+  step 900/101725  loss=5.8785  tokens=0.044B  ckpts=383  elapsed=182s
+  [step 947, 0.05B, ckpt 390] toy_diff=-0.0260 indist_diff=0.0900
+  step 1000/101725  loss=5.9496  tokens=0.049B  ckpts=396  elapsed=193s
+  [step 1023, 0.05B, ckpt 400] toy_diff=-0.0281 indist_diff=0.1052
+  step 1100/101725  loss=5.8291  tokens=0.054B  ckpts=409  elapsed=204s
+  [step 1104, 0.05B, ckpt 410] toy_diff=-0.0313 indist_diff=0.1108
+  [step 1192, 0.06B, ckpt 420] toy_diff=-0.0381 indist_diff=0.1217
+  step 1200/101725  loss=5.6779  tokens=0.059B  ckpts=420  elapsed=215s
+  [step 1287, 0.06B, ckpt 430] toy_diff=-0.0333 indist_diff=0.0934
+  step 1300/101725  loss=5.5380  tokens=0.064B  ckpts=431  elapsed=225s
+  [step 1390, 0.07B, ckpt 440] toy_diff=-0.0284 indist_diff=0.1236
+  step 1400/101725  loss=5.6169  tokens=0.069B  ckpts=440  elapsed=235s
+  step 1500/101725  loss=5.7374  tokens=0.074B  ckpts=449  elapsed=245s
+  [step 1501, 0.07B, ckpt 450] toy_diff=-0.0137 indist_diff=0.1296
+  step 1600/101725  loss=5.5676  tokens=0.079B  ckpts=458  elapsed=255s
+  [step 1620, 0.08B, ckpt 460] toy_diff=0.0185 indist_diff=0.1154
+  step 1700/101725  loss=5.5248  tokens=0.084B  ckpts=466  elapsed=265s
+  [step 1749, 0.09B, ckpt 470] toy_diff=0.0394 indist_diff=0.1699
+  step 1800/101725  loss=5.4306  tokens=0.088B  ckpts=473  elapsed=275s
+  [step 1889, 0.09B, ckpt 480] toy_diff=0.0698 indist_diff=0.1712
+  step 1900/101725  loss=5.4826  tokens=0.093B  ckpts=480  elapsed=286s
+  step 2000/101725  loss=5.5308  tokens=0.098B  ckpts=487  elapsed=296s
+  [step 2039, 0.10B, ckpt 490] toy_diff=0.1048 indist_diff=0.1814
+  step 2100/101725  loss=5.3943  tokens=0.103B  ckpts=493  elapsed=305s
+  step 2200/101725  loss=5.3584  tokens=0.108B  ckpts=499  elapsed=316s
+  [step 2202, 0.11B, ckpt 500] toy_diff=0.1525 indist_diff=0.2037
+  step 2300/101725  loss=5.4395  tokens=0.113B  ckpts=505  elapsed=327s
+  [step 2377, 0.12B, ckpt 510] toy_diff=0.1763 indist_diff=0.2013
+  step 2400/101725  loss=5.3561  tokens=0.118B  ckpts=511  elapsed=338s
+  step 2500/101725  loss=5.3560  tokens=0.123B  ckpts=516  elapsed=348s
+  [step 2566, 0.13B, ckpt 520] toy_diff=0.2052 indist_diff=0.1973
+  step 2600/101725  loss=5.4645  tokens=0.128B  ckpts=521  elapsed=359s
+  step 2700/101725  loss=5.1734  tokens=0.133B  ckpts=526  elapsed=370s
+  [step 2771, 0.14B, ckpt 530] toy_diff=0.2329 indist_diff=0.2250
+  step 2800/101725  loss=5.5552  tokens=0.138B  ckpts=531  elapsed=380s
+  step 2900/101725  loss=5.3170  tokens=0.143B  ckpts=535  elapsed=390s
+  [step 2992, 0.15B, ckpt 540] toy_diff=0.2676 indist_diff=0.2438
+  step 3000/101725  loss=5.2797  tokens=0.147B  ckpts=540  elapsed=401s
+  step 3100/101725  loss=5.1692  tokens=0.152B  ckpts=544  elapsed=412s
+  step 3200/101725  loss=5.3281  tokens=0.157B  ckpts=548  elapsed=423s
+  [step 3230, 0.16B, ckpt 550] toy_diff=0.3191 indist_diff=0.2363
+  step 3300/101725  loss=5.1922  tokens=0.162B  ckpts=552  elapsed=432s
+  step 3400/101725  loss=5.2295  tokens=0.167B  ckpts=556  elapsed=442s
+  [step 3487, 0.17B, ckpt 560] toy_diff=0.3423 indist_diff=0.2357
+  step 3500/101725  loss=5.2612  tokens=0.172B  ckpts=560  elapsed=452s
+  step 3600/101725  loss=5.3267  tokens=0.177B  ckpts=564  elapsed=462s
+  step 3700/101725  loss=5.2467  tokens=0.182B  ckpts=567  elapsed=471s
+  [step 3765, 0.19B, ckpt 570] toy_diff=0.3873 indist_diff=0.2820
+  step 3800/101725  loss=5.1439  tokens=0.187B  ckpts=571  elapsed=481s
+  step 3900/101725  loss=5.1602  tokens=0.192B  ckpts=574  elapsed=491s
+  step 4000/101725  loss=5.2300  tokens=0.197B  ckpts=577  elapsed=501s
+  [step 4065, 0.20B, ckpt 580] toy_diff=0.4126 indist_diff=0.3015
+  step 4100/101725  loss=5.2343  tokens=0.202B  ckpts=581  elapsed=513s
+  step 4200/101725  loss=5.3288  tokens=0.206B  ckpts=584  elapsed=523s
+  step 4300/101725  loss=5.1808  tokens=0.211B  ckpts=587  elapsed=533s
+  [step 4389, 0.22B, ckpt 590] toy_diff=0.4797 indist_diff=0.3006
+  step 4400/101725  loss=5.2829  tokens=0.216B  ckpts=590  elapsed=544s
+  step 4500/101725  loss=5.2142  tokens=0.221B  ckpts=593  elapsed=553s
+  step 4600/101725  loss=5.0656  tokens=0.226B  ckpts=596  elapsed=563s
+  step 4700/101725  loss=5.1681  tokens=0.231B  ckpts=598  elapsed=573s
+  [step 4739, 0.23B, ckpt 600] toy_diff=0.5267 indist_diff=0.3316
+'The read operation timed out' thrown while requesting GET https://huggingface.co/datasets/stanford-crfm/DSIR-filtered-pile-50M/resolve/2b07626eba22fbb8ac936faa385767e06cba6593/train_1.jsonl
+Retrying in 1s [Retry 1/5].
+  step 4800/101725  loss=5.1931  tokens=0.236B  ckpts=601  elapsed=596s
+  step 4900/101725  loss=5.1105  tokens=0.241B  ckpts=604  elapsed=607s
+  step 5000/101725  loss=5.2744  tokens=0.246B  ckpts=606  elapsed=618s
+  step 5100/101725  loss=5.1904  tokens=0.251B  ckpts=609  elapsed=629s
+  [step 5116, 0.25B, ckpt 610] toy_diff=0.5684 indist_diff=0.3350
+  step 5200/101725  loss=5.1440  tokens=0.256B  ckpts=612  elapsed=639s
+  step 5300/101725  loss=5.2009  tokens=0.261B  ckpts=614  elapsed=649s
+  step 5400/101725  loss=5.1165  tokens=0.265B  ckpts=617  elapsed=660s
+  step 5500/101725  loss=5.1027  tokens=0.270B  ckpts=619  elapsed=672s
+  [step 5524, 0.27B, ckpt 620] toy_diff=0.6288 indist_diff=0.3791
+  step 5600/101725  loss=5.0673  tokens=0.275B  ckpts=621  elapsed=683s
+  step 5700/101725  loss=5.2036  tokens=0.280B  ckpts=624  elapsed=695s
+  step 5800/101725  loss=5.1040  tokens=0.285B  ckpts=626  elapsed=705s
+  step 5900/101725  loss=5.1349  tokens=0.290B  ckpts=628  elapsed=716s
+  [step 5964, 0.29B, ckpt 630] toy_diff=0.7239 indist_diff=0.4309
+  step 6000/101725  loss=5.1854  tokens=0.295B  ckpts=630  elapsed=727s
+  step 6100/101725  loss=5.1235  tokens=0.300B  ckpts=632  elapsed=737s
+  step 6200/101725  loss=5.1763  tokens=0.305B  ckpts=635  elapsed=749s
+  step 6300/101725  loss=5.0864  tokens=0.310B  ckpts=637  elapsed=759s
+  step 6400/101725  loss=5.1040  tokens=0.315B  ckpts=639  elapsed=768s
+  [step 6439, 0.32B, ckpt 640] toy_diff=0.7654 indist_diff=0.4746
+  step 6500/101725  loss=5.0868  tokens=0.319B  ckpts=641  elapsed=778s
+  step 6600/101725  loss=5.1326  tokens=0.324B  ckpts=643  elapsed=789s
+  step 6700/101725  loss=5.1505  tokens=0.329B  ckpts=645  elapsed=800s
+  step 6800/101725  loss=5.0180  tokens=0.334B  ckpts=647  elapsed=810s
+  step 6900/101725  loss=5.0408  tokens=0.339B  ckpts=649  elapsed=822s
+  [step 6952, 0.34B, ckpt 650] toy_diff=0.9224 indist_diff=0.5391
+  step 7000/101725  loss=5.1026  tokens=0.344B  ckpts=650  elapsed=831s
+  step 7100/101725  loss=5.1050  tokens=0.349B  ckpts=652  elapsed=842s
+  step 7200/101725  loss=5.0963  tokens=0.354B  ckpts=654  elapsed=853s
+  step 7300/101725  loss=5.1070  tokens=0.359B  ckpts=656  elapsed=865s
+  step 7400/101725  loss=5.0851  tokens=0.364B  ckpts=658  elapsed=876s
+  step 7500/101725  loss=4.6786  tokens=0.369B  ckpts=659  elapsed=887s
+  [step 7506, 0.37B, ckpt 660] toy_diff=1.0943 indist_diff=0.5955
+  step 7600/101725  loss=5.0510  tokens=0.374B  ckpts=661  elapsed=898s
+  step 7700/101725  loss=4.9826  tokens=0.378B  ckpts=663  elapsed=908s
+  step 7800/101725  loss=5.0481  tokens=0.383B  ckpts=664  elapsed=918s
+  step 7900/101725  loss=5.0522  tokens=0.388B  ckpts=666  elapsed=928s
+  step 8000/101725  loss=5.2006  tokens=0.393B  ckpts=668  elapsed=938s
+  step 8100/101725  loss=5.0008  tokens=0.398B  ckpts=669  elapsed=949s
+  [step 8104, 0.40B, ckpt 670] toy_diff=1.2019 indist_diff=0.6968
+  step 8200/101725  loss=5.1320  tokens=0.403B  ckpts=671  elapsed=960s
+  step 8300/101725  loss=5.3029  tokens=0.408B  ckpts=673  elapsed=971s
+  step 8400/101725  loss=5.1345  tokens=0.413B  ckpts=674  elapsed=982s
+  step 8500/101725  loss=5.1540  tokens=0.418B  ckpts=676  elapsed=992s
+  step 8600/101725  loss=5.0821  tokens=0.423B  ckpts=677  elapsed=1002s
+  step 8700/101725  loss=5.0439  tokens=0.428B  ckpts=679  elapsed=1011s
+  [step 8750, 0.43B, ckpt 680] toy_diff=1.4729 indist_diff=0.8065
+  step 8800/101725  loss=4.9733  tokens=0.433B  ckpts=680  elapsed=1022s
+  step 8900/101725  loss=5.1450  tokens=0.437B  ckpts=682  elapsed=1032s
+  step 9000/101725  loss=5.0908  tokens=0.442B  ckpts=683  elapsed=1043s
+  step 9100/101725  loss=4.9889  tokens=0.447B  ckpts=685  elapsed=1054s
+  step 9200/101725  loss=5.2570  tokens=0.452B  ckpts=686  elapsed=1063s
+  step 9300/101725  loss=5.1737  tokens=0.457B  ckpts=687  elapsed=1072s
+  step 9400/101725  loss=4.9972  tokens=0.462B  ckpts=689  elapsed=1082s
+  [step 9447, 0.46B, ckpt 690] toy_diff=1.7613 indist_diff=0.8939
+  step 9500/101725  loss=5.0026  tokens=0.467B  ckpts=690  elapsed=1092s
+  step 9600/101725  loss=4.9931  tokens=0.472B  ckpts=692  elapsed=1102s
+  step 9700/101725  loss=4.9537  tokens=0.477B  ckpts=693  elapsed=1112s
+  step 9800/101725  loss=5.0185  tokens=0.482B  ckpts=694  elapsed=1122s
+  step 9900/101725  loss=5.1700  tokens=0.487B  ckpts=696  elapsed=1131s
+  step 10000/101725  loss=4.9749  tokens=0.492B  ckpts=697  elapsed=1141s
+  step 10100/101725  loss=4.9656  tokens=0.496B  ckpts=698  elapsed=1151s
+  step 10200/101725  loss=5.0584  tokens=0.501B  ckpts=699  elapsed=1162s
+  [step 10200, 0.50B, ckpt 700] toy_diff=2.1788 indist_diff=0.9678
+  step 10300/101725  loss=4.8930  tokens=0.506B  ckpts=701  elapsed=1172s
+  step 10400/101725  loss=5.0005  tokens=0.511B  ckpts=702  elapsed=1183s
+  step 10500/101725  loss=4.9343  tokens=0.516B  ckpts=703  elapsed=1195s
+  step 10600/101725  loss=4.9723  tokens=0.521B  ckpts=705  elapsed=1212s
+  step 10700/101725  loss=4.9672  tokens=0.526B  ckpts=706  elapsed=1231s
+  step 10800/101725  loss=5.0215  tokens=0.531B  ckpts=707  elapsed=1253s
+  step 10900/101725  loss=4.9338  tokens=0.536B  ckpts=708  elapsed=1268s
+  step 11000/101725  loss=5.0316  tokens=0.541B  ckpts=709  elapsed=1280s
+  [step 11013, 0.54B, ckpt 710] toy_diff=2.4132 indist_diff=1.0360
+  step 11100/101725  loss=4.9382  tokens=0.546B  ckpts=711  elapsed=1291s
+  step 11200/101725  loss=4.9596  tokens=0.551B  ckpts=712  elapsed=1302s
+  step 11300/101725  loss=5.0441  tokens=0.555B  ckpts=713  elapsed=1315s
+  step 11400/101725  loss=5.0245  tokens=0.560B  ckpts=714  elapsed=1326s
+  step 11500/101725  loss=4.8803  tokens=0.565B  ckpts=715  elapsed=1337s
+  step 11600/101725  loss=4.9757  tokens=0.570B  ckpts=716  elapsed=1348s
+  step 11700/101725  loss=4.9721  tokens=0.575B  ckpts=717  elapsed=1359s
+  step 11800/101725  loss=4.8650  tokens=0.580B  ckpts=718  elapsed=1369s
+  [step 11890, 0.58B, ckpt 720] toy_diff=2.7762 indist_diff=1.1012
+  step 11900/101725  loss=4.8592  tokens=0.585B  ckpts=720  elapsed=1380s
+  step 12000/101725  loss=5.1256  tokens=0.590B  ckpts=721  elapsed=1390s
+  step 12100/101725  loss=4.9197  tokens=0.595B  ckpts=722  elapsed=1401s
+  step 12200/101725  loss=4.9696  tokens=0.600B  ckpts=723  elapsed=1410s
+  step 12300/101725  loss=4.9795  tokens=0.605B  ckpts=724  elapsed=1420s
+  step 12400/101725  loss=4.8861  tokens=0.609B  ckpts=725  elapsed=1431s
+  step 12500/101725  loss=4.8694  tokens=0.614B  ckpts=726  elapsed=1442s
+  step 12600/101725  loss=4.9969  tokens=0.619B  ckpts=727  elapsed=1452s
+  step 12700/101725  loss=4.9213  tokens=0.624B  ckpts=728  elapsed=1463s
+  step 12800/101725  loss=5.0711  tokens=0.629B  ckpts=729  elapsed=1473s
+  [step 12838, 0.63B, ckpt 730] toy_diff=3.0720 indist_diff=1.1376
+  step 12900/101725  loss=4.8578  tokens=0.634B  ckpts=730  elapsed=1484s
+  step 13000/101725  loss=4.9392  tokens=0.639B  ckpts=731  elapsed=1495s
+  step 13100/101725  loss=4.9181  tokens=0.644B  ckpts=732  elapsed=1504s
+  step 13200/101725  loss=4.9052  tokens=0.649B  ckpts=733  elapsed=1515s
+  step 13300/101725  loss=4.9809  tokens=0.654B  ckpts=734  elapsed=1525s
+  step 13400/101725  loss=4.9980  tokens=0.659B  ckpts=735  elapsed=1535s
+  step 13500/101725  loss=4.7892  tokens=0.664B  ckpts=736  elapsed=1546s
+  step 13600/101725  loss=4.9551  tokens=0.668B  ckpts=737  elapsed=1555s
+  step 13700/101725  loss=4.9692  tokens=0.673B  ckpts=738  elapsed=1566s
+  step 13800/101725  loss=5.0940  tokens=0.678B  ckpts=739  elapsed=1576s
+  [step 13861, 0.68B, ckpt 740] toy_diff=3.3094 indist_diff=1.1689
+  step 13900/101725  loss=4.9339  tokens=0.683B  ckpts=740  elapsed=1587s
+  step 14000/101725  loss=4.9273  tokens=0.688B  ckpts=741  elapsed=1598s
+  step 14100/101725  loss=5.0022  tokens=0.693B  ckpts=742  elapsed=1609s
+  step 14200/101725  loss=5.0627  tokens=0.698B  ckpts=743  elapsed=1620s
+  step 14300/101725  loss=4.9635  tokens=0.703B  ckpts=744  elapsed=1630s
+  step 14400/101725  loss=4.9202  tokens=0.708B  ckpts=744  elapsed=1639s
+  step 14500/101725  loss=4.9704  tokens=0.713B  ckpts=745  elapsed=1650s
+  step 14600/101725  loss=5.0571  tokens=0.718B  ckpts=746  elapsed=1661s
+  step 14700/101725  loss=4.9546  tokens=0.723B  ckpts=747  elapsed=1672s
+  step 14800/101725  loss=4.9277  tokens=0.727B  ckpts=748  elapsed=1682s
+  step 14900/101725  loss=4.9009  tokens=0.732B  ckpts=749  elapsed=1692s
+  [step 14965, 0.74B, ckpt 750] toy_diff=3.6448 indist_diff=1.2092
+  step 15000/101725  loss=4.8865  tokens=0.737B  ckpts=750  elapsed=1703s
+  step 15100/101725  loss=4.9255  tokens=0.742B  ckpts=751  elapsed=1713s
+  step 15200/101725  loss=5.0462  tokens=0.747B  ckpts=752  elapsed=1722s
+  step 15300/101725  loss=4.9623  tokens=0.752B  ckpts=752  elapsed=1733s
+  step 15400/101725  loss=4.8621  tokens=0.757B  ckpts=753  elapsed=1743s
+  step 15500/101725  loss=4.9026  tokens=0.762B  ckpts=754  elapsed=1753s
+  step 15600/101725  loss=4.8967  tokens=0.767B  ckpts=755  elapsed=1763s
+  step 15700/101725  loss=4.8310  tokens=0.772B  ckpts=756  elapsed=1774s
+  step 15800/101725  loss=4.8835  tokens=0.777B  ckpts=757  elapsed=1784s
+  step 15900/101725  loss=4.9511  tokens=0.782B  ckpts=757  elapsed=1794s
+  step 16000/101725  loss=4.9686  tokens=0.786B  ckpts=758  elapsed=1804s
+  step 16100/101725  loss=5.0086  tokens=0.791B  ckpts=759  elapsed=1816s
+  [step 16157, 0.79B, ckpt 760] toy_diff=3.8642 indist_diff=1.2691
+  step 16200/101725  loss=4.9507  tokens=0.796B  ckpts=760  elapsed=1825s
+  step 16300/101725  loss=4.8543  tokens=0.801B  ckpts=761  elapsed=1835s
+  step 16400/101725  loss=5.1829  tokens=0.806B  ckpts=761  elapsed=1846s
+  step 16500/101725  loss=4.9692  tokens=0.811B  ckpts=762  elapsed=1856s
+  step 16600/101725  loss=4.7860  tokens=0.816B  ckpts=763  elapsed=1866s
+  step 16700/101725  loss=4.8012  tokens=0.821B  ckpts=764  elapsed=1876s
+  step 16800/101725  loss=4.8024  tokens=0.826B  ckpts=765  elapsed=1886s
+  step 16900/101725  loss=5.0896  tokens=0.831B  ckpts=765  elapsed=1897s
+  step 17000/101725  loss=4.9257  tokens=0.836B  ckpts=766  elapsed=1908s
+  step 17100/101725  loss=4.8274  tokens=0.840B  ckpts=767  elapsed=1918s
+  step 17200/101725  loss=4.8216  tokens=0.845B  ckpts=768  elapsed=1928s
+  step 17300/101725  loss=4.8229  tokens=0.850B  ckpts=768  elapsed=1938s
+  step 17400/101725  loss=5.2041  tokens=0.855B  ckpts=769  elapsed=1949s
+  [step 17445, 0.86B, ckpt 770] toy_diff=3.9439 indist_diff=1.2715
+  step 17500/101725  loss=4.9948  tokens=0.860B  ckpts=770  elapsed=1962s
+  step 17600/101725  loss=4.8703  tokens=0.865B  ckpts=771  elapsed=1971s
+  step 17700/101725  loss=4.9193  tokens=0.870B  ckpts=771  elapsed=1981s
+  step 17800/101725  loss=4.9128  tokens=0.875B  ckpts=772  elapsed=1991s
+  step 17900/101725  loss=5.0166  tokens=0.880B  ckpts=773  elapsed=2001s
+  step 18000/101725  loss=4.9071  tokens=0.885B  ckpts=774  elapsed=2012s
+  step 18100/101725  loss=4.8718  tokens=0.890B  ckpts=774  elapsed=2023s
+  step 18200/101725  loss=4.9305  tokens=0.895B  ckpts=775  elapsed=2033s
+  step 18300/101725  loss=4.9608  tokens=0.899B  ckpts=776  elapsed=2043s
+  step 18400/101725  loss=4.7917  tokens=0.904B  ckpts=776  elapsed=2054s
+  step 18500/101725  loss=4.8292  tokens=0.909B  ckpts=777  elapsed=2064s
+  step 18600/101725  loss=5.0069  tokens=0.914B  ckpts=778  elapsed=2075s
+  step 18700/101725  loss=4.8975  tokens=0.919B  ckpts=779  elapsed=2085s
+  step 18800/101725  loss=4.8704  tokens=0.924B  ckpts=779  elapsed=2095s
+  [step 18835, 0.93B, ckpt 780] toy_diff=4.1215 indist_diff=1.2938
+  step 18900/101725  loss=4.9443  tokens=0.929B  ckpts=780  elapsed=2106s
+  step 19000/101725  loss=4.7561  tokens=0.934B  ckpts=781  elapsed=2117s
+  step 19100/101725  loss=4.8797  tokens=0.939B  ckpts=781  elapsed=2126s
+  step 19200/101725  loss=4.9506  tokens=0.944B  ckpts=782  elapsed=2135s
+  step 19300/101725  loss=4.8717  tokens=0.949B  ckpts=783  elapsed=2149s
+  step 19400/101725  loss=4.7561  tokens=0.954B  ckpts=783  elapsed=2163s
+  step 19500/101725  loss=5.0192  tokens=0.958B  ckpts=784  elapsed=2174s
+  step 19600/101725  loss=4.7889  tokens=0.963B  ckpts=785  elapsed=2186s
+  step 19700/101725  loss=4.8783  tokens=0.968B  ckpts=785  elapsed=2202s
+  step 19800/101725  loss=4.9716  tokens=0.973B  ckpts=786  elapsed=2213s
+  step 19900/101725  loss=4.8933  tokens=0.978B  ckpts=787  elapsed=2223s
+  step 20000/101725  loss=4.8982  tokens=0.983B  ckpts=787  elapsed=2234s
+  step 20100/101725  loss=4.8542  tokens=0.988B  ckpts=788  elapsed=2246s
+  step 20200/101725  loss=4.8679  tokens=0.993B  ckpts=789  elapsed=2256s
+  step 20300/101725  loss=4.8608  tokens=0.998B  ckpts=789  elapsed=2268s
+  [step 20335, 1.00B, ckpt 790] toy_diff=4.1378 indist_diff=1.2942
+  step 20400/101725  loss=4.9855  tokens=1.003B  ckpts=790  elapsed=2280s
+  step 20500/101725  loss=4.8926  tokens=1.008B  ckpts=791  elapsed=2291s
+  step 20600/101725  loss=4.8661  tokens=1.013B  ckpts=791  elapsed=2302s
+  step 20700/101725  loss=4.9354  tokens=1.017B  ckpts=792  elapsed=2319s
+  step 20800/101725  loss=4.8447  tokens=1.022B  ckpts=792  elapsed=2331s
+  step 20900/101725  loss=4.7695  tokens=1.027B  ckpts=793  elapsed=2341s
+  step 21000/101725  loss=4.9302  tokens=1.032B  ckpts=794  elapsed=2352s
+  step 21100/101725  loss=4.8399  tokens=1.037B  ckpts=794  elapsed=2364s
+  step 21200/101725  loss=4.8989  tokens=1.042B  ckpts=795  elapsed=2376s
+  step 21300/101725  loss=4.8447  tokens=1.047B  ckpts=796  elapsed=2386s
+  step 21400/101725  loss=4.8286  tokens=1.052B  ckpts=796  elapsed=2397s
+  step 21500/101725  loss=4.9382  tokens=1.057B  ckpts=797  elapsed=2410s
+  step 21600/101725  loss=4.9419  tokens=1.062B  ckpts=797  elapsed=2420s
+  step 21700/101725  loss=4.9183  tokens=1.067B  ckpts=798  elapsed=2431s
+  step 21800/101725  loss=4.7202  tokens=1.072B  ckpts=799  elapsed=2443s
+  step 21900/101725  loss=4.9320  tokens=1.076B  ckpts=799  elapsed=2454s
+  [step 21956, 1.08B, ckpt 800] toy_diff=4.1194 indist_diff=1.2965
+  step 22000/101725  loss=4.9017  tokens=1.081B  ckpts=800  elapsed=2464s
+  step 22100/101725  loss=4.8619  tokens=1.086B  ckpts=800  elapsed=2474s
+  step 22200/101725  loss=4.7488  tokens=1.091B  ckpts=801  elapsed=2486s
+  step 22300/101725  loss=4.8002  tokens=1.096B  ckpts=802  elapsed=2496s
+  step 22400/101725  loss=4.9516  tokens=1.101B  ckpts=802  elapsed=2507s
+  step 22500/101725  loss=4.9041  tokens=1.106B  ckpts=803  elapsed=2517s
+  step 22600/101725  loss=4.8950  tokens=1.111B  ckpts=803  elapsed=2530s
+  step 22700/101725  loss=4.8666  tokens=1.116B  ckpts=804  elapsed=2541s
+  step 22800/101725  loss=4.9145  tokens=1.121B  ckpts=804  elapsed=2552s
+  step 22900/101725  loss=4.9070  tokens=1.126B  ckpts=805  elapsed=2563s
+  step 23000/101725  loss=4.8572  tokens=1.130B  ckpts=806  elapsed=2574s
+  step 23100/101725  loss=4.8262  tokens=1.135B  ckpts=806  elapsed=2584s
+  step 23200/101725  loss=4.8456  tokens=1.140B  ckpts=807  elapsed=2594s
+  step 23300/101725  loss=4.8435  tokens=1.145B  ckpts=807  elapsed=2604s
+  step 23400/101725  loss=4.8686  tokens=1.150B  ckpts=808  elapsed=2615s
+  step 23500/101725  loss=4.9582  tokens=1.155B  ckpts=808  elapsed=2626s
+  step 23600/101725  loss=4.9517  tokens=1.160B  ckpts=809  elapsed=2636s
+  step 23700/101725  loss=4.9298  tokens=1.165B  ckpts=809  elapsed=2648s
+  [step 23705, 1.17B, ckpt 810] toy_diff=4.2231 indist_diff=1.3118
+  step 23800/101725  loss=4.8229  tokens=1.170B  ckpts=810  elapsed=2660s
+  step 23900/101725  loss=4.8746  tokens=1.175B  ckpts=811  elapsed=2671s
+  step 24000/101725  loss=4.8602  tokens=1.180B  ckpts=811  elapsed=2682s
+  step 24100/101725  loss=4.8707  tokens=1.185B  ckpts=812  elapsed=2693s
+  step 24200/101725  loss=4.8016  tokens=1.189B  ckpts=812  elapsed=2703s
+  step 24300/101725  loss=4.9489  tokens=1.194B  ckpts=813  elapsed=2715s
+  step 24400/101725  loss=4.9216  tokens=1.199B  ckpts=813  elapsed=2726s
+  step 24500/101725  loss=4.8650  tokens=1.204B  ckpts=814  elapsed=2737s
+  step 24600/101725  loss=4.7954  tokens=1.209B  ckpts=814  elapsed=2748s
+  step 24700/101725  loss=4.9677  tokens=1.214B  ckpts=815  elapsed=2759s
+  step 24800/101725  loss=4.8419  tokens=1.219B  ckpts=815  elapsed=2771s
+  step 24900/101725  loss=4.9645  tokens=1.224B  ckpts=816  elapsed=2781s
+  step 25000/101725  loss=4.8975  tokens=1.229B  ckpts=816  elapsed=2792s
+  step 25100/101725  loss=4.9869  tokens=1.234B  ckpts=817  elapsed=2802s
+  step 25200/101725  loss=4.8377  tokens=1.239B  ckpts=817  elapsed=2812s
+  step 25300/101725  loss=4.8636  tokens=1.244B  ckpts=818  elapsed=2822s
+  step 25400/101725  loss=4.8813  tokens=1.248B  ckpts=819  elapsed=2832s
+  step 25500/101725  loss=4.9274  tokens=1.253B  ckpts=819  elapsed=2844s
+  [step 25594, 1.26B, ckpt 820] toy_diff=4.2569 indist_diff=1.3194
+  step 25600/101725  loss=4.8676  tokens=1.258B  ckpts=820  elapsed=2854s
+  step 25700/101725  loss=4.8719  tokens=1.263B  ckpts=820  elapsed=2864s
+  step 25800/101725  loss=4.8555  tokens=1.268B  ckpts=821  elapsed=2874s
+  step 25900/101725  loss=4.8868  tokens=1.273B  ckpts=821  elapsed=2885s
+  step 26000/101725  loss=4.8959  tokens=1.278B  ckpts=822  elapsed=2896s
+  step 26100/101725  loss=4.8686  tokens=1.283B  ckpts=822  elapsed=2907s
+  step 26200/101725  loss=4.8416  tokens=1.288B  ckpts=823  elapsed=2918s
+  step 26300/101725  loss=4.7644  tokens=1.293B  ckpts=823  elapsed=2928s
+  step 26400/101725  loss=4.8057  tokens=1.298B  ckpts=824  elapsed=2938s
+  step 26500/101725  loss=4.9622  tokens=1.303B  ckpts=824  elapsed=2949s
+  step 26600/101725  loss=4.7783  tokens=1.307B  ckpts=825  elapsed=2959s
+  step 26700/101725  loss=4.8226  tokens=1.312B  ckpts=825  elapsed=2969s
+  step 26800/101725  loss=4.8901  tokens=1.317B  ckpts=826  elapsed=2980s
+  step 26900/101725  loss=4.8448  tokens=1.322B  ckpts=826  elapsed=2990s
+  step 27000/101725  loss=4.8035  tokens=1.327B  ckpts=826  elapsed=3001s
+  step 27100/101725  loss=4.7919  tokens=1.332B  ckpts=827  elapsed=3013s
+  step 27200/101725  loss=4.8276  tokens=1.337B  ckpts=827  elapsed=3023s
+  step 27300/101725  loss=4.7525  tokens=1.342B  ckpts=828  elapsed=3034s
+  step 27400/101725  loss=4.9211  tokens=1.347B  ckpts=828  elapsed=3044s
+  step 27500/101725  loss=4.9816  tokens=1.352B  ckpts=829  elapsed=3054s
+  step 27600/101725  loss=4.9916  tokens=1.357B  ckpts=829  elapsed=3063s
+  [step 27633, 1.36B, ckpt 830] toy_diff=4.4118 indist_diff=1.3705
+  step 27700/101725  loss=4.8590  tokens=1.362B  ckpts=830  elapsed=3074s
+  step 27800/101725  loss=4.7895  tokens=1.366B  ckpts=830  elapsed=3083s
+  step 27900/101725  loss=4.9864  tokens=1.371B  ckpts=831  elapsed=3094s
+  step 28000/101725  loss=4.9101  tokens=1.376B  ckpts=831  elapsed=3104s
+  step 28100/101725  loss=5.2253  tokens=1.381B  ckpts=832  elapsed=3114s
+  step 28200/101725  loss=4.6915  tokens=1.386B  ckpts=832  elapsed=3125s
+  step 28300/101725  loss=4.7341  tokens=1.391B  ckpts=833  elapsed=3134s
+  step 28400/101725  loss=4.8146  tokens=1.396B  ckpts=833  elapsed=3145s
+  step 28500/101725  loss=4.8357  tokens=1.401B  ckpts=834  elapsed=3156s
+  step 28600/101725  loss=4.8691  tokens=1.406B  ckpts=834  elapsed=3165s
+  step 28700/101725  loss=4.8757  tokens=1.411B  ckpts=834  elapsed=3174s
+  step 28800/101725  loss=4.8135  tokens=1.416B  ckpts=835  elapsed=3185s
+  step 28900/101725  loss=4.8619  tokens=1.420B  ckpts=835  elapsed=3195s
+  step 29000/101725  loss=4.8603  tokens=1.425B  ckpts=836  elapsed=3205s
+  step 29100/101725  loss=4.8185  tokens=1.430B  ckpts=836  elapsed=3216s
+  step 29200/101725  loss=4.8689  tokens=1.435B  ckpts=837  elapsed=3225s
+  step 29300/101725  loss=4.9401  tokens=1.440B  ckpts=837  elapsed=3236s
+  step 29400/101725  loss=4.8811  tokens=1.445B  ckpts=838  elapsed=3247s
+  step 29500/101725  loss=4.7366  tokens=1.450B  ckpts=838  elapsed=3257s
+  step 29600/101725  loss=5.1147  tokens=1.455B  ckpts=838  elapsed=3267s
+  step 29700/101725  loss=4.9551  tokens=1.460B  ckpts=839  elapsed=3278s
+  step 29800/101725  loss=4.8672  tokens=1.465B  ckpts=839  elapsed=3287s
+  [step 29835, 1.47B, ckpt 840] toy_diff=4.1715 indist_diff=1.3250
+  step 29900/101725  loss=4.8112  tokens=1.470B  ckpts=840  elapsed=3298s
+  step 30000/101725  loss=4.8799  tokens=1.475B  ckpts=840  elapsed=3307s
+  step 30100/101725  loss=4.8374  tokens=1.479B  ckpts=841  elapsed=3317s
+  step 30200/101725  loss=4.8096  tokens=1.484B  ckpts=841  elapsed=3328s
+  step 30300/101725  loss=4.8348  tokens=1.489B  ckpts=842  elapsed=3339s
+  step 30400/101725  loss=4.8530  tokens=1.494B  ckpts=842  elapsed=3349s
+  step 30500/101725  loss=4.9656  tokens=1.499B  ckpts=842  elapsed=3360s
+  step 30600/101725  loss=4.9528  tokens=1.504B  ckpts=843  elapsed=3372s
+  step 30700/101725  loss=4.8378  tokens=1.509B  ckpts=843  elapsed=3381s
+  step 30800/101725  loss=4.7144  tokens=1.514B  ckpts=844  elapsed=3391s
+  step 30900/101725  loss=4.8567  tokens=1.519B  ckpts=844  elapsed=3402s
+  step 31000/101725  loss=4.8639  tokens=1.524B  ckpts=844  elapsed=3411s
+  step 31100/101725  loss=4.8637  tokens=1.529B  ckpts=845  elapsed=3422s
+  step 31200/101725  loss=4.9212  tokens=1.534B  ckpts=845  elapsed=3432s
+  step 31300/101725  loss=4.8805  tokens=1.538B  ckpts=846  elapsed=3443s
+  step 31400/101725  loss=4.8355  tokens=1.543B  ckpts=846  elapsed=3453s
+  step 31500/101725  loss=5.0264  tokens=1.548B  ckpts=847  elapsed=3464s
+  step 31600/101725  loss=4.9257  tokens=1.553B  ckpts=847  elapsed=3474s
+  step 31700/101725  loss=4.8744  tokens=1.558B  ckpts=847  elapsed=3484s
+  step 31800/101725  loss=4.8011  tokens=1.563B  ckpts=848  elapsed=3493s
+  step 31900/101725  loss=4.9276  tokens=1.568B  ckpts=848  elapsed=3503s
+  step 32000/101725  loss=4.7361  tokens=1.573B  ckpts=849  elapsed=3513s
+  step 32100/101725  loss=4.8728  tokens=1.578B  ckpts=849  elapsed=3523s
+  step 32200/101725  loss=4.8212  tokens=1.583B  ckpts=849  elapsed=3532s
+  [step 32212, 1.58B, ckpt 850] toy_diff=4.4058 indist_diff=1.3693
+  step 32300/101725  loss=4.8162  tokens=1.588B  ckpts=850  elapsed=3543s
+  step 32400/101725  loss=4.7722  tokens=1.593B  ckpts=850  elapsed=3555s
+  step 32500/101725  loss=4.9052  tokens=1.597B  ckpts=851  elapsed=3565s
+  step 32600/101725  loss=4.8570  tokens=1.602B  ckpts=851  elapsed=3575s
+  step 32700/101725  loss=5.0446  tokens=1.607B  ckpts=851  elapsed=3586s
+  step 32800/101725  loss=5.0766  tokens=1.612B  ckpts=852  elapsed=3595s
+  step 32900/101725  loss=4.7687  tokens=1.617B  ckpts=852  elapsed=3606s
+  step 33000/101725  loss=4.7445  tokens=1.622B  ckpts=853  elapsed=3616s
+  step 33100/101725  loss=4.7493  tokens=1.627B  ckpts=853  elapsed=3626s
+  step 33200/101725  loss=4.7621  tokens=1.632B  ckpts=853  elapsed=3635s
+  step 33300/101725  loss=4.9591  tokens=1.637B  ckpts=854  elapsed=3646s
+  step 33400/101725  loss=4.8432  tokens=1.642B  ckpts=854  elapsed=3656s
+  step 33500/101725  loss=4.7878  tokens=1.647B  ckpts=855  elapsed=3666s
+  step 33600/101725  loss=4.9124  tokens=1.652B  ckpts=855  elapsed=3676s
+  step 33700/101725  loss=4.8646  tokens=1.656B  ckpts=855  elapsed=3685s
+  step 33800/101725  loss=4.8278  tokens=1.661B  ckpts=856  elapsed=3695s
+  step 33900/101725  loss=4.8242  tokens=1.666B  ckpts=856  elapsed=3706s
+  step 34000/101725  loss=4.7063  tokens=1.671B  ckpts=857  elapsed=3716s
+  step 34100/101725  loss=4.9071  tokens=1.676B  ckpts=857  elapsed=3726s
+  step 34200/101725  loss=4.9129  tokens=1.681B  ckpts=857  elapsed=3737s
+  step 34300/101725  loss=4.7242  tokens=1.686B  ckpts=858  elapsed=3747s
+  step 34400/101725  loss=4.9108  tokens=1.691B  ckpts=858  elapsed=3756s
+  step 34500/101725  loss=4.7720  tokens=1.696B  ckpts=858  elapsed=3766s
+  step 34600/101725  loss=4.7563  tokens=1.701B  ckpts=859  elapsed=3776s
+  step 34700/101725  loss=4.8581  tokens=1.706B  ckpts=859  elapsed=3786s
+  [step 34778, 1.71B, ckpt 860] toy_diff=4.5114 indist_diff=1.3628
+  step 34800/101725  loss=4.7626  tokens=1.710B  ckpts=860  elapsed=3797s
+  step 34900/101725  loss=4.8414  tokens=1.715B  ckpts=860  elapsed=3809s
+  step 35000/101725  loss=4.7120  tokens=1.720B  ckpts=860  elapsed=3819s
+  step 35100/101725  loss=4.8310  tokens=1.725B  ckpts=861  elapsed=3830s
+  step 35200/101725  loss=4.7927  tokens=1.730B  ckpts=861  elapsed=3840s
+  step 35300/101725  loss=4.8184  tokens=1.735B  ckpts=861  elapsed=3850s
+  step 35400/101725  loss=4.9194  tokens=1.740B  ckpts=862  elapsed=3860s
+  step 35500/101725  loss=4.7988  tokens=1.745B  ckpts=862  elapsed=3871s
+  step 35600/101725  loss=4.8488  tokens=1.750B  ckpts=863  elapsed=3880s
+  step 35700/101725  loss=4.8393  tokens=1.755B  ckpts=863  elapsed=3891s
+  step 35800/101725  loss=4.8091  tokens=1.760B  ckpts=863  elapsed=3902s
+  step 35900/101725  loss=4.7960  tokens=1.765B  ckpts=864  elapsed=3911s
+  step 36000/101725  loss=4.9004  tokens=1.769B  ckpts=864  elapsed=3922s
+  step 36100/101725  loss=4.8340  tokens=1.774B  ckpts=864  elapsed=3932s
+  step 36200/101725  loss=4.6709  tokens=1.779B  ckpts=865  elapsed=3941s
+  step 36300/101725  loss=4.8233  tokens=1.784B  ckpts=865  elapsed=3952s
+  step 36400/101725  loss=4.5727  tokens=1.789B  ckpts=865  elapsed=3963s
+  step 36500/101725  loss=4.8010  tokens=1.794B  ckpts=866  elapsed=3973s
+  step 36600/101725  loss=4.8755  tokens=1.799B  ckpts=866  elapsed=3982s
+  step 36700/101725  loss=4.8339  tokens=1.804B  ckpts=867  elapsed=3993s
+  step 36800/101725  loss=4.7395  tokens=1.809B  ckpts=867  elapsed=4004s
+  step 36900/101725  loss=4.7750  tokens=1.814B  ckpts=867  elapsed=4014s
+  step 37000/101725  loss=4.8709  tokens=1.819B  ckpts=868  elapsed=4025s
+  step 37100/101725  loss=4.8768  tokens=1.824B  ckpts=868  elapsed=4036s
+  step 37200/101725  loss=4.9588  tokens=1.828B  ckpts=868  elapsed=4046s
+  step 37300/101725  loss=4.8403  tokens=1.833B  ckpts=869  elapsed=4056s
+  step 37400/101725  loss=4.7927  tokens=1.838B  ckpts=869  elapsed=4066s
+  step 37500/101725  loss=4.8137  tokens=1.843B  ckpts=869  elapsed=4076s
+  [step 37550, 1.85B, ckpt 870] toy_diff=4.6788 indist_diff=1.3931
+  step 37600/101725  loss=4.8090  tokens=1.848B  ckpts=870  elapsed=4088s
+  step 37700/101725  loss=4.7241  tokens=1.853B  ckpts=870  elapsed=4098s
+  step 37800/101725  loss=4.8826  tokens=1.858B  ckpts=870  elapsed=4109s
+  step 37900/101725  loss=4.8496  tokens=1.863B  ckpts=871  elapsed=4120s
+  step 38000/101725  loss=4.8365  tokens=1.868B  ckpts=871  elapsed=4129s
+  step 38100/101725  loss=4.8921  tokens=1.873B  ckpts=871  elapsed=4139s
+  step 38200/101725  loss=4.7576  tokens=1.878B  ckpts=872  elapsed=4150s
+  step 38300/101725  loss=4.7467  tokens=1.883B  ckpts=872  elapsed=4161s
+  step 38400/101725  loss=4.7460  tokens=1.887B  ckpts=872  elapsed=4170s
+  step 38500/101725  loss=4.8492  tokens=1.892B  ckpts=873  elapsed=4179s
+  step 38600/101725  loss=4.8406  tokens=1.897B  ckpts=873  elapsed=4189s
+  step 38700/101725  loss=4.7964  tokens=1.902B  ckpts=873  elapsed=4200s
+  step 38800/101725  loss=4.7119  tokens=1.907B  ckpts=874  elapsed=4210s
+  step 38900/101725  loss=4.8004  tokens=1.912B  ckpts=874  elapsed=4221s
+  step 39000/101725  loss=4.7956  tokens=1.917B  ckpts=874  elapsed=4230s
+  step 39100/101725  loss=4.7653  tokens=1.922B  ckpts=875  elapsed=4240s
+  step 39200/101725  loss=4.8409  tokens=1.927B  ckpts=875  elapsed=4250s
+  step 39300/101725  loss=4.9204  tokens=1.932B  ckpts=875  elapsed=4259s
+  step 39400/101725  loss=4.8720  tokens=1.937B  ckpts=876  elapsed=4269s
+  step 39500/101725  loss=4.8453  tokens=1.942B  ckpts=876  elapsed=4279s
+  step 39600/101725  loss=4.8869  tokens=1.946B  ckpts=876  elapsed=4289s
+  step 39700/101725  loss=4.7527  tokens=1.951B  ckpts=877  elapsed=4299s
+  step 39800/101725  loss=4.8721  tokens=1.956B  ckpts=877  elapsed=4310s
+  step 39900/101725  loss=4.9694  tokens=1.961B  ckpts=877  elapsed=4320s
+  step 40000/101725  loss=4.8065  tokens=1.966B  ckpts=878  elapsed=4330s
+  step 40100/101725  loss=4.8975  tokens=1.971B  ckpts=878  elapsed=4340s
+  step 40200/101725  loss=4.7736  tokens=1.976B  ckpts=878  elapsed=4351s
+  step 40300/101725  loss=4.8623  tokens=1.981B  ckpts=879  elapsed=4362s
+  step 40400/101725  loss=4.7949  tokens=1.986B  ckpts=879  elapsed=4374s
+  step 40500/101725  loss=4.7920  tokens=1.991B  ckpts=879  elapsed=4385s
+  [step 40541, 1.99B, ckpt 880] toy_diff=4.6966 indist_diff=1.4134
+  step 40600/101725  loss=4.7936  tokens=1.996B  ckpts=880  elapsed=4395s
+  step 40700/101725  loss=4.8373  tokens=2.000B  ckpts=880  elapsed=4406s
+  step 40800/101725  loss=4.8406  tokens=2.005B  ckpts=880  elapsed=4415s
+  step 40900/101725  loss=4.8988  tokens=2.010B  ckpts=881  elapsed=4425s
+  step 41000/101725  loss=4.7716  tokens=2.015B  ckpts=881  elapsed=4435s
+  step 41100/101725  loss=4.7793  tokens=2.020B  ckpts=881  elapsed=4446s
+  step 41200/101725  loss=4.8625  tokens=2.025B  ckpts=882  elapsed=4456s
+  step 41300/101725  loss=4.8208  tokens=2.030B  ckpts=882  elapsed=4465s
+  step 41400/101725  loss=4.8121  tokens=2.035B  ckpts=882  elapsed=4474s
+  step 41500/101725  loss=4.8407  tokens=2.040B  ckpts=883  elapsed=4484s
+  step 41600/101725  loss=4.5541  tokens=2.045B  ckpts=883  elapsed=4494s
+  step 41700/101725  loss=4.7908  tokens=2.050B  ckpts=883  elapsed=4505s
+  step 41800/101725  loss=4.7726  tokens=2.055B  ckpts=883  elapsed=4516s
+  step 41900/101725  loss=4.8935  tokens=2.059B  ckpts=884  elapsed=4526s
+  step 42000/101725  loss=4.9196  tokens=2.064B  ckpts=884  elapsed=4536s
+  step 42100/101725  loss=4.8450  tokens=2.069B  ckpts=884  elapsed=4546s
+  step 42200/101725  loss=4.6365  tokens=2.074B  ckpts=885  elapsed=4558s
+  step 42300/101725  loss=4.8355  tokens=2.079B  ckpts=885  elapsed=4569s
+  step 42400/101725  loss=4.7544  tokens=2.084B  ckpts=885  elapsed=4579s
+  step 42500/101725  loss=4.7584  tokens=2.089B  ckpts=886  elapsed=4589s
+  step 42600/101725  loss=4.8538  tokens=2.094B  ckpts=886  elapsed=4600s
+  step 42700/101725  loss=5.1737  tokens=2.099B  ckpts=886  elapsed=4611s
+  step 42800/101725  loss=4.8870  tokens=2.104B  ckpts=887  elapsed=4622s
+  step 42900/101725  loss=4.9056  tokens=2.109B  ckpts=887  elapsed=4633s
+  step 43000/101725  loss=5.1174  tokens=2.114B  ckpts=887  elapsed=4645s
+  step 43100/101725  loss=4.8118  tokens=2.118B  ckpts=887  elapsed=4655s
+  step 43200/101725  loss=4.7814  tokens=2.123B  ckpts=888  elapsed=4666s
+  step 43300/101725  loss=5.1096  tokens=2.128B  ckpts=888  elapsed=4677s
+  step 43400/101725  loss=4.7025  tokens=2.133B  ckpts=888  elapsed=4686s
+  step 43500/101725  loss=4.8450  tokens=2.138B  ckpts=889  elapsed=4695s
+  step 43600/101725  loss=4.8030  tokens=2.143B  ckpts=889  elapsed=4705s
+  step 43700/101725  loss=4.8010  tokens=2.148B  ckpts=889  elapsed=4715s
+  [step 43772, 2.15B, ckpt 890] toy_diff=4.5368 indist_diff=1.4014
+'The read operation timed out' thrown while requesting GET https://huggingface.co/datasets/stanford-crfm/DSIR-filtered-pile-50M/resolve/2b07626eba22fbb8ac936faa385767e06cba6593/train_1.jsonl
+Retrying in 1s [Retry 1/5].
+  step 43800/101725  loss=4.6089  tokens=2.153B  ckpts=890  elapsed=4737s
+  step 43900/101725  loss=4.8588  tokens=2.158B  ckpts=890  elapsed=4748s
+  step 44000/101725  loss=4.7716  tokens=2.163B  ckpts=890  elapsed=4759s
+  step 44100/101725  loss=4.9677  tokens=2.168B  ckpts=890  elapsed=4768s
+  step 44200/101725  loss=5.0015  tokens=2.173B  ckpts=891  elapsed=4777s
+  step 44300/101725  loss=4.8040  tokens=2.177B  ckpts=891  elapsed=4786s
+  step 44400/101725  loss=4.8210  tokens=2.182B  ckpts=891  elapsed=4796s
+  step 44500/101725  loss=4.6667  tokens=2.187B  ckpts=892  elapsed=4807s
+  step 44600/101725  loss=4.6848  tokens=2.192B  ckpts=892  elapsed=4817s
+  step 44700/101725  loss=4.7716  tokens=2.197B  ckpts=892  elapsed=4827s
+  step 44800/101725  loss=4.8474  tokens=2.202B  ckpts=893  elapsed=4836s
+  step 44900/101725  loss=4.7509  tokens=2.207B  ckpts=893  elapsed=4846s
+  step 45000/101725  loss=4.8191  tokens=2.212B  ckpts=893  elapsed=4856s
+  step 45100/101725  loss=4.9469  tokens=2.217B  ckpts=893  elapsed=4867s
+  step 45200/101725  loss=4.9961  tokens=2.222B  ckpts=894  elapsed=4876s
+  step 45300/101725  loss=4.9195  tokens=2.227B  ckpts=894  elapsed=4886s
+  step 45400/101725  loss=4.7151  tokens=2.232B  ckpts=894  elapsed=4897s
+  step 45500/101725  loss=4.8634  tokens=2.236B  ckpts=895  elapsed=4907s
+  step 45600/101725  loss=4.6132  tokens=2.241B  ckpts=895  elapsed=4918s
+  step 45700/101725  loss=4.7783  tokens=2.246B  ckpts=895  elapsed=4927s
+  step 45800/101725  loss=4.7079  tokens=2.251B  ckpts=895  elapsed=4937s
+  step 45900/101725  loss=4.9662  tokens=2.256B  ckpts=896  elapsed=4948s
+  step 46000/101725  loss=4.8189  tokens=2.261B  ckpts=896  elapsed=4958s
+  step 46100/101725  loss=4.7568  tokens=2.266B  ckpts=896  elapsed=4968s
+  step 46200/101725  loss=4.8029  tokens=2.271B  ckpts=897  elapsed=4978s
+  step 46300/101725  loss=4.7258  tokens=2.276B  ckpts=897  elapsed=4988s
+  step 46400/101725  loss=4.7914  tokens=2.281B  ckpts=897  elapsed=4997s
+  step 46500/101725  loss=4.6565  tokens=2.286B  ckpts=897  elapsed=5007s
+  step 46600/101725  loss=4.5718  tokens=2.290B  ckpts=898  elapsed=5018s
+  step 46700/101725  loss=4.7480  tokens=2.295B  ckpts=898  elapsed=5027s
+  step 46800/101725  loss=4.7491  tokens=2.300B  ckpts=898  elapsed=5037s
+  step 46900/101725  loss=4.8560  tokens=2.305B  ckpts=899  elapsed=5046s
+  step 47000/101725  loss=4.7113  tokens=2.310B  ckpts=899  elapsed=5055s
+  step 47100/101725  loss=4.8193  tokens=2.315B  ckpts=899  elapsed=5065s
+  step 47200/101725  loss=4.8301  tokens=2.320B  ckpts=899  elapsed=5076s
+  [step 47259, 2.32B, ckpt 900] toy_diff=4.7614 indist_diff=1.4220
+  step 47300/101725  loss=4.8001  tokens=2.325B  ckpts=900  elapsed=5086s
+  step 47400/101725  loss=4.7473  tokens=2.330B  ckpts=900  elapsed=5096s
+  step 47500/101725  loss=4.7338  tokens=2.335B  ckpts=900  elapsed=5107s
+  step 47600/101725  loss=4.7053  tokens=2.340B  ckpts=900  elapsed=5118s
+  step 47700/101725  loss=4.8852  tokens=2.345B  ckpts=901  elapsed=5128s
+  step 47800/101725  loss=4.8346  tokens=2.349B  ckpts=901  elapsed=5139s
+  step 47900/101725  loss=4.9124  tokens=2.354B  ckpts=901  elapsed=5151s
+  step 48000/101725  loss=4.8037  tokens=2.359B  ckpts=902  elapsed=5162s
+  step 48100/101725  loss=4.7606  tokens=2.364B  ckpts=902  elapsed=5173s
+  step 48200/101725  loss=4.8272  tokens=2.369B  ckpts=902  elapsed=5183s
+  step 48300/101725  loss=4.7368  tokens=2.374B  ckpts=902  elapsed=5195s
+  step 48400/101725  loss=4.8353  tokens=2.379B  ckpts=903  elapsed=5205s
+  step 48500/101725  loss=4.7212  tokens=2.384B  ckpts=903  elapsed=5216s
+  step 48600/101725  loss=4.6801  tokens=2.389B  ckpts=903  elapsed=5227s
+  step 48700/101725  loss=4.7525  tokens=2.394B  ckpts=903  elapsed=5238s
+  step 48800/101725  loss=4.6673  tokens=2.399B  ckpts=904  elapsed=5248s
+  step 48900/101725  loss=4.7810  tokens=2.404B  ckpts=904  elapsed=5258s
+  step 49000/101725  loss=4.7038  tokens=2.408B  ckpts=904  elapsed=5269s
+  step 49100/101725  loss=4.8496  tokens=2.413B  ckpts=904  elapsed=5279s
+  step 49200/101725  loss=4.7886  tokens=2.418B  ckpts=905  elapsed=5288s
+  step 49300/101725  loss=4.8250  tokens=2.423B  ckpts=905  elapsed=5297s
+  step 49400/101725  loss=4.7878  tokens=2.428B  ckpts=905  elapsed=5308s
+  step 49500/101725  loss=4.7415  tokens=2.433B  ckpts=906  elapsed=5318s
+  step 49600/101725  loss=4.7956  tokens=2.438B  ckpts=906  elapsed=5329s
+  step 49700/101725  loss=4.7314  tokens=2.443B  ckpts=906  elapsed=5340s
+  step 49800/101725  loss=4.7181  tokens=2.448B  ckpts=906  elapsed=5351s
+  step 49900/101725  loss=4.8252  tokens=2.453B  ckpts=907  elapsed=5362s
+  step 50000/101725  loss=4.7004  tokens=2.458B  ckpts=907  elapsed=5373s
+  step 50100/101725  loss=4.8319  tokens=2.463B  ckpts=907  elapsed=5384s
+  step 50200/101725  loss=4.6827  tokens=2.467B  ckpts=907  elapsed=5395s
+  step 50300/101725  loss=4.8609  tokens=2.472B  ckpts=908  elapsed=5406s
+  step 50400/101725  loss=4.8357  tokens=2.477B  ckpts=908  elapsed=5415s
+  step 50500/101725  loss=4.7976  tokens=2.482B  ckpts=908  elapsed=5427s
+  step 50600/101725  loss=4.6900  tokens=2.487B  ckpts=908  elapsed=5436s
+  step 50700/101725  loss=4.7117  tokens=2.492B  ckpts=909  elapsed=5446s
+  step 50800/101725  loss=4.8299  tokens=2.497B  ckpts=909  elapsed=5455s
+  step 50900/101725  loss=4.7612  tokens=2.502B  ckpts=909  elapsed=5465s
+  step 51000/101725  loss=4.7518  tokens=2.507B  ckpts=909  elapsed=5475s
+  [step 51025, 2.51B, ckpt 910] toy_diff=4.8006 indist_diff=1.4402
+  step 51100/101725  loss=4.5792  tokens=2.512B  ckpts=910  elapsed=5487s
+  step 51200/101725  loss=4.7016  tokens=2.517B  ckpts=910  elapsed=5498s
+  step 51300/101725  loss=4.7512  tokens=2.521B  ckpts=910  elapsed=5507s
+  step 51400/101725  loss=4.8106  tokens=2.526B  ckpts=910  elapsed=5517s
+  step 51500/101725  loss=4.6772  tokens=2.531B  ckpts=911  elapsed=5528s
+  step 51600/101725  loss=4.7677  tokens=2.536B  ckpts=911  elapsed=5539s
+  step 51700/101725  loss=4.7686  tokens=2.541B  ckpts=911  elapsed=5549s
+  step 51800/101725  loss=4.8749  tokens=2.546B  ckpts=911  elapsed=5559s
+  step 51900/101725  loss=4.8733  tokens=2.551B  ckpts=912  elapsed=5569s
+  step 52000/101725  loss=4.8443  tokens=2.556B  ckpts=912  elapsed=5579s
+  step 52100/101725  loss=4.6522  tokens=2.561B  ckpts=912  elapsed=5588s
+  step 52200/101725  loss=4.4314  tokens=2.566B  ckpts=912  elapsed=5597s
+  step 52300/101725  loss=4.6531  tokens=2.571B  ckpts=913  elapsed=5608s
+  step 52400/101725  loss=4.7010  tokens=2.576B  ckpts=913  elapsed=5619s
+  step 52500/101725  loss=4.7860  tokens=2.580B  ckpts=913  elapsed=5629s
+  step 52600/101725  loss=4.8352  tokens=2.585B  ckpts=913  elapsed=5638s
+  step 52700/101725  loss=4.5986  tokens=2.590B  ckpts=914  elapsed=5647s
+  step 52800/101725  loss=4.8248  tokens=2.595B  ckpts=914  elapsed=5658s
+  step 52900/101725  loss=4.7779  tokens=2.600B  ckpts=914  elapsed=5668s
+  step 53000/101725  loss=4.7973  tokens=2.605B  ckpts=914  elapsed=5678s
+  step 53100/101725  loss=4.6550  tokens=2.610B  ckpts=915  elapsed=5689s
+  step 53200/101725  loss=4.8069  tokens=2.615B  ckpts=915  elapsed=5700s
+  step 53300/101725  loss=4.8198  tokens=2.620B  ckpts=915  elapsed=5709s
+  step 53400/101725  loss=4.8493  tokens=2.625B  ckpts=915  elapsed=5720s
+  step 53500/101725  loss=4.7756  tokens=2.630B  ckpts=916  elapsed=5731s
+  step 53600/101725  loss=4.7318  tokens=2.635B  ckpts=916  elapsed=5740s
+  step 53700/101725  loss=4.7416  tokens=2.639B  ckpts=916  elapsed=5750s
+  step 53800/101725  loss=4.7565  tokens=2.644B  ckpts=916  elapsed=5760s
+  step 53900/101725  loss=4.8820  tokens=2.649B  ckpts=917  elapsed=5770s
+  step 54000/101725  loss=4.6906  tokens=2.654B  ckpts=917  elapsed=5780s
+  step 54100/101725  loss=4.8721  tokens=2.659B  ckpts=917  elapsed=5790s
+  step 54200/101725  loss=4.7624  tokens=2.664B  ckpts=917  elapsed=5800s
+  step 54300/101725  loss=4.8409  tokens=2.669B  ckpts=918  elapsed=5809s
+  step 54400/101725  loss=4.7531  tokens=2.674B  ckpts=918  elapsed=5818s
+  step 54500/101725  loss=4.8234  tokens=2.679B  ckpts=918  elapsed=5828s
+  step 54600/101725  loss=4.7257  tokens=2.684B  ckpts=918  elapsed=5838s
+  step 54700/101725  loss=4.8212  tokens=2.689B  ckpts=919  elapsed=5848s
+  step 54800/101725  loss=4.7962  tokens=2.694B  ckpts=919  elapsed=5859s
+  step 54900/101725  loss=4.8220  tokens=2.698B  ckpts=919  elapsed=5869s
+  step 55000/101725  loss=4.7988  tokens=2.703B  ckpts=919  elapsed=5878s
+  [step 55090, 2.71B, ckpt 920] toy_diff=4.8889 indist_diff=1.4406
+  step 55100/101725  loss=5.1726  tokens=2.708B  ckpts=920  elapsed=5889s
+  step 55200/101725  loss=4.6155  tokens=2.713B  ckpts=920  elapsed=5899s
+  step 55300/101725  loss=4.7156  tokens=2.718B  ckpts=920  elapsed=5909s
+  step 55400/101725  loss=4.6741  tokens=2.723B  ckpts=920  elapsed=5919s
+  step 55500/101725  loss=4.7634  tokens=2.728B  ckpts=920  elapsed=5929s
+  step 55600/101725  loss=4.8100  tokens=2.733B  ckpts=921  elapsed=5939s
+  step 55700/101725  loss=4.7570  tokens=2.738B  ckpts=921  elapsed=5948s
+  step 55800/101725  loss=4.8009  tokens=2.743B  ckpts=921  elapsed=5957s
+  step 55900/101725  loss=4.7991  tokens=2.748B  ckpts=921  elapsed=5966s
+  step 56000/101725  loss=4.7098  tokens=2.753B  ckpts=922  elapsed=5975s
+  step 56100/101725  loss=4.7310  tokens=2.757B  ckpts=922  elapsed=5984s
+  step 56200/101725  loss=4.8056  tokens=2.762B  ckpts=922  elapsed=5993s
+  step 56300/101725  loss=4.8292  tokens=2.767B  ckpts=922  elapsed=6003s
+  step 56400/101725  loss=4.7773  tokens=2.772B  ckpts=923  elapsed=6014s
+  step 56500/101725  loss=4.7730  tokens=2.777B  ckpts=923  elapsed=6023s
+  step 56600/101725  loss=4.8940  tokens=2.782B  ckpts=923  elapsed=6033s
+  step 56700/101725  loss=4.8049  tokens=2.787B  ckpts=923  elapsed=6043s
+  step 56800/101725  loss=4.8872  tokens=2.792B  ckpts=923  elapsed=6052s
+  step 56900/101725  loss=4.7438  tokens=2.797B  ckpts=924  elapsed=6063s
+  step 57000/101725  loss=4.7485  tokens=2.802B  ckpts=924  elapsed=6074s
+  step 57100/101725  loss=4.8294  tokens=2.807B  ckpts=924  elapsed=6084s
+  step 57200/101725  loss=4.7478  tokens=2.811B  ckpts=924  elapsed=6092s
+  step 57300/101725  loss=4.7225  tokens=2.816B  ckpts=925  elapsed=6101s
+  step 57400/101725  loss=4.6932  tokens=2.821B  ckpts=925  elapsed=6111s
+  step 57500/101725  loss=4.6885  tokens=2.826B  ckpts=925  elapsed=6122s
+  step 57600/101725  loss=4.6512  tokens=2.831B  ckpts=925  elapsed=6133s
+  step 57700/101725  loss=4.7677  tokens=2.836B  ckpts=926  elapsed=6143s
+  step 57800/101725  loss=4.8025  tokens=2.841B  ckpts=926  elapsed=6153s
+  step 57900/101725  loss=4.8438  tokens=2.846B  ckpts=926  elapsed=6162s
+  step 58000/101725  loss=4.8451  tokens=2.851B  ckpts=926  elapsed=6173s
+  step 58100/101725  loss=5.0230  tokens=2.856B  ckpts=926  elapsed=6183s
+  step 58200/101725  loss=4.6903  tokens=2.861B  ckpts=927  elapsed=6194s
+  step 58300/101725  loss=4.7772  tokens=2.866B  ckpts=927  elapsed=6204s
+  step 58400/101725  loss=4.8053  tokens=2.870B  ckpts=927  elapsed=6214s
+  step 58500/101725  loss=4.7835  tokens=2.875B  ckpts=927  elapsed=6224s
+  step 58600/101725  loss=4.6098  tokens=2.880B  ckpts=928  elapsed=6234s
+  step 58700/101725  loss=4.8075  tokens=2.885B  ckpts=928  elapsed=6245s
+  step 58800/101725  loss=4.8008  tokens=2.890B  ckpts=928  elapsed=6255s
+  step 58900/101725  loss=4.8783  tokens=2.895B  ckpts=928  elapsed=6265s
+  step 59000/101725  loss=4.6631  tokens=2.900B  ckpts=928  elapsed=6274s
+  step 59100/101725  loss=4.7129  tokens=2.905B  ckpts=929  elapsed=6284s
+  step 59200/101725  loss=4.6413  tokens=2.910B  ckpts=929  elapsed=6295s
+  step 59300/101725  loss=4.7011  tokens=2.915B  ckpts=929  elapsed=6305s
+  step 59400/101725  loss=4.8037  tokens=2.920B  ckpts=929  elapsed=6315s
+  [step 59480, 2.92B, ckpt 930] toy_diff=5.0058 indist_diff=1.4593
+  step 59500/101725  loss=4.7258  tokens=2.925B  ckpts=930  elapsed=6326s
+  step 59600/101725  loss=4.7447  tokens=2.929B  ckpts=930  elapsed=6335s
+  step 59700/101725  loss=4.7065  tokens=2.934B  ckpts=930  elapsed=6346s
+  step 59800/101725  loss=4.8721  tokens=2.939B  ckpts=930  elapsed=6356s
+  step 59900/101725  loss=4.7178  tokens=2.944B  ckpts=930  elapsed=6366s
+  step 60000/101725  loss=4.6971  tokens=2.949B  ckpts=931  elapsed=6375s
+  step 60100/101725  loss=4.7825  tokens=2.954B  ckpts=931  elapsed=6385s
+  step 60200/101725  loss=4.7795  tokens=2.959B  ckpts=931  elapsed=6395s
+  step 60300/101725  loss=4.7504  tokens=2.964B  ckpts=931  elapsed=6405s
+  step 60400/101725  loss=4.2566  tokens=2.969B  ckpts=932  elapsed=6416s
+  step 60500/101725  loss=4.7908  tokens=2.974B  ckpts=932  elapsed=6426s
+  step 60600/101725  loss=4.7435  tokens=2.979B  ckpts=932  elapsed=6436s
+  step 60700/101725  loss=4.8307  tokens=2.984B  ckpts=932  elapsed=6447s
+  step 60800/101725  loss=4.7912  tokens=2.988B  ckpts=932  elapsed=6458s
+  step 60900/101725  loss=4.7036  tokens=2.993B  ckpts=933  elapsed=6471s
+  step 61000/101725  loss=4.9708  tokens=2.998B  ckpts=933  elapsed=6487s
+  step 61100/101725  loss=4.8615  tokens=3.003B  ckpts=933  elapsed=6502s
+  step 61200/101725  loss=4.7962  tokens=3.008B  ckpts=933  elapsed=6519s
+  step 61300/101725  loss=4.7857  tokens=3.013B  ckpts=933  elapsed=6534s
+  step 61400/101725  loss=4.6845  tokens=3.018B  ckpts=934  elapsed=6547s
+  step 61500/101725  loss=4.7241  tokens=3.023B  ckpts=934  elapsed=6558s
+  step 61600/101725  loss=4.7510  tokens=3.028B  ckpts=934  elapsed=6569s
+  step 61700/101725  loss=4.6783  tokens=3.033B  ckpts=934  elapsed=6580s
+  step 61800/101725  loss=4.8210  tokens=3.038B  ckpts=934  elapsed=6591s
+  step 61900/101725  loss=4.7632  tokens=3.043B  ckpts=935  elapsed=6603s
+  step 62000/101725  loss=4.8582  tokens=3.047B  ckpts=935  elapsed=6614s
+  step 62100/101725  loss=4.7932  tokens=3.052B  ckpts=935  elapsed=6626s
+  step 62200/101725  loss=4.8196  tokens=3.057B  ckpts=935  elapsed=6635s
+  step 62300/101725  loss=4.7725  tokens=3.062B  ckpts=936  elapsed=6645s
+  step 62400/101725  loss=4.8093  tokens=3.067B  ckpts=936  elapsed=6656s
+  step 62500/101725  loss=4.7157  tokens=3.072B  ckpts=936  elapsed=6666s
+  step 62600/101725  loss=4.7803  tokens=3.077B  ckpts=936  elapsed=6676s
+  step 62700/101725  loss=4.8008  tokens=3.082B  ckpts=936  elapsed=6687s
+  step 62800/101725  loss=4.7808  tokens=3.087B  ckpts=937  elapsed=6696s
+  step 62900/101725  loss=4.8038  tokens=3.092B  ckpts=937  elapsed=6706s
+  step 63000/101725  loss=4.7472  tokens=3.097B  ckpts=937  elapsed=6718s
+  step 63100/101725  loss=4.8447  tokens=3.101B  ckpts=937  elapsed=6732s
+  step 63200/101725  loss=4.9355  tokens=3.106B  ckpts=937  elapsed=6757s
+  step 63300/101725  loss=4.8098  tokens=3.111B  ckpts=938  elapsed=6772s
+  step 63400/101725  loss=4.7972  tokens=3.116B  ckpts=938  elapsed=6788s
+  step 63500/101725  loss=4.7942  tokens=3.121B  ckpts=938  elapsed=6807s
+  step 63600/101725  loss=4.7921  tokens=3.126B  ckpts=938  elapsed=6824s
+  step 63700/101725  loss=4.8592  tokens=3.131B  ckpts=938  elapsed=6837s
+  step 63800/101725  loss=4.7365  tokens=3.136B  ckpts=939  elapsed=6847s
+  step 63900/101725  loss=4.6887  tokens=3.141B  ckpts=939  elapsed=6858s
+  step 64000/101725  loss=4.7446  tokens=3.146B  ckpts=939  elapsed=6869s
+  step 64100/101725  loss=4.7334  tokens=3.151B  ckpts=939  elapsed=6880s
+  step 64200/101725  loss=4.7430  tokens=3.156B  ckpts=939  elapsed=6891s
+  [step 64219, 3.16B, ckpt 940] toy_diff=4.9461 indist_diff=1.4741
+  step 64300/101725  loss=4.7229  tokens=3.160B  ckpts=940  elapsed=6902s
+  step 64400/101725  loss=4.7656  tokens=3.165B  ckpts=940  elapsed=6913s
+  step 64500/101725  loss=4.7948  tokens=3.170B  ckpts=940  elapsed=6923s
+  step 64600/101725  loss=4.8170  tokens=3.175B  ckpts=940  elapsed=6933s
+  step 64700/101725  loss=4.8275  tokens=3.180B  ckpts=940  elapsed=6943s
+  step 64800/101725  loss=4.8873  tokens=3.185B  ckpts=941  elapsed=6953s
+  step 64900/101725  loss=4.7401  tokens=3.190B  ckpts=941  elapsed=6963s
+  step 65000/101725  loss=4.8024  tokens=3.195B  ckpts=941  elapsed=6974s
+  step 65100/101725  loss=4.6534  tokens=3.200B  ckpts=941  elapsed=6983s
+  step 65200/101725  loss=4.7142  tokens=3.205B  ckpts=941  elapsed=6992s
+  step 65300/101725  loss=4.6253  tokens=3.210B  ckpts=942  elapsed=7001s
+  step 65400/101725  loss=4.7549  tokens=3.215B  ckpts=942  elapsed=7012s
+  step 65500/101725  loss=4.8648  tokens=3.219B  ckpts=942  elapsed=7022s
+  step 65600/101725  loss=4.7636  tokens=3.224B  ckpts=942  elapsed=7032s
+  step 65700/101725  loss=4.8148  tokens=3.229B  ckpts=942  elapsed=7044s
+  step 65800/101725  loss=4.7173  tokens=3.234B  ckpts=943  elapsed=7067s
+  step 65900/101725  loss=4.8317  tokens=3.239B  ckpts=943  elapsed=7084s
+  step 66000/101725  loss=4.9336  tokens=3.244B  ckpts=943  elapsed=7107s
+  step 66100/101725  loss=4.7290  tokens=3.249B  ckpts=943  elapsed=7125s
+  step 66200/101725  loss=4.7574  tokens=3.254B  ckpts=943  elapsed=7136s
+  step 66300/101725  loss=4.7804  tokens=3.259B  ckpts=944  elapsed=7146s
+  step 66400/101725  loss=4.6788  tokens=3.264B  ckpts=944  elapsed=7156s
+  step 66500/101725  loss=4.8014  tokens=3.269B  ckpts=944  elapsed=7166s
+  step 66600/101725  loss=4.8360  tokens=3.274B  ckpts=944  elapsed=7177s
+  step 66700/101725  loss=4.7226  tokens=3.278B  ckpts=944  elapsed=7187s
+  step 66800/101725  loss=4.7083  tokens=3.283B  ckpts=945  elapsed=7198s
+  step 66900/101725  loss=4.8516  tokens=3.288B  ckpts=945  elapsed=7208s
+  step 67000/101725  loss=4.7737  tokens=3.293B  ckpts=945  elapsed=7218s
+  step 67100/101725  loss=4.8813  tokens=3.298B  ckpts=945  elapsed=7229s
+  step 67200/101725  loss=4.7626  tokens=3.303B  ckpts=945  elapsed=7239s
+  step 67300/101725  loss=4.5342  tokens=3.308B  ckpts=946  elapsed=7248s
+  step 67400/101725  loss=4.6830  tokens=3.313B  ckpts=946  elapsed=7257s
+  step 67500/101725  loss=4.8655  tokens=3.318B  ckpts=946  elapsed=7267s
+  step 67600/101725  loss=4.7390  tokens=3.323B  ckpts=946  elapsed=7277s
+  step 67700/101725  loss=4.7375  tokens=3.328B  ckpts=946  elapsed=7287s
+  step 67800/101725  loss=4.8673  tokens=3.333B  ckpts=947  elapsed=7298s
+  step 67900/101725  loss=5.0689  tokens=3.337B  ckpts=947  elapsed=7316s
+  step 68000/101725  loss=4.8550  tokens=3.342B  ckpts=947  elapsed=7338s
+  step 68100/101725  loss=4.7651  tokens=3.347B  ckpts=947  elapsed=7351s
+  step 68200/101725  loss=4.7623  tokens=3.352B  ckpts=947  elapsed=7367s
+  step 68300/101725  loss=4.8618  tokens=3.357B  ckpts=948  elapsed=7385s
+  step 68400/101725  loss=4.7784  tokens=3.362B  ckpts=948  elapsed=7398s
+  step 68500/101725  loss=4.7355  tokens=3.367B  ckpts=948  elapsed=7409s
+  step 68600/101725  loss=4.7182  tokens=3.372B  ckpts=948  elapsed=7420s
+  step 68700/101725  loss=4.8571  tokens=3.377B  ckpts=948  elapsed=7431s
+  step 68800/101725  loss=4.7182  tokens=3.382B  ckpts=948  elapsed=7441s
+  step 68900/101725  loss=4.8406  tokens=3.387B  ckpts=949  elapsed=7452s
+  step 69000/101725  loss=4.7357  tokens=3.391B  ckpts=949  elapsed=7462s
+  step 69100/101725  loss=4.6965  tokens=3.396B  ckpts=949  elapsed=7473s
+  step 69200/101725  loss=4.7313  tokens=3.401B  ckpts=949  elapsed=7483s
+  step 69300/101725  loss=4.8703  tokens=3.406B  ckpts=949  elapsed=7493s
+  [step 69336, 3.41B, ckpt 950] toy_diff=5.0538 indist_diff=1.4856
+  step 69400/101725  loss=5.1698  tokens=3.411B  ckpts=950  elapsed=7504s
+  step 69500/101725  loss=4.8072  tokens=3.416B  ckpts=950  elapsed=7513s
+  step 69600/101725  loss=4.6876  tokens=3.421B  ckpts=950  elapsed=7523s
+  step 69700/101725  loss=4.7964  tokens=3.426B  ckpts=950  elapsed=7533s
+  step 69800/101725  loss=4.7551  tokens=3.431B  ckpts=950  elapsed=7544s
+  step 69900/101725  loss=4.7209  tokens=3.436B  ckpts=951  elapsed=7554s
+  step 70000/101725  loss=4.8182  tokens=3.441B  ckpts=951  elapsed=7565s
+  step 70100/101725  loss=4.7841  tokens=3.446B  ckpts=951  elapsed=7576s
+  step 70200/101725  loss=5.0477  tokens=3.450B  ckpts=951  elapsed=7586s
+  step 70300/101725  loss=4.8017  tokens=3.455B  ckpts=951  elapsed=7599s
+  step 70400/101725  loss=4.9032  tokens=3.460B  ckpts=951  elapsed=7613s
+  step 70500/101725  loss=4.8792  tokens=3.465B  ckpts=952  elapsed=7644s
+  step 70600/101725  loss=4.7103  tokens=3.470B  ckpts=952  elapsed=7656s
+  step 70700/101725  loss=4.5002  tokens=3.475B  ckpts=952  elapsed=7666s
+  step 70800/101725  loss=4.6146  tokens=3.480B  ckpts=952  elapsed=7676s
+  step 70900/101725  loss=4.7546  tokens=3.485B  ckpts=952  elapsed=7685s
+  step 71000/101725  loss=4.7558  tokens=3.490B  ckpts=953  elapsed=7695s
+  step 71100/101725  loss=4.7779  tokens=3.495B  ckpts=953  elapsed=7705s
+  step 71200/101725  loss=4.7589  tokens=3.500B  ckpts=953  elapsed=7715s
+  step 71300/101725  loss=4.8155  tokens=3.505B  ckpts=953  elapsed=7726s
+  step 71400/101725  loss=4.4695  tokens=3.509B  ckpts=953  elapsed=7736s
+  step 71500/101725  loss=4.8486  tokens=3.514B  ckpts=954  elapsed=7746s
+  step 71600/101725  loss=4.7852  tokens=3.519B  ckpts=954  elapsed=7756s
+  step 71700/101725  loss=4.7539  tokens=3.524B  ckpts=954  elapsed=7766s
+  step 71800/101725  loss=4.7041  tokens=3.529B  ckpts=954  elapsed=7776s
+  step 71900/101725  loss=4.7051  tokens=3.534B  ckpts=954  elapsed=7786s
+  step 72000/101725  loss=5.0088  tokens=3.539B  ckpts=954  elapsed=7796s
+  step 72100/101725  loss=4.9083  tokens=3.544B  ckpts=955  elapsed=7807s
+  step 72200/101725  loss=4.7782  tokens=3.549B  ckpts=955  elapsed=7815s
+  step 72300/101725  loss=4.7880  tokens=3.554B  ckpts=955  elapsed=7826s
+  step 72400/101725  loss=4.7719  tokens=3.559B  ckpts=955  elapsed=7836s
+  step 72500/101725  loss=4.7046  tokens=3.564B  ckpts=955  elapsed=7846s
+  step 72600/101725  loss=4.7445  tokens=3.568B  ckpts=955  elapsed=7857s
+  step 72700/101725  loss=4.7124  tokens=3.573B  ckpts=956  elapsed=7867s
+  step 72800/101725  loss=4.7315  tokens=3.578B  ckpts=956  elapsed=7877s
+  step 72900/101725  loss=4.5738  tokens=3.583B  ckpts=956  elapsed=7887s
+  step 73000/101725  loss=4.6985  tokens=3.588B  ckpts=956  elapsed=7898s
+  step 73100/101725  loss=4.6465  tokens=3.593B  ckpts=956  elapsed=7910s
+  step 73200/101725  loss=4.6718  tokens=3.598B  ckpts=957  elapsed=7920s
+  step 73300/101725  loss=4.7737  tokens=3.603B  ckpts=957  elapsed=7929s
+  step 73400/101725  loss=4.7382  tokens=3.608B  ckpts=957  elapsed=7940s
+  step 73500/101725  loss=4.7613  tokens=3.613B  ckpts=957  elapsed=7951s
+  step 73600/101725  loss=4.9282  tokens=3.618B  ckpts=957  elapsed=7961s
+  step 73700/101725  loss=4.7389  tokens=3.623B  ckpts=957  elapsed=7970s
+  step 73800/101725  loss=4.7653  tokens=3.627B  ckpts=958  elapsed=7980s
+  step 73900/101725  loss=4.7107  tokens=3.632B  ckpts=958  elapsed=7990s
+  step 74000/101725  loss=4.8042  tokens=3.637B  ckpts=958  elapsed=8000s
+  step 74100/101725  loss=4.7746  tokens=3.642B  ckpts=958  elapsed=8010s
+  step 74200/101725  loss=4.6300  tokens=3.647B  ckpts=958  elapsed=8021s
+  step 74300/101725  loss=4.7670  tokens=3.652B  ckpts=959  elapsed=8031s
+  step 74400/101725  loss=4.8102  tokens=3.657B  ckpts=959  elapsed=8040s
+  step 74500/101725  loss=4.6489  tokens=3.662B  ckpts=959  elapsed=8051s
+  step 74600/101725  loss=4.7086  tokens=3.667B  ckpts=959  elapsed=8061s
+  step 74700/101725  loss=4.7617  tokens=3.672B  ckpts=959  elapsed=8072s
+  step 74800/101725  loss=4.7682  tokens=3.677B  ckpts=959  elapsed=8083s
+  [step 74860, 3.68B, ckpt 960] toy_diff=5.1679 indist_diff=1.4938
+  step 74900/101725  loss=4.7365  tokens=3.681B  ckpts=960  elapsed=8093s
+  step 75000/101725  loss=4.6641  tokens=3.686B  ckpts=960  elapsed=8103s
+  step 75100/101725  loss=4.7032  tokens=3.691B  ckpts=960  elapsed=8112s
+  step 75200/101725  loss=4.7839  tokens=3.696B  ckpts=960  elapsed=8123s
+  step 75300/101725  loss=4.7208  tokens=3.701B  ckpts=960  elapsed=8133s
+  step 75400/101725  loss=4.7513  tokens=3.706B  ckpts=960  elapsed=8143s
+  step 75500/101725  loss=4.6969  tokens=3.711B  ckpts=961  elapsed=8153s
+  step 75600/101725  loss=4.6931  tokens=3.716B  ckpts=961  elapsed=8164s
+  step 75700/101725  loss=4.6991  tokens=3.721B  ckpts=961  elapsed=8175s
+  step 75800/101725  loss=4.6799  tokens=3.726B  ckpts=961  elapsed=8185s
+  step 75900/101725  loss=4.5704  tokens=3.731B  ckpts=961  elapsed=8196s
+  step 76000/101725  loss=4.7755  tokens=3.736B  ckpts=961  elapsed=8205s
+  step 76100/101725  loss=4.6353  tokens=3.740B  ckpts=962  elapsed=8215s
+  step 76200/101725  loss=4.8164  tokens=3.745B  ckpts=962  elapsed=8225s
+  step 76300/101725  loss=4.7068  tokens=3.750B  ckpts=962  elapsed=8235s
+  step 76400/101725  loss=4.7640  tokens=3.755B  ckpts=962  elapsed=8246s
+  step 76500/101725  loss=4.7008  tokens=3.760B  ckpts=962  elapsed=8255s
+  step 76600/101725  loss=4.7852  tokens=3.765B  ckpts=962  elapsed=8266s
+  step 76700/101725  loss=4.7844  tokens=3.770B  ckpts=963  elapsed=8277s
+  step 76800/101725  loss=4.7826  tokens=3.775B  ckpts=963  elapsed=8287s
+  step 76900/101725  loss=4.8022  tokens=3.780B  ckpts=963  elapsed=8297s
+  step 77000/101725  loss=4.8042  tokens=3.785B  ckpts=963  elapsed=8308s
+  step 77100/101725  loss=4.7516  tokens=3.790B  ckpts=963  elapsed=8319s
+  step 77200/101725  loss=4.7612  tokens=3.795B  ckpts=964  elapsed=8329s
+  step 77300/101725  loss=4.7012  tokens=3.799B  ckpts=964  elapsed=8345s
+  step 77400/101725  loss=4.7711  tokens=3.804B  ckpts=964  elapsed=8364s
+  step 77500/101725  loss=4.6400  tokens=3.809B  ckpts=964  elapsed=8380s
+  step 77600/101725  loss=4.8213  tokens=3.814B  ckpts=964  elapsed=8399s
+  step 77700/101725  loss=4.6796  tokens=3.819B  ckpts=964  elapsed=8418s
+  step 77800/101725  loss=4.7876  tokens=3.824B  ckpts=965  elapsed=8431s
+  step 77900/101725  loss=5.4776  tokens=3.829B  ckpts=965  elapsed=8443s
+  step 78000/101725  loss=4.7136  tokens=3.834B  ckpts=965  elapsed=8455s
+  step 78100/101725  loss=4.7436  tokens=3.839B  ckpts=965  elapsed=8466s
+  step 78200/101725  loss=4.7089  tokens=3.844B  ckpts=965  elapsed=8475s
+  step 78300/101725  loss=4.7839  tokens=3.849B  ckpts=965  elapsed=8487s
+  step 78400/101725  loss=4.8429  tokens=3.854B  ckpts=966  elapsed=8498s
+  step 78500/101725  loss=4.6917  tokens=3.858B  ckpts=966  elapsed=8508s
+  step 78600/101725  loss=4.6929  tokens=3.863B  ckpts=966  elapsed=8519s
+  step 78700/101725  loss=4.8863  tokens=3.868B  ckpts=966  elapsed=8529s
+  step 78800/101725  loss=4.8110  tokens=3.873B  ckpts=966  elapsed=8540s
+  step 78900/101725  loss=4.8532  tokens=3.878B  ckpts=966  elapsed=8550s
+  step 79000/101725  loss=4.7006  tokens=3.883B  ckpts=967  elapsed=8561s
+  step 79100/101725  loss=4.6814  tokens=3.888B  ckpts=967  elapsed=8571s
+  step 79200/101725  loss=4.7486  tokens=3.893B  ckpts=967  elapsed=8583s
+  step 79300/101725  loss=4.7930  tokens=3.898B  ckpts=967  elapsed=8592s
+  step 79400/101725  loss=4.8203  tokens=3.903B  ckpts=967  elapsed=8603s
+  step 79500/101725  loss=4.7443  tokens=3.908B  ckpts=967  elapsed=8613s
+  step 79600/101725  loss=4.7462  tokens=3.912B  ckpts=968  elapsed=8625s
+  step 79700/101725  loss=4.7353  tokens=3.917B  ckpts=968  elapsed=8634s
+  step 79800/101725  loss=4.7888  tokens=3.922B  ckpts=968  elapsed=8644s
+  step 79900/101725  loss=4.6857  tokens=3.927B  ckpts=968  elapsed=8654s
+  step 80000/101725  loss=4.7063  tokens=3.932B  ckpts=968  elapsed=8664s
+  step 80100/101725  loss=4.7395  tokens=3.937B  ckpts=968  elapsed=8675s
+  step 80200/101725  loss=4.7413  tokens=3.942B  ckpts=968  elapsed=8685s
+  step 80300/101725  loss=4.6778  tokens=3.947B  ckpts=969  elapsed=8697s
+  step 80400/101725  loss=4.7170  tokens=3.952B  ckpts=969  elapsed=8707s
+  step 80500/101725  loss=4.7761  tokens=3.957B  ckpts=969  elapsed=8718s
+  step 80600/101725  loss=4.8859  tokens=3.962B  ckpts=969  elapsed=8728s
+  step 80700/101725  loss=4.7176  tokens=3.967B  ckpts=969  elapsed=8738s
+  step 80800/101725  loss=4.7739  tokens=3.971B  ckpts=969  elapsed=8749s
+  [step 80825, 3.97B, ckpt 970] toy_diff=5.2629 indist_diff=1.4988
+  step 80900/101725  loss=4.7617  tokens=3.976B  ckpts=970  elapsed=8760s
+  step 81000/101725  loss=4.6595  tokens=3.981B  ckpts=970  elapsed=8771s
+  step 81100/101725  loss=4.7683  tokens=3.986B  ckpts=970  elapsed=8782s
+  step 81200/101725  loss=4.7295  tokens=3.991B  ckpts=970  elapsed=8792s
+  step 81300/101725  loss=4.7977  tokens=3.996B  ckpts=970  elapsed=8803s
+  step 81400/101725  loss=4.7704  tokens=4.001B  ckpts=970  elapsed=8813s
+  step 81500/101725  loss=4.7739  tokens=4.006B  ckpts=971  elapsed=8823s
+  step 81600/101725  loss=4.7905  tokens=4.011B  ckpts=971  elapsed=8834s
+  step 81700/101725  loss=4.7010  tokens=4.016B  ckpts=971  elapsed=8845s
+  step 81800/101725  loss=4.6762  tokens=4.021B  ckpts=971  elapsed=8856s
+  step 81900/101725  loss=4.7543  tokens=4.026B  ckpts=971  elapsed=8867s
+  step 82000/101725  loss=4.7006  tokens=4.030B  ckpts=971  elapsed=8881s
+  step 82100/101725  loss=4.7812  tokens=4.035B  ckpts=972  elapsed=8900s
+  step 82200/101725  loss=4.7596  tokens=4.040B  ckpts=972  elapsed=8919s
+  step 82300/101725  loss=4.6872  tokens=4.045B  ckpts=972  elapsed=8938s
+  step 82400/101725  loss=4.7537  tokens=4.050B  ckpts=972  elapsed=8956s
+  step 82500/101725  loss=4.8035  tokens=4.055B  ckpts=972  elapsed=8967s
+  step 82600/101725  loss=4.7841  tokens=4.060B  ckpts=972  elapsed=8980s
+  step 82700/101725  loss=4.7289  tokens=4.065B  ckpts=972  elapsed=8991s
+  step 82800/101725  loss=4.6683  tokens=4.070B  ckpts=973  elapsed=9001s
+  step 82900/101725  loss=4.7448  tokens=4.075B  ckpts=973  elapsed=9012s
+  step 83000/101725  loss=4.8018  tokens=4.080B  ckpts=973  elapsed=9024s
+  step 83100/101725  loss=4.7100  tokens=4.085B  ckpts=973  elapsed=9033s
+  step 83200/101725  loss=4.6933  tokens=4.089B  ckpts=973  elapsed=9044s
+  step 83300/101725  loss=4.7071  tokens=4.094B  ckpts=973  elapsed=9054s
+  step 83400/101725  loss=4.7865  tokens=4.099B  ckpts=974  elapsed=9065s
+  step 83500/101725  loss=4.7836  tokens=4.104B  ckpts=974  elapsed=9078s
+  step 83600/101725  loss=4.6401  tokens=4.109B  ckpts=974  elapsed=9088s
+  step 83700/101725  loss=4.7832  tokens=4.114B  ckpts=974  elapsed=9098s
+  step 83800/101725  loss=4.6743  tokens=4.119B  ckpts=974  elapsed=9108s
+  step 83900/101725  loss=4.6875  tokens=4.124B  ckpts=974  elapsed=9118s
+  step 84000/101725  loss=4.7983  tokens=4.129B  ckpts=975  elapsed=9129s
+  step 84100/101725  loss=4.7512  tokens=4.134B  ckpts=975  elapsed=9139s
+  step 84200/101725  loss=4.6303  tokens=4.139B  ckpts=975  elapsed=9150s
+  step 84300/101725  loss=4.6398  tokens=4.144B  ckpts=975  elapsed=9161s
+  step 84400/101725  loss=4.6877  tokens=4.148B  ckpts=975  elapsed=9171s
+  step 84500/101725  loss=4.7582  tokens=4.153B  ckpts=975  elapsed=9181s
+  step 84600/101725  loss=4.7648  tokens=4.158B  ckpts=975  elapsed=9191s
+  step 84700/101725  loss=4.8062  tokens=4.163B  ckpts=976  elapsed=9201s
+  step 84800/101725  loss=4.6397  tokens=4.168B  ckpts=976  elapsed=9211s
+  step 84900/101725  loss=4.5802  tokens=4.173B  ckpts=976  elapsed=9220s
+  step 85000/101725  loss=4.7821  tokens=4.178B  ckpts=976  elapsed=9232s
+  step 85100/101725  loss=4.7840  tokens=4.183B  ckpts=976  elapsed=9242s
+  step 85200/101725  loss=4.6646  tokens=4.188B  ckpts=976  elapsed=9252s
+  step 85300/101725  loss=4.8511  tokens=4.193B  ckpts=977  elapsed=9262s
+  step 85400/101725  loss=4.7409  tokens=4.198B  ckpts=977  elapsed=9273s
+  step 85500/101725  loss=4.7734  tokens=4.202B  ckpts=977  elapsed=9282s
+  step 85600/101725  loss=4.6848  tokens=4.207B  ckpts=977  elapsed=9292s
+  step 85700/101725  loss=4.6731  tokens=4.212B  ckpts=977  elapsed=9302s
+  step 85800/101725  loss=4.7888  tokens=4.217B  ckpts=977  elapsed=9311s
+  step 85900/101725  loss=4.8909  tokens=4.222B  ckpts=977  elapsed=9320s
+  step 86000/101725  loss=4.7138  tokens=4.227B  ckpts=978  elapsed=9330s
+  step 86100/101725  loss=4.7693  tokens=4.232B  ckpts=978  elapsed=9341s
+  step 86200/101725  loss=4.7215  tokens=4.237B  ckpts=978  elapsed=9352s
+  step 86300/101725  loss=4.6458  tokens=4.242B  ckpts=978  elapsed=9362s
+  step 86400/101725  loss=4.7810  tokens=4.247B  ckpts=978  elapsed=9372s
+  step 86500/101725  loss=4.6917  tokens=4.252B  ckpts=978  elapsed=9384s
+  step 86600/101725  loss=4.8459  tokens=4.257B  ckpts=979  elapsed=9394s
+  step 86700/101725  loss=4.7634  tokens=4.261B  ckpts=979  elapsed=9404s
+  step 86800/101725  loss=4.6620  tokens=4.266B  ckpts=979  elapsed=9414s
+  step 86900/101725  loss=4.7597  tokens=4.271B  ckpts=979  elapsed=9424s
+  step 87000/101725  loss=4.7332  tokens=4.276B  ckpts=979  elapsed=9434s
+  step 87100/101725  loss=4.7400  tokens=4.281B  ckpts=979  elapsed=9443s
+  step 87200/101725  loss=4.6776  tokens=4.286B  ckpts=979  elapsed=9452s
+  [step 87265, 4.29B, ckpt 980] toy_diff=5.3383 indist_diff=1.5142
+  step 87300/101725  loss=4.6713  tokens=4.291B  ckpts=980  elapsed=9463s
+  step 87400/101725  loss=4.7083  tokens=4.296B  ckpts=980  elapsed=9473s
+  step 87500/101725  loss=4.6151  tokens=4.301B  ckpts=980  elapsed=9482s
+  step 87600/101725  loss=4.7011  tokens=4.306B  ckpts=980  elapsed=9492s
+  step 87700/101725  loss=4.7326  tokens=4.311B  ckpts=980  elapsed=9502s
+  step 87800/101725  loss=4.7948  tokens=4.316B  ckpts=980  elapsed=9512s
+  step 87900/101725  loss=4.7236  tokens=4.320B  ckpts=980  elapsed=9523s
+  step 88000/101725  loss=4.7903  tokens=4.325B  ckpts=981  elapsed=9533s
+  step 88100/101725  loss=4.8276  tokens=4.330B  ckpts=981  elapsed=9544s
+  step 88200/101725  loss=5.0259  tokens=4.335B  ckpts=981  elapsed=9554s
+  step 88300/101725  loss=4.7059  tokens=4.340B  ckpts=981  elapsed=9566s
+  step 88400/101725  loss=5.1521  tokens=4.345B  ckpts=981  elapsed=9577s
+  step 88500/101725  loss=4.7879  tokens=4.350B  ckpts=981  elapsed=9587s
+  step 88600/101725  loss=4.7178  tokens=4.355B  ckpts=981  elapsed=9598s
+  step 88700/101725  loss=4.7155  tokens=4.360B  ckpts=982  elapsed=9609s
+  step 88800/101725  loss=4.7622  tokens=4.365B  ckpts=982  elapsed=9620s
+  step 88900/101725  loss=4.7737  tokens=4.370B  ckpts=982  elapsed=9629s
+  step 89000/101725  loss=4.6883  tokens=4.375B  ckpts=982  elapsed=9640s
+  step 89100/101725  loss=4.7432  tokens=4.379B  ckpts=982  elapsed=9651s
+  step 89200/101725  loss=4.7596  tokens=4.384B  ckpts=982  elapsed=9662s
+  step 89300/101725  loss=4.7420  tokens=4.389B  ckpts=983  elapsed=9673s
+  step 89400/101725  loss=4.8350  tokens=4.394B  ckpts=983  elapsed=9683s
+  step 89500/101725  loss=4.7468  tokens=4.399B  ckpts=983  elapsed=9692s
+  step 89600/101725  loss=4.7796  tokens=4.404B  ckpts=983  elapsed=9702s
+  step 89700/101725  loss=4.7118  tokens=4.409B  ckpts=983  elapsed=9712s
+  step 89800/101725  loss=4.8724  tokens=4.414B  ckpts=983  elapsed=9722s
+  step 89900/101725  loss=4.7772  tokens=4.419B  ckpts=983  elapsed=9732s
+  step 90000/101725  loss=4.6978  tokens=4.424B  ckpts=984  elapsed=9742s
+  step 90100/101725  loss=4.8373  tokens=4.429B  ckpts=984  elapsed=9753s
+  step 90200/101725  loss=4.8832  tokens=4.434B  ckpts=984  elapsed=9763s
+  step 90300/101725  loss=4.6734  tokens=4.438B  ckpts=984  elapsed=9774s
+  step 90400/101725  loss=4.7111  tokens=4.443B  ckpts=984  elapsed=9784s
+  step 90500/101725  loss=4.7722  tokens=4.448B  ckpts=984  elapsed=9794s
+  step 90600/101725  loss=4.6689  tokens=4.453B  ckpts=984  elapsed=9805s
+  step 90700/101725  loss=4.7416  tokens=4.458B  ckpts=985  elapsed=9816s
+  step 90800/101725  loss=4.7510  tokens=4.463B  ckpts=985  elapsed=9825s
+  step 90900/101725  loss=4.6424  tokens=4.468B  ckpts=985  elapsed=9836s
+  step 91000/101725  loss=4.6453  tokens=4.473B  ckpts=985  elapsed=9847s
+  step 91100/101725  loss=4.6717  tokens=4.478B  ckpts=985  elapsed=9858s
+  step 91200/101725  loss=4.7436  tokens=4.483B  ckpts=985  elapsed=9870s
+  step 91300/101725  loss=4.7637  tokens=4.488B  ckpts=985  elapsed=9886s
+  step 91400/101725  loss=4.7618  tokens=4.492B  ckpts=986  elapsed=9901s
+  step 91500/101725  loss=4.8460  tokens=4.497B  ckpts=986  elapsed=9920s
+  step 91600/101725  loss=4.6876  tokens=4.502B  ckpts=986  elapsed=9936s
+  step 91700/101725  loss=4.7562  tokens=4.507B  ckpts=986  elapsed=9949s
+  step 91800/101725  loss=4.7761  tokens=4.512B  ckpts=986  elapsed=9962s
+  step 91900/101725  loss=4.5689  tokens=4.517B  ckpts=986  elapsed=9974s
+  step 92000/101725  loss=4.6348  tokens=4.522B  ckpts=986  elapsed=9984s
+  step 92100/101725  loss=4.6199  tokens=4.527B  ckpts=987  elapsed=9994s
+  step 92200/101725  loss=4.7290  tokens=4.532B  ckpts=987  elapsed=10005s
+  step 92300/101725  loss=4.7707  tokens=4.537B  ckpts=987  elapsed=10015s
+  step 92400/101725  loss=4.9923  tokens=4.542B  ckpts=987  elapsed=10026s
+  step 92500/101725  loss=4.7747  tokens=4.547B  ckpts=987  elapsed=10037s
+  step 92600/101725  loss=4.7582  tokens=4.551B  ckpts=987  elapsed=10047s
+  step 92700/101725  loss=4.7601  tokens=4.556B  ckpts=987  elapsed=10056s
+  step 92800/101725  loss=4.6790  tokens=4.561B  ckpts=988  elapsed=10066s
+  step 92900/101725  loss=4.8575  tokens=4.566B  ckpts=988  elapsed=10076s
+  step 93000/101725  loss=4.7233  tokens=4.571B  ckpts=988  elapsed=10087s
+  step 93100/101725  loss=4.9469  tokens=4.576B  ckpts=988  elapsed=10097s
+  step 93200/101725  loss=4.7148  tokens=4.581B  ckpts=988  elapsed=10108s
+  step 93300/101725  loss=4.7190  tokens=4.586B  ckpts=988  elapsed=10118s
+  step 93400/101725  loss=4.8554  tokens=4.591B  ckpts=988  elapsed=10128s
+  step 93500/101725  loss=4.7548  tokens=4.596B  ckpts=989  elapsed=10138s
+  step 93600/101725  loss=4.7617  tokens=4.601B  ckpts=989  elapsed=10147s
+  step 93700/101725  loss=4.6602  tokens=4.606B  ckpts=989  elapsed=10157s
+  step 93800/101725  loss=4.6312  tokens=4.610B  ckpts=989  elapsed=10168s
+  step 93900/101725  loss=4.6785  tokens=4.615B  ckpts=989  elapsed=10178s
+  step 94000/101725  loss=4.8092  tokens=4.620B  ckpts=989  elapsed=10188s
+  step 94100/101725  loss=4.7680  tokens=4.625B  ckpts=989  elapsed=10198s
+  step 94200/101725  loss=4.8395  tokens=4.630B  ckpts=989  elapsed=10208s
+  [step 94218, 4.63B, ckpt 990] toy_diff=3.9588 indist_diff=1.3531
+  step 94300/101725  loss=4.6826  tokens=4.635B  ckpts=990  elapsed=10218s
+  step 94400/101725  loss=4.6494  tokens=4.640B  ckpts=990  elapsed=10228s
+  step 94500/101725  loss=4.7890  tokens=4.645B  ckpts=990  elapsed=10238s
+  step 94600/101725  loss=4.7881  tokens=4.650B  ckpts=990  elapsed=10249s
+  step 94700/101725  loss=4.7763  tokens=4.655B  ckpts=990  elapsed=10259s
+  step 94800/101725  loss=4.7848  tokens=4.660B  ckpts=990  elapsed=10269s
+  step 94900/101725  loss=4.7240  tokens=4.665B  ckpts=990  elapsed=10279s
+  step 95000/101725  loss=4.7064  tokens=4.669B  ckpts=991  elapsed=10289s
+  step 95100/101725  loss=4.6316  tokens=4.674B  ckpts=991  elapsed=10306s
+  step 95200/101725  loss=4.8861  tokens=4.679B  ckpts=991  elapsed=10321s
+  step 95300/101725  loss=4.6670  tokens=4.684B  ckpts=991  elapsed=10340s
+  step 95400/101725  loss=5.0505  tokens=4.689B  ckpts=991  elapsed=10353s
+  step 95500/101725  loss=4.7960  tokens=4.694B  ckpts=991  elapsed=10386s
+  step 95600/101725  loss=4.7930  tokens=4.699B  ckpts=991  elapsed=10398s
+  step 95700/101725  loss=4.7698  tokens=4.704B  ckpts=992  elapsed=10410s
+  step 95800/101725  loss=4.7102  tokens=4.709B  ckpts=992  elapsed=10422s
+  step 95900/101725  loss=4.8208  tokens=4.714B  ckpts=992  elapsed=10433s
+  step 96000/101725  loss=4.6954  tokens=4.719B  ckpts=992  elapsed=10444s
+  step 96100/101725  loss=4.7272  tokens=4.724B  ckpts=992  elapsed=10456s
+  step 96200/101725  loss=4.8080  tokens=4.728B  ckpts=992  elapsed=10467s
+  step 96300/101725  loss=4.7682  tokens=4.733B  ckpts=992  elapsed=10478s
+  step 96400/101725  loss=4.7140  tokens=4.738B  ckpts=992  elapsed=10488s
+  step 96500/101725  loss=4.8191  tokens=4.743B  ckpts=993  elapsed=10499s
+  step 96600/101725  loss=4.7330  tokens=4.748B  ckpts=993  elapsed=10509s
+  step 96700/101725  loss=4.7269  tokens=4.753B  ckpts=993  elapsed=10520s
+  step 96800/101725  loss=4.7311  tokens=4.758B  ckpts=993  elapsed=10531s
+  step 96900/101725  loss=4.7167  tokens=4.763B  ckpts=993  elapsed=10541s
+  step 97000/101725  loss=4.6764  tokens=4.768B  ckpts=993  elapsed=10551s
+  step 97100/101725  loss=4.6554  tokens=4.773B  ckpts=993  elapsed=10561s
+  step 97200/101725  loss=4.7712  tokens=4.778B  ckpts=994  elapsed=10571s
+  step 97300/101725  loss=4.7255  tokens=4.782B  ckpts=994  elapsed=10582s
+  step 97400/101725  loss=4.8862  tokens=4.787B  ckpts=994  elapsed=10592s
+  step 97500/101725  loss=4.7625  tokens=4.792B  ckpts=994  elapsed=10601s
+  step 97600/101725  loss=4.8166  tokens=4.797B  ckpts=994  elapsed=10612s
+  step 97700/101725  loss=4.5914  tokens=4.802B  ckpts=994  elapsed=10621s
+  step 97800/101725  loss=4.8127  tokens=4.807B  ckpts=994  elapsed=10631s
+  step 97900/101725  loss=4.7802  tokens=4.812B  ckpts=994  elapsed=10640s
+  step 98000/101725  loss=4.6735  tokens=4.817B  ckpts=995  elapsed=10651s
+  step 98100/101725  loss=4.5760  tokens=4.822B  ckpts=995  elapsed=10661s
+  step 98200/101725  loss=4.6129  tokens=4.827B  ckpts=995  elapsed=10670s
+  step 98300/101725  loss=4.7380  tokens=4.832B  ckpts=995  elapsed=10680s
+  step 98400/101725  loss=4.6475  tokens=4.837B  ckpts=995  elapsed=10691s
+  step 98500/101725  loss=4.5280  tokens=4.841B  ckpts=995  elapsed=10700s
+  step 98600/101725  loss=4.9379  tokens=4.846B  ckpts=995  elapsed=10709s
+  step 98700/101725  loss=4.7216  tokens=4.851B  ckpts=996  elapsed=10720s
+  step 98800/101725  loss=4.8226  tokens=4.856B  ckpts=996  elapsed=10730s
+  step 98900/101725  loss=4.7416  tokens=4.861B  ckpts=996  elapsed=10739s
+  step 99000/101725  loss=4.6904  tokens=4.866B  ckpts=996  elapsed=10748s
+  step 99100/101725  loss=5.0486  tokens=4.871B  ckpts=996  elapsed=10760s
+  step 99200/101725  loss=4.8517  tokens=4.876B  ckpts=996  elapsed=10771s
+  step 99300/101725  loss=4.7373  tokens=4.881B  ckpts=996  elapsed=10782s
+  step 99400/101725  loss=4.7923  tokens=4.886B  ckpts=996  elapsed=10793s
+  step 99500/101725  loss=4.7193  tokens=4.891B  ckpts=997  elapsed=10803s
+  step 99600/101725  loss=4.7395  tokens=4.896B  ckpts=997  elapsed=10814s
+  step 99700/101725  loss=4.9220  tokens=4.900B  ckpts=997  elapsed=10825s
+  step 99800/101725  loss=4.6729  tokens=4.905B  ckpts=997  elapsed=10834s
+  step 99900/101725  loss=4.6835  tokens=4.910B  ckpts=997  elapsed=10844s
+  step 100000/101725  loss=4.7608  tokens=4.915B  ckpts=997  elapsed=10852s
+  step 100100/101725  loss=4.7905  tokens=4.920B  ckpts=997  elapsed=10862s
+  step 100200/101725  loss=4.6535  tokens=4.925B  ckpts=998  elapsed=10873s
+  step 100300/101725  loss=4.7576  tokens=4.930B  ckpts=998  elapsed=10882s
+  step 100400/101725  loss=4.8495  tokens=4.935B  ckpts=998  elapsed=10893s
+  step 100500/101725  loss=4.6806  tokens=4.940B  ckpts=998  elapsed=10905s
+  step 100600/101725  loss=4.4264  tokens=4.945B  ckpts=998  elapsed=10915s
+  step 100700/101725  loss=4.7717  tokens=4.950B  ckpts=998  elapsed=10925s
+  step 100800/101725  loss=4.6777  tokens=4.955B  ckpts=998  elapsed=10936s
+  step 100900/101725  loss=5.0521  tokens=4.959B  ckpts=998  elapsed=10946s
+  step 101000/101725  loss=4.7347  tokens=4.964B  ckpts=999  elapsed=10956s
+  step 101100/101725  loss=4.5923  tokens=4.969B  ckpts=999  elapsed=10967s
+  step 101200/101725  loss=4.7115  tokens=4.974B  ckpts=999  elapsed=10976s
+  step 101300/101725  loss=4.7497  tokens=4.979B  ckpts=999  elapsed=10988s
+  step 101400/101725  loss=4.6703  tokens=4.984B  ckpts=999  elapsed=10999s
+  step 101500/101725  loss=4.6164  tokens=4.989B  ckpts=999  elapsed=11009s
+  step 101600/101725  loss=4.7404  tokens=4.994B  ckpts=999  elapsed=11020s
+  step 101700/101725  loss=4.6809  tokens=4.999B  ckpts=999  elapsed=11030s
+  [step 101725, 5.00B, ckpt 1000] toy_diff=5.1472 indist_diff=1.4979
+
+Final: toy_diff=5.1472 indist_diff=1.4979
+Total checkpoints saved: 1000
+Trained on 5.0B tokens

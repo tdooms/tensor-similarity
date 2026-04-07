@@ -1,0 +1,1167 @@
+=== Bilinear + BatchNorm + NO BIAS + SimpleStories: ctx=512, d=512 ===
+2L attn-only, d=512, 16 heads (d_head=32), bilinear+BN, no bias
+Data: SimpleStories (cached), vocab=4019
+Batch: 96, n_ctx: 512, tokens/step: 49,152
+Max steps: 101,725 (5.0B tokens)
+Train chunks: 1,186,392 (0.607B tokens/epoch)
+Epochs needed: ~9 to reach 5B tokens
+Model parameters: 7,270,400 (compiled)
+Induction eval: 7464 repeated bigrams in 100 val seqs
+Toy eval: 100 samples of [16 random tokens] x 2
+  --- Epoch 1 ---
+  step 100/101725  loss=7.4848  tokens=0.005B  epoch=1  elapsed=19s
+  step 200/101725  loss=5.1800  tokens=0.010B  epoch=1  elapsed=26s
+  step 300/101725  loss=4.5448  tokens=0.015B  epoch=1  elapsed=34s
+  step 400/101725  loss=4.2439  tokens=0.020B  epoch=1  elapsed=41s
+  step 500/101725  loss=4.1159  tokens=0.025B  epoch=1  elapsed=48s
+  step 600/101725  loss=3.9131  tokens=0.029B  epoch=1  elapsed=55s
+  step 700/101725  loss=3.8180  tokens=0.034B  epoch=1  elapsed=62s
+  step 800/101725  loss=3.6261  tokens=0.039B  epoch=1  elapsed=70s
+  step 900/101725  loss=3.5125  tokens=0.044B  epoch=1  elapsed=77s
+  step 1000/101725  loss=3.4332  tokens=0.049B  epoch=1  elapsed=84s
+/workspace/tensor-mars/.venv/lib/python3.13/site-packages/torch/_inductor/compile_fx.py:321: UserWarning: TensorFloat32 tensor cores for float32 matrix multiplication available but not enabled. Consider setting `torch.set_float32_matmul_precision('high')` for better performance.
+  warnings.warn(
+
+  [step 1000, 0.05B tokens, epoch 1] toy_loss_diff=-0.0102 toy_acc=0.0000 | indist_loss_diff=0.1236 frac+=0.542
+  step 1100/101725  loss=3.2966  tokens=0.054B  epoch=1  elapsed=99s
+  step 1200/101725  loss=3.1964  tokens=0.059B  epoch=1  elapsed=107s
+  step 1300/101725  loss=3.0993  tokens=0.064B  epoch=1  elapsed=114s
+  step 1400/101725  loss=3.0375  tokens=0.069B  epoch=1  elapsed=121s
+  step 1500/101725  loss=2.9162  tokens=0.074B  epoch=1  elapsed=128s
+  step 1600/101725  loss=2.8865  tokens=0.079B  epoch=1  elapsed=136s
+  step 1700/101725  loss=2.8309  tokens=0.084B  epoch=1  elapsed=143s
+  step 1800/101725  loss=2.8146  tokens=0.088B  epoch=1  elapsed=150s
+  step 1900/101725  loss=2.7666  tokens=0.093B  epoch=1  elapsed=157s
+  step 2000/101725  loss=2.7155  tokens=0.098B  epoch=1  elapsed=165s
+
+  [step 2000, 0.10B tokens, epoch 1] toy_loss_diff=-0.0951 toy_acc=0.0000 | indist_loss_diff=0.1919 frac+=0.539
+  step 2100/101725  loss=2.7233  tokens=0.103B  epoch=1  elapsed=172s
+  step 2200/101725  loss=2.6751  tokens=0.108B  epoch=1  elapsed=179s
+  step 2300/101725  loss=2.6456  tokens=0.113B  epoch=1  elapsed=186s
+  step 2400/101725  loss=2.6283  tokens=0.118B  epoch=1  elapsed=194s
+  step 2500/101725  loss=2.6028  tokens=0.123B  epoch=1  elapsed=201s
+  step 2600/101725  loss=2.5916  tokens=0.128B  epoch=1  elapsed=208s
+  step 2700/101725  loss=2.6037  tokens=0.133B  epoch=1  elapsed=216s
+  step 2800/101725  loss=2.5784  tokens=0.138B  epoch=1  elapsed=223s
+  step 2900/101725  loss=2.5691  tokens=0.143B  epoch=1  elapsed=230s
+  step 3000/101725  loss=2.5474  tokens=0.147B  epoch=1  elapsed=237s
+
+  [step 3000, 0.15B tokens, epoch 1] toy_loss_diff=-0.0855 toy_acc=0.0000 | indist_loss_diff=0.2173 frac+=0.546
+  step 3100/101725  loss=2.5666  tokens=0.152B  epoch=1  elapsed=245s
+  step 3200/101725  loss=2.5361  tokens=0.157B  epoch=1  elapsed=252s
+  step 3300/101725  loss=2.4992  tokens=0.162B  epoch=1  elapsed=259s
+  step 3400/101725  loss=2.4852  tokens=0.167B  epoch=1  elapsed=266s
+  step 3500/101725  loss=2.5015  tokens=0.172B  epoch=1  elapsed=274s
+  step 3600/101725  loss=2.4987  tokens=0.177B  epoch=1  elapsed=281s
+  step 3700/101725  loss=2.5116  tokens=0.182B  epoch=1  elapsed=288s
+  step 3800/101725  loss=2.4595  tokens=0.187B  epoch=1  elapsed=295s
+  step 3900/101725  loss=2.4531  tokens=0.192B  epoch=1  elapsed=303s
+  step 4000/101725  loss=2.4686  tokens=0.197B  epoch=1  elapsed=310s
+
+  [step 4000, 0.20B tokens, epoch 1] toy_loss_diff=-0.0665 toy_acc=0.0000 | indist_loss_diff=0.2190 frac+=0.551
+  step 4100/101725  loss=2.4654  tokens=0.202B  epoch=1  elapsed=317s
+  step 4200/101725  loss=2.4413  tokens=0.206B  epoch=1  elapsed=324s
+  step 4300/101725  loss=2.4564  tokens=0.211B  epoch=1  elapsed=332s
+  step 4400/101725  loss=2.3954  tokens=0.216B  epoch=1  elapsed=339s
+  step 4500/101725  loss=2.3995  tokens=0.221B  epoch=1  elapsed=346s
+  step 4600/101725  loss=2.4112  tokens=0.226B  epoch=1  elapsed=353s
+  step 4700/101725  loss=2.4100  tokens=0.231B  epoch=1  elapsed=361s
+  step 4800/101725  loss=2.4024  tokens=0.236B  epoch=1  elapsed=368s
+  step 4900/101725  loss=2.4026  tokens=0.241B  epoch=1  elapsed=375s
+  step 5000/101725  loss=2.3801  tokens=0.246B  epoch=1  elapsed=382s
+
+  [step 5000, 0.25B tokens, epoch 1] toy_loss_diff=0.0078 toy_acc=0.0000 | indist_loss_diff=0.2275 frac+=0.545
+  step 5100/101725  loss=2.3394  tokens=0.251B  epoch=1  elapsed=390s
+  step 5200/101725  loss=2.3977  tokens=0.256B  epoch=1  elapsed=397s
+  step 5300/101725  loss=2.3931  tokens=0.261B  epoch=1  elapsed=404s
+  step 5400/101725  loss=2.3554  tokens=0.265B  epoch=1  elapsed=412s
+  step 5500/101725  loss=2.3668  tokens=0.270B  epoch=1  elapsed=419s
+  step 5600/101725  loss=2.3373  tokens=0.275B  epoch=1  elapsed=426s
+  step 5700/101725  loss=2.3551  tokens=0.280B  epoch=1  elapsed=433s
+  step 5800/101725  loss=2.3716  tokens=0.285B  epoch=1  elapsed=441s
+  step 5900/101725  loss=2.3625  tokens=0.290B  epoch=1  elapsed=448s
+  step 6000/101725  loss=2.3888  tokens=0.295B  epoch=1  elapsed=455s
+
+  [step 6000, 0.29B tokens, epoch 1] toy_loss_diff=0.0294 toy_acc=0.0000 | indist_loss_diff=0.2484 frac+=0.550
+  step 6100/101725  loss=2.3483  tokens=0.300B  epoch=1  elapsed=462s
+  step 6200/101725  loss=2.3496  tokens=0.305B  epoch=1  elapsed=470s
+  step 6300/101725  loss=2.3245  tokens=0.310B  epoch=1  elapsed=477s
+  step 6400/101725  loss=2.3319  tokens=0.315B  epoch=1  elapsed=484s
+  step 6500/101725  loss=2.3653  tokens=0.319B  epoch=1  elapsed=491s
+  step 6600/101725  loss=2.3209  tokens=0.324B  epoch=1  elapsed=499s
+  step 6700/101725  loss=2.3260  tokens=0.329B  epoch=1  elapsed=506s
+  step 6800/101725  loss=2.3275  tokens=0.334B  epoch=1  elapsed=513s
+  step 6900/101725  loss=2.3550  tokens=0.339B  epoch=1  elapsed=520s
+  step 7000/101725  loss=2.3147  tokens=0.344B  epoch=1  elapsed=528s
+
+  [step 7000, 0.34B tokens, epoch 1] toy_loss_diff=0.0339 toy_acc=0.0000 | indist_loss_diff=0.2489 frac+=0.556
+  step 7100/101725  loss=2.3356  tokens=0.349B  epoch=1  elapsed=535s
+  step 7200/101725  loss=2.3336  tokens=0.354B  epoch=1  elapsed=542s
+  step 7300/101725  loss=2.3570  tokens=0.359B  epoch=1  elapsed=549s
+  step 7400/101725  loss=2.3020  tokens=0.364B  epoch=1  elapsed=557s
+  step 7500/101725  loss=2.2645  tokens=0.369B  epoch=1  elapsed=564s
+  step 7600/101725  loss=2.2811  tokens=0.374B  epoch=1  elapsed=571s
+  step 7700/101725  loss=2.2984  tokens=0.378B  epoch=1  elapsed=579s
+  step 7800/101725  loss=2.3100  tokens=0.383B  epoch=1  elapsed=586s
+  step 7900/101725  loss=2.3051  tokens=0.388B  epoch=1  elapsed=593s
+  step 8000/101725  loss=2.2843  tokens=0.393B  epoch=1  elapsed=600s
+
+  [step 8000, 0.39B tokens, epoch 1] toy_loss_diff=0.0926 toy_acc=0.0000 | indist_loss_diff=0.2609 frac+=0.554
+  step 8100/101725  loss=2.2909  tokens=0.398B  epoch=1  elapsed=608s
+  step 8200/101725  loss=2.2811  tokens=0.403B  epoch=1  elapsed=615s
+  step 8300/101725  loss=2.3316  tokens=0.408B  epoch=1  elapsed=622s
+  step 8400/101725  loss=2.2639  tokens=0.413B  epoch=1  elapsed=629s
+  step 8500/101725  loss=2.2371  tokens=0.418B  epoch=1  elapsed=637s
+  step 8600/101725  loss=2.2794  tokens=0.423B  epoch=1  elapsed=644s
+  step 8700/101725  loss=2.2777  tokens=0.428B  epoch=1  elapsed=651s
+  step 8800/101725  loss=2.2720  tokens=0.433B  epoch=1  elapsed=658s
+  step 8900/101725  loss=2.2950  tokens=0.437B  epoch=1  elapsed=665s
+  step 9000/101725  loss=2.2541  tokens=0.442B  epoch=1  elapsed=673s
+
+  [step 9000, 0.44B tokens, epoch 1] toy_loss_diff=0.1109 toy_acc=0.0000 | indist_loss_diff=0.2657 frac+=0.556
+  step 9100/101725  loss=2.2861  tokens=0.447B  epoch=1  elapsed=680s
+  step 9200/101725  loss=2.3174  tokens=0.452B  epoch=1  elapsed=687s
+  step 9300/101725  loss=2.2850  tokens=0.457B  epoch=1  elapsed=695s
+  step 9400/101725  loss=2.2680  tokens=0.462B  epoch=1  elapsed=702s
+  step 9500/101725  loss=2.3008  tokens=0.467B  epoch=1  elapsed=709s
+  step 9600/101725  loss=2.2777  tokens=0.472B  epoch=1  elapsed=716s
+  step 9700/101725  loss=2.2795  tokens=0.477B  epoch=1  elapsed=724s
+  step 9800/101725  loss=2.2817  tokens=0.482B  epoch=1  elapsed=731s
+  step 9900/101725  loss=2.2593  tokens=0.487B  epoch=1  elapsed=738s
+  step 10000/101725  loss=2.2730  tokens=0.492B  epoch=1  elapsed=745s
+
+  [step 10000, 0.49B tokens, epoch 1] toy_loss_diff=0.1022 toy_acc=0.0000 | indist_loss_diff=0.2908 frac+=0.566
+  step 10100/101725  loss=2.2535  tokens=0.496B  epoch=1  elapsed=753s
+  step 10200/101725  loss=2.2605  tokens=0.501B  epoch=1  elapsed=760s
+  step 10300/101725  loss=2.2736  tokens=0.506B  epoch=1  elapsed=767s
+  step 10400/101725  loss=2.2741  tokens=0.511B  epoch=1  elapsed=775s
+  step 10500/101725  loss=2.2963  tokens=0.516B  epoch=1  elapsed=782s
+  step 10600/101725  loss=2.2737  tokens=0.521B  epoch=1  elapsed=789s
+  step 10700/101725  loss=2.2424  tokens=0.526B  epoch=1  elapsed=796s
+  step 10800/101725  loss=2.2840  tokens=0.531B  epoch=1  elapsed=804s
+  step 10900/101725  loss=2.2216  tokens=0.536B  epoch=1  elapsed=811s
+  step 11000/101725  loss=2.2302  tokens=0.541B  epoch=1  elapsed=818s
+
+  [step 11000, 0.54B tokens, epoch 1] toy_loss_diff=0.0817 toy_acc=0.0000 | indist_loss_diff=0.2645 frac+=0.555
+  step 11100/101725  loss=2.2247  tokens=0.546B  epoch=1  elapsed=825s
+  step 11200/101725  loss=2.2791  tokens=0.551B  epoch=1  elapsed=833s
+  step 11300/101725  loss=2.2364  tokens=0.555B  epoch=1  elapsed=840s
+  step 11400/101725  loss=2.2627  tokens=0.560B  epoch=1  elapsed=847s
+  step 11500/101725  loss=2.2326  tokens=0.565B  epoch=1  elapsed=854s
+  step 11600/101725  loss=2.2438  tokens=0.570B  epoch=1  elapsed=862s
+  step 11700/101725  loss=2.2500  tokens=0.575B  epoch=1  elapsed=869s
+  step 11800/101725  loss=2.2521  tokens=0.580B  epoch=1  elapsed=876s
+  step 11900/101725  loss=2.2368  tokens=0.585B  epoch=1  elapsed=883s
+  step 12000/101725  loss=2.2361  tokens=0.590B  epoch=1  elapsed=890s
+
+  [step 12000, 0.59B tokens, epoch 1] toy_loss_diff=0.1400 toy_acc=0.0000 | indist_loss_diff=0.2889 frac+=0.562
+  step 12100/101725  loss=2.1922  tokens=0.595B  epoch=1  elapsed=898s
+  step 12200/101725  loss=2.2359  tokens=0.600B  epoch=1  elapsed=905s
+  step 12300/101725  loss=2.2192  tokens=0.605B  epoch=1  elapsed=912s
+  --- Epoch 2 ---
+  step 12400/101725  loss=2.2414  tokens=0.609B  epoch=2  elapsed=920s
+  step 12500/101725  loss=2.2402  tokens=0.614B  epoch=2  elapsed=927s
+  step 12600/101725  loss=2.2242  tokens=0.619B  epoch=2  elapsed=934s
+  step 12700/101725  loss=2.2355  tokens=0.624B  epoch=2  elapsed=942s
+  step 12800/101725  loss=2.2438  tokens=0.629B  epoch=2  elapsed=949s
+  step 12900/101725  loss=2.2145  tokens=0.634B  epoch=2  elapsed=956s
+  step 13000/101725  loss=2.2362  tokens=0.639B  epoch=2  elapsed=963s
+
+  [step 13000, 0.64B tokens, epoch 2] toy_loss_diff=0.1052 toy_acc=0.0000 | indist_loss_diff=0.2928 frac+=0.566
+  step 13100/101725  loss=2.2655  tokens=0.644B  epoch=2  elapsed=971s
+  step 13200/101725  loss=2.1864  tokens=0.649B  epoch=2  elapsed=978s
+  step 13300/101725  loss=2.2516  tokens=0.654B  epoch=2  elapsed=985s
+  step 13400/101725  loss=2.2378  tokens=0.659B  epoch=2  elapsed=992s
+  step 13500/101725  loss=2.2194  tokens=0.664B  epoch=2  elapsed=1000s
+  step 13600/101725  loss=2.2262  tokens=0.668B  epoch=2  elapsed=1007s
+  step 13700/101725  loss=2.2147  tokens=0.673B  epoch=2  elapsed=1014s
+  step 13800/101725  loss=2.2098  tokens=0.678B  epoch=2  elapsed=1021s
+  step 13900/101725  loss=2.1887  tokens=0.683B  epoch=2  elapsed=1028s
+  step 14000/101725  loss=2.2330  tokens=0.688B  epoch=2  elapsed=1036s
+
+  [step 14000, 0.69B tokens, epoch 2] toy_loss_diff=0.1634 toy_acc=0.0000 | indist_loss_diff=0.2790 frac+=0.561
+  step 14100/101725  loss=2.2525  tokens=0.693B  epoch=2  elapsed=1043s
+  step 14200/101725  loss=2.2287  tokens=0.698B  epoch=2  elapsed=1050s
+  step 14300/101725  loss=2.2195  tokens=0.703B  epoch=2  elapsed=1057s
+  step 14400/101725  loss=2.1685  tokens=0.708B  epoch=2  elapsed=1065s
+  step 14500/101725  loss=2.2265  tokens=0.713B  epoch=2  elapsed=1072s
+  step 14600/101725  loss=2.1920  tokens=0.718B  epoch=2  elapsed=1079s
+  step 14700/101725  loss=2.2185  tokens=0.723B  epoch=2  elapsed=1086s
+  step 14800/101725  loss=2.2109  tokens=0.727B  epoch=2  elapsed=1094s
+  step 14900/101725  loss=2.1752  tokens=0.732B  epoch=2  elapsed=1101s
+  step 15000/101725  loss=2.1773  tokens=0.737B  epoch=2  elapsed=1108s
+
+  [step 15000, 0.74B tokens, epoch 2] toy_loss_diff=0.1419 toy_acc=0.0000 | indist_loss_diff=0.2829 frac+=0.562
+  step 15100/101725  loss=2.2263  tokens=0.742B  epoch=2  elapsed=1116s
+  step 15200/101725  loss=2.2227  tokens=0.747B  epoch=2  elapsed=1123s
+  step 15300/101725  loss=2.2455  tokens=0.752B  epoch=2  elapsed=1130s
+  step 15400/101725  loss=2.2239  tokens=0.757B  epoch=2  elapsed=1138s
+  step 15500/101725  loss=2.1953  tokens=0.762B  epoch=2  elapsed=1145s
+  step 15600/101725  loss=2.1621  tokens=0.767B  epoch=2  elapsed=1152s
+  step 15700/101725  loss=2.2295  tokens=0.772B  epoch=2  elapsed=1159s
+  step 15800/101725  loss=2.2326  tokens=0.777B  epoch=2  elapsed=1166s
+  step 15900/101725  loss=2.2130  tokens=0.782B  epoch=2  elapsed=1174s
+  step 16000/101725  loss=2.2089  tokens=0.786B  epoch=2  elapsed=1181s
+
+  [step 16000, 0.79B tokens, epoch 2] toy_loss_diff=0.2144 toy_acc=0.0000 | indist_loss_diff=0.2799 frac+=0.557
+  step 16100/101725  loss=2.2130  tokens=0.791B  epoch=2  elapsed=1188s
+  step 16200/101725  loss=2.2125  tokens=0.796B  epoch=2  elapsed=1196s
+  step 16300/101725  loss=2.2038  tokens=0.801B  epoch=2  elapsed=1203s
+  step 16400/101725  loss=2.2490  tokens=0.806B  epoch=2  elapsed=1210s
+  step 16500/101725  loss=2.2301  tokens=0.811B  epoch=2  elapsed=1217s
+  step 16600/101725  loss=2.1849  tokens=0.816B  epoch=2  elapsed=1225s
+  step 16700/101725  loss=2.2348  tokens=0.821B  epoch=2  elapsed=1232s
+  step 16800/101725  loss=2.1570  tokens=0.826B  epoch=2  elapsed=1239s
+  step 16900/101725  loss=2.2277  tokens=0.831B  epoch=2  elapsed=1246s
+  step 17000/101725  loss=2.2223  tokens=0.836B  epoch=2  elapsed=1254s
+
+  [step 17000, 0.84B tokens, epoch 2] toy_loss_diff=0.2026 toy_acc=0.0000 | indist_loss_diff=0.2865 frac+=0.559
+  step 17100/101725  loss=2.1956  tokens=0.840B  epoch=2  elapsed=1261s
+  step 17200/101725  loss=2.1793  tokens=0.845B  epoch=2  elapsed=1268s
+  step 17300/101725  loss=2.2587  tokens=0.850B  epoch=2  elapsed=1275s
+  step 17400/101725  loss=2.1902  tokens=0.855B  epoch=2  elapsed=1283s
+  step 17500/101725  loss=2.1695  tokens=0.860B  epoch=2  elapsed=1290s
+  step 17600/101725  loss=2.1855  tokens=0.865B  epoch=2  elapsed=1297s
+  step 17700/101725  loss=2.1968  tokens=0.870B  epoch=2  elapsed=1304s
+  step 17800/101725  loss=2.2317  tokens=0.875B  epoch=2  elapsed=1312s
+  step 17900/101725  loss=2.2107  tokens=0.880B  epoch=2  elapsed=1319s
+  step 18000/101725  loss=2.1793  tokens=0.885B  epoch=2  elapsed=1326s
+
+  [step 18000, 0.88B tokens, epoch 2] toy_loss_diff=0.1973 toy_acc=0.0000 | indist_loss_diff=0.3116 frac+=0.569
+  step 18100/101725  loss=2.1568  tokens=0.890B  epoch=2  elapsed=1334s
+  step 18200/101725  loss=2.1916  tokens=0.895B  epoch=2  elapsed=1341s
+  step 18300/101725  loss=2.2202  tokens=0.899B  epoch=2  elapsed=1348s
+  step 18400/101725  loss=2.1847  tokens=0.904B  epoch=2  elapsed=1355s
+  step 18500/101725  loss=2.1700  tokens=0.909B  epoch=2  elapsed=1362s
+  step 18600/101725  loss=2.1615  tokens=0.914B  epoch=2  elapsed=1370s
+  step 18700/101725  loss=2.1984  tokens=0.919B  epoch=2  elapsed=1377s
+  step 18800/101725  loss=2.1841  tokens=0.924B  epoch=2  elapsed=1384s
+  step 18900/101725  loss=2.2179  tokens=0.929B  epoch=2  elapsed=1391s
+  step 19000/101725  loss=2.1867  tokens=0.934B  epoch=2  elapsed=1399s
+
+  [step 19000, 0.93B tokens, epoch 2] toy_loss_diff=0.2491 toy_acc=0.0000 | indist_loss_diff=0.2954 frac+=0.567
+  step 19100/101725  loss=2.1788  tokens=0.939B  epoch=2  elapsed=1406s
+  step 19200/101725  loss=2.1718  tokens=0.944B  epoch=2  elapsed=1413s
+  step 19300/101725  loss=2.2208  tokens=0.949B  epoch=2  elapsed=1420s
+  step 19400/101725  loss=2.1731  tokens=0.954B  epoch=2  elapsed=1428s
+  step 19500/101725  loss=2.1967  tokens=0.958B  epoch=2  elapsed=1435s
+  step 19600/101725  loss=2.2129  tokens=0.963B  epoch=2  elapsed=1442s
+  step 19700/101725  loss=2.2351  tokens=0.968B  epoch=2  elapsed=1449s
+  step 19800/101725  loss=2.1819  tokens=0.973B  epoch=2  elapsed=1457s
+  step 19900/101725  loss=2.1784  tokens=0.978B  epoch=2  elapsed=1464s
+  step 20000/101725  loss=2.2151  tokens=0.983B  epoch=2  elapsed=1471s
+
+  [step 20000, 0.98B tokens, epoch 2] toy_loss_diff=0.1733 toy_acc=0.0000 | indist_loss_diff=0.2963 frac+=0.563
+  step 20100/101725  loss=2.1794  tokens=0.988B  epoch=2  elapsed=1479s
+  step 20200/101725  loss=2.1733  tokens=0.993B  epoch=2  elapsed=1486s
+  step 20300/101725  loss=2.2089  tokens=0.998B  epoch=2  elapsed=1493s
+  step 20400/101725  loss=2.1828  tokens=1.003B  epoch=2  elapsed=1500s
+  step 20500/101725  loss=2.1582  tokens=1.008B  epoch=2  elapsed=1508s
+  step 20600/101725  loss=2.2111  tokens=1.013B  epoch=2  elapsed=1515s
+  step 20700/101725  loss=2.2045  tokens=1.017B  epoch=2  elapsed=1522s
+  step 20800/101725  loss=2.1943  tokens=1.022B  epoch=2  elapsed=1529s
+  step 20900/101725  loss=2.2135  tokens=1.027B  epoch=2  elapsed=1537s
+  step 21000/101725  loss=2.1972  tokens=1.032B  epoch=2  elapsed=1544s
+
+  [step 21000, 1.03B tokens, epoch 2] toy_loss_diff=0.2267 toy_acc=0.0000 | indist_loss_diff=0.2980 frac+=0.563
+  step 21100/101725  loss=2.2426  tokens=1.037B  epoch=2  elapsed=1551s
+  step 21200/101725  loss=2.1817  tokens=1.042B  epoch=2  elapsed=1558s
+  step 21300/101725  loss=2.2236  tokens=1.047B  epoch=2  elapsed=1566s
+  step 21400/101725  loss=2.1814  tokens=1.052B  epoch=2  elapsed=1573s
+  step 21500/101725  loss=2.2052  tokens=1.057B  epoch=2  elapsed=1580s
+  step 21600/101725  loss=2.2117  tokens=1.062B  epoch=2  elapsed=1587s
+  step 21700/101725  loss=2.1973  tokens=1.067B  epoch=2  elapsed=1595s
+  step 21800/101725  loss=2.1823  tokens=1.072B  epoch=2  elapsed=1602s
+  step 21900/101725  loss=2.1452  tokens=1.076B  epoch=2  elapsed=1609s
+  step 22000/101725  loss=2.1560  tokens=1.081B  epoch=2  elapsed=1616s
+
+  [step 22000, 1.08B tokens, epoch 2] toy_loss_diff=0.2352 toy_acc=0.0000 | indist_loss_diff=0.3002 frac+=0.562
+  step 22100/101725  loss=2.1910  tokens=1.086B  epoch=2  elapsed=1624s
+  step 22200/101725  loss=2.1965  tokens=1.091B  epoch=2  elapsed=1631s
+  step 22300/101725  loss=2.1835  tokens=1.096B  epoch=2  elapsed=1638s
+  step 22400/101725  loss=2.1222  tokens=1.101B  epoch=2  elapsed=1645s
+  step 22500/101725  loss=2.1957  tokens=1.106B  epoch=2  elapsed=1653s
+  step 22600/101725  loss=2.1826  tokens=1.111B  epoch=2  elapsed=1660s
+  step 22700/101725  loss=2.1583  tokens=1.116B  epoch=2  elapsed=1667s
+  step 22800/101725  loss=2.2206  tokens=1.121B  epoch=2  elapsed=1675s
+  step 22900/101725  loss=2.1563  tokens=1.126B  epoch=2  elapsed=1682s
+  step 23000/101725  loss=2.1453  tokens=1.130B  epoch=2  elapsed=1689s
+
+  [step 23000, 1.13B tokens, epoch 2] toy_loss_diff=0.2425 toy_acc=0.0000 | indist_loss_diff=0.2890 frac+=0.565
+  step 23100/101725  loss=2.1839  tokens=1.135B  epoch=2  elapsed=1696s
+  step 23200/101725  loss=2.1727  tokens=1.140B  epoch=2  elapsed=1704s
+  step 23300/101725  loss=2.1705  tokens=1.145B  epoch=2  elapsed=1711s
+  step 23400/101725  loss=2.1937  tokens=1.150B  epoch=2  elapsed=1718s
+  step 23500/101725  loss=2.1677  tokens=1.155B  epoch=2  elapsed=1725s
+  step 23600/101725  loss=2.1631  tokens=1.160B  epoch=2  elapsed=1733s
+  step 23700/101725  loss=2.1692  tokens=1.165B  epoch=2  elapsed=1740s
+  step 23800/101725  loss=2.1895  tokens=1.170B  epoch=2  elapsed=1747s
+  step 23900/101725  loss=2.1961  tokens=1.175B  epoch=2  elapsed=1754s
+  step 24000/101725  loss=2.1737  tokens=1.180B  epoch=2  elapsed=1762s
+
+  [step 24000, 1.18B tokens, epoch 2] toy_loss_diff=0.2783 toy_acc=0.0000 | indist_loss_diff=0.3023 frac+=0.563
+  step 24100/101725  loss=2.1575  tokens=1.185B  epoch=2  elapsed=1769s
+  step 24200/101725  loss=2.1619  tokens=1.189B  epoch=2  elapsed=1776s
+  step 24300/101725  loss=2.1674  tokens=1.194B  epoch=2  elapsed=1783s
+  step 24400/101725  loss=2.1751  tokens=1.199B  epoch=2  elapsed=1791s
+  step 24500/101725  loss=2.1464  tokens=1.204B  epoch=2  elapsed=1798s
+  step 24600/101725  loss=2.1802  tokens=1.209B  epoch=2  elapsed=1805s
+  step 24700/101725  loss=2.1714  tokens=1.214B  epoch=2  elapsed=1812s
+  --- Epoch 3 ---
+  step 24800/101725  loss=2.1582  tokens=1.219B  epoch=3  elapsed=1820s
+  step 24900/101725  loss=2.1963  tokens=1.224B  epoch=3  elapsed=1827s
+  step 25000/101725  loss=2.1683  tokens=1.229B  epoch=3  elapsed=1834s
+
+  [step 25000, 1.23B tokens, epoch 3] toy_loss_diff=0.2626 toy_acc=0.0000 | indist_loss_diff=0.3036 frac+=0.566
+  step 25100/101725  loss=2.1875  tokens=1.234B  epoch=3  elapsed=1842s
+  step 25200/101725  loss=2.1427  tokens=1.239B  epoch=3  elapsed=1849s
+  step 25300/101725  loss=2.1438  tokens=1.244B  epoch=3  elapsed=1856s
+  step 25400/101725  loss=2.1469  tokens=1.248B  epoch=3  elapsed=1863s
+  step 25500/101725  loss=2.1742  tokens=1.253B  epoch=3  elapsed=1871s
+  step 25600/101725  loss=2.1401  tokens=1.258B  epoch=3  elapsed=1878s
+  step 25700/101725  loss=2.1851  tokens=1.263B  epoch=3  elapsed=1885s
+  step 25800/101725  loss=2.1659  tokens=1.268B  epoch=3  elapsed=1892s
+  step 25900/101725  loss=2.1516  tokens=1.273B  epoch=3  elapsed=1900s
+  step 26000/101725  loss=2.1764  tokens=1.278B  epoch=3  elapsed=1907s
+
+  [step 26000, 1.28B tokens, epoch 3] toy_loss_diff=0.1972 toy_acc=0.0000 | indist_loss_diff=0.3065 frac+=0.564
+  step 26100/101725  loss=2.1870  tokens=1.283B  epoch=3  elapsed=1914s
+  step 26200/101725  loss=2.1352  tokens=1.288B  epoch=3  elapsed=1921s
+  step 26300/101725  loss=2.1539  tokens=1.293B  epoch=3  elapsed=1929s
+  step 26400/101725  loss=2.1695  tokens=1.298B  epoch=3  elapsed=1936s
+  step 26500/101725  loss=2.1972  tokens=1.303B  epoch=3  elapsed=1943s
+  step 26600/101725  loss=2.1541  tokens=1.307B  epoch=3  elapsed=1950s
+  step 26700/101725  loss=2.1651  tokens=1.312B  epoch=3  elapsed=1958s
+  step 26800/101725  loss=2.1282  tokens=1.317B  epoch=3  elapsed=1965s
+  step 26900/101725  loss=2.1148  tokens=1.322B  epoch=3  elapsed=1972s
+  step 27000/101725  loss=2.1390  tokens=1.327B  epoch=3  elapsed=1979s
+
+  [step 27000, 1.33B tokens, epoch 3] toy_loss_diff=0.2621 toy_acc=0.0000 | indist_loss_diff=0.3071 frac+=0.567
+  step 27100/101725  loss=2.1343  tokens=1.332B  epoch=3  elapsed=1987s
+  step 27200/101725  loss=2.1854  tokens=1.337B  epoch=3  elapsed=1994s
+  step 27300/101725  loss=2.1796  tokens=1.342B  epoch=3  elapsed=2001s
+  step 27400/101725  loss=2.1328  tokens=1.347B  epoch=3  elapsed=2008s
+  step 27500/101725  loss=2.1585  tokens=1.352B  epoch=3  elapsed=2016s
+  step 27600/101725  loss=2.1684  tokens=1.357B  epoch=3  elapsed=2023s
+  step 27700/101725  loss=2.1690  tokens=1.362B  epoch=3  elapsed=2030s
+  step 27800/101725  loss=2.1226  tokens=1.366B  epoch=3  elapsed=2038s
+  step 27900/101725  loss=2.1242  tokens=1.371B  epoch=3  elapsed=2045s
+  step 28000/101725  loss=2.1356  tokens=1.376B  epoch=3  elapsed=2052s
+
+  [step 28000, 1.38B tokens, epoch 3] toy_loss_diff=0.2695 toy_acc=0.0000 | indist_loss_diff=0.2931 frac+=0.565
+  step 28100/101725  loss=2.1591  tokens=1.381B  epoch=3  elapsed=2059s
+  step 28200/101725  loss=2.1344  tokens=1.386B  epoch=3  elapsed=2067s
+  step 28300/101725  loss=2.1423  tokens=1.391B  epoch=3  elapsed=2074s
+  step 28400/101725  loss=2.1596  tokens=1.396B  epoch=3  elapsed=2081s
+  step 28500/101725  loss=2.1412  tokens=1.401B  epoch=3  elapsed=2088s
+  step 28600/101725  loss=2.1587  tokens=1.406B  epoch=3  elapsed=2096s
+  step 28700/101725  loss=2.1701  tokens=1.411B  epoch=3  elapsed=2103s
+  step 28800/101725  loss=2.1472  tokens=1.416B  epoch=3  elapsed=2110s
+  step 28900/101725  loss=2.1408  tokens=1.420B  epoch=3  elapsed=2117s
+  step 29000/101725  loss=2.1481  tokens=1.425B  epoch=3  elapsed=2125s
+
+  [step 29000, 1.43B tokens, epoch 3] toy_loss_diff=0.2933 toy_acc=0.0000 | indist_loss_diff=0.3017 frac+=0.562
+  step 29100/101725  loss=2.1676  tokens=1.430B  epoch=3  elapsed=2132s
+  step 29200/101725  loss=2.2068  tokens=1.435B  epoch=3  elapsed=2139s
+  step 29300/101725  loss=2.1521  tokens=1.440B  epoch=3  elapsed=2146s
+  step 29400/101725  loss=2.1542  tokens=1.445B  epoch=3  elapsed=2154s
+  step 29500/101725  loss=2.1620  tokens=1.450B  epoch=3  elapsed=2161s
+  step 29600/101725  loss=2.1839  tokens=1.455B  epoch=3  elapsed=2168s
+  step 29700/101725  loss=2.1618  tokens=1.460B  epoch=3  elapsed=2175s
+  step 29800/101725  loss=2.1412  tokens=1.465B  epoch=3  elapsed=2183s
+  step 29900/101725  loss=2.1669  tokens=1.470B  epoch=3  elapsed=2190s
+  step 30000/101725  loss=2.1565  tokens=1.475B  epoch=3  elapsed=2197s
+
+  [step 30000, 1.47B tokens, epoch 3] toy_loss_diff=0.2663 toy_acc=0.0000 | indist_loss_diff=0.3038 frac+=0.562
+  step 30100/101725  loss=2.1515  tokens=1.479B  epoch=3  elapsed=2205s
+  step 30200/101725  loss=2.1633  tokens=1.484B  epoch=3  elapsed=2212s
+  step 30300/101725  loss=2.1070  tokens=1.489B  epoch=3  elapsed=2219s
+  step 30400/101725  loss=2.1566  tokens=1.494B  epoch=3  elapsed=2226s
+  step 30500/101725  loss=2.2091  tokens=1.499B  epoch=3  elapsed=2234s
+  step 30600/101725  loss=2.1510  tokens=1.504B  epoch=3  elapsed=2241s
+  step 30700/101725  loss=2.1503  tokens=1.509B  epoch=3  elapsed=2248s
+  step 30800/101725  loss=2.1482  tokens=1.514B  epoch=3  elapsed=2255s
+  step 30900/101725  loss=2.1677  tokens=1.519B  epoch=3  elapsed=2263s
+  step 31000/101725  loss=2.1700  tokens=1.524B  epoch=3  elapsed=2270s
+
+  [step 31000, 1.52B tokens, epoch 3] toy_loss_diff=0.2783 toy_acc=0.0000 | indist_loss_diff=0.2976 frac+=0.561
+  step 31100/101725  loss=2.1805  tokens=1.529B  epoch=3  elapsed=2277s
+  step 31200/101725  loss=2.1312  tokens=1.534B  epoch=3  elapsed=2284s
+  step 31300/101725  loss=2.1808  tokens=1.538B  epoch=3  elapsed=2292s
+  step 31400/101725  loss=2.1403  tokens=1.543B  epoch=3  elapsed=2299s
+  step 31500/101725  loss=2.1495  tokens=1.548B  epoch=3  elapsed=2306s
+  step 31600/101725  loss=2.1937  tokens=1.553B  epoch=3  elapsed=2313s
+  step 31700/101725  loss=2.1651  tokens=1.558B  epoch=3  elapsed=2320s
+  step 31800/101725  loss=2.1012  tokens=1.563B  epoch=3  elapsed=2328s
+  step 31900/101725  loss=2.1350  tokens=1.568B  epoch=3  elapsed=2335s
+  step 32000/101725  loss=2.1636  tokens=1.573B  epoch=3  elapsed=2342s
+
+  [step 32000, 1.57B tokens, epoch 3] toy_loss_diff=0.2868 toy_acc=0.0000 | indist_loss_diff=0.2988 frac+=0.560
+  step 32100/101725  loss=2.1113  tokens=1.578B  epoch=3  elapsed=2350s
+  step 32200/101725  loss=2.1581  tokens=1.583B  epoch=3  elapsed=2357s
+  step 32300/101725  loss=2.1520  tokens=1.588B  epoch=3  elapsed=2364s
+  step 32400/101725  loss=2.1067  tokens=1.593B  epoch=3  elapsed=2371s
+  step 32500/101725  loss=2.1442  tokens=1.597B  epoch=3  elapsed=2379s
+  step 32600/101725  loss=2.1728  tokens=1.602B  epoch=3  elapsed=2386s
+  step 32700/101725  loss=2.1351  tokens=1.607B  epoch=3  elapsed=2393s
+  step 32800/101725  loss=2.1490  tokens=1.612B  epoch=3  elapsed=2400s
+  step 32900/101725  loss=2.1826  tokens=1.617B  epoch=3  elapsed=2408s
+  step 33000/101725  loss=2.1423  tokens=1.622B  epoch=3  elapsed=2415s
+
+  [step 33000, 1.62B tokens, epoch 3] toy_loss_diff=0.3158 toy_acc=0.0000 | indist_loss_diff=0.3218 frac+=0.571
+  step 33100/101725  loss=2.1320  tokens=1.627B  epoch=3  elapsed=2422s
+  step 33200/101725  loss=2.1658  tokens=1.632B  epoch=3  elapsed=2430s
+  step 33300/101725  loss=2.1533  tokens=1.637B  epoch=3  elapsed=2437s
+  step 33400/101725  loss=2.1504  tokens=1.642B  epoch=3  elapsed=2444s
+  step 33500/101725  loss=2.1563  tokens=1.647B  epoch=3  elapsed=2451s
+  step 33600/101725  loss=2.1590  tokens=1.652B  epoch=3  elapsed=2459s
+  step 33700/101725  loss=2.1095  tokens=1.656B  epoch=3  elapsed=2466s
+  step 33800/101725  loss=2.1076  tokens=1.661B  epoch=3  elapsed=2473s
+  step 33900/101725  loss=2.1925  tokens=1.666B  epoch=3  elapsed=2480s
+  step 34000/101725  loss=2.1585  tokens=1.671B  epoch=3  elapsed=2487s
+
+  [step 34000, 1.67B tokens, epoch 3] toy_loss_diff=0.3271 toy_acc=0.0000 | indist_loss_diff=0.3043 frac+=0.562
+  step 34100/101725  loss=2.1419  tokens=1.676B  epoch=3  elapsed=2495s
+  step 34200/101725  loss=2.1389  tokens=1.681B  epoch=3  elapsed=2502s
+  step 34300/101725  loss=2.1616  tokens=1.686B  epoch=3  elapsed=2509s
+  step 34400/101725  loss=2.1662  tokens=1.691B  epoch=3  elapsed=2517s
+  step 34500/101725  loss=2.1700  tokens=1.696B  epoch=3  elapsed=2524s
+  step 34600/101725  loss=2.1608  tokens=1.701B  epoch=3  elapsed=2531s
+  step 34700/101725  loss=2.1430  tokens=1.706B  epoch=3  elapsed=2538s
+  step 34800/101725  loss=2.1474  tokens=1.710B  epoch=3  elapsed=2546s
+  step 34900/101725  loss=2.1335  tokens=1.715B  epoch=3  elapsed=2553s
+  step 35000/101725  loss=2.1272  tokens=1.720B  epoch=3  elapsed=2560s
+
+  [step 35000, 1.72B tokens, epoch 3] toy_loss_diff=0.2548 toy_acc=0.0000 | indist_loss_diff=0.3205 frac+=0.568
+  step 35100/101725  loss=2.1213  tokens=1.725B  epoch=3  elapsed=2568s
+  step 35200/101725  loss=2.1687  tokens=1.730B  epoch=3  elapsed=2575s
+  step 35300/101725  loss=2.1401  tokens=1.735B  epoch=3  elapsed=2582s
+  step 35400/101725  loss=2.1413  tokens=1.740B  epoch=3  elapsed=2589s
+  step 35500/101725  loss=2.1565  tokens=1.745B  epoch=3  elapsed=2597s
+  step 35600/101725  loss=2.1392  tokens=1.750B  epoch=3  elapsed=2604s
+  step 35700/101725  loss=2.1616  tokens=1.755B  epoch=3  elapsed=2611s
+  step 35800/101725  loss=2.1370  tokens=1.760B  epoch=3  elapsed=2618s
+  step 35900/101725  loss=2.1343  tokens=1.765B  epoch=3  elapsed=2626s
+  step 36000/101725  loss=2.1324  tokens=1.769B  epoch=3  elapsed=2633s
+
+  [step 36000, 1.77B tokens, epoch 3] toy_loss_diff=0.2641 toy_acc=0.0000 | indist_loss_diff=0.3027 frac+=0.564
+  step 36100/101725  loss=2.1519  tokens=1.774B  epoch=3  elapsed=2640s
+  step 36200/101725  loss=2.1187  tokens=1.779B  epoch=3  elapsed=2647s
+  step 36300/101725  loss=2.1855  tokens=1.784B  epoch=3  elapsed=2655s
+  step 36400/101725  loss=2.1612  tokens=1.789B  epoch=3  elapsed=2662s
+  step 36500/101725  loss=2.1350  tokens=1.794B  epoch=3  elapsed=2669s
+  step 36600/101725  loss=2.1278  tokens=1.799B  epoch=3  elapsed=2676s
+  step 36700/101725  loss=2.1410  tokens=1.804B  epoch=3  elapsed=2684s
+  step 36800/101725  loss=2.1247  tokens=1.809B  epoch=3  elapsed=2691s
+  step 36900/101725  loss=2.1556  tokens=1.814B  epoch=3  elapsed=2698s
+  step 37000/101725  loss=2.1522  tokens=1.819B  epoch=3  elapsed=2705s
+
+  [step 37000, 1.82B tokens, epoch 3] toy_loss_diff=0.3118 toy_acc=0.0000 | indist_loss_diff=0.2960 frac+=0.563
+  --- Epoch 4 ---
+  step 37100/101725  loss=2.1453  tokens=1.824B  epoch=4  elapsed=2713s
+  step 37200/101725  loss=2.0971  tokens=1.828B  epoch=4  elapsed=2720s
+  step 37300/101725  loss=2.0978  tokens=1.833B  epoch=4  elapsed=2727s
+  step 37400/101725  loss=2.0957  tokens=1.838B  epoch=4  elapsed=2734s
+  step 37500/101725  loss=2.1342  tokens=1.843B  epoch=4  elapsed=2741s
+  step 37600/101725  loss=2.1056  tokens=1.848B  epoch=4  elapsed=2749s
+  step 37700/101725  loss=2.1096  tokens=1.853B  epoch=4  elapsed=2756s
+  step 37800/101725  loss=2.1535  tokens=1.858B  epoch=4  elapsed=2763s
+  step 37900/101725  loss=2.1532  tokens=1.863B  epoch=4  elapsed=2771s
+  step 38000/101725  loss=2.1233  tokens=1.868B  epoch=4  elapsed=2778s
+
+  [step 38000, 1.87B tokens, epoch 4] toy_loss_diff=0.3335 toy_acc=0.0000 | indist_loss_diff=0.3116 frac+=0.566
+  step 38100/101725  loss=2.1268  tokens=1.873B  epoch=4  elapsed=2785s
+  step 38200/101725  loss=2.1323  tokens=1.878B  epoch=4  elapsed=2793s
+  step 38300/101725  loss=2.1234  tokens=1.883B  epoch=4  elapsed=2800s
+  step 38400/101725  loss=2.0908  tokens=1.887B  epoch=4  elapsed=2807s
+  step 38500/101725  loss=2.1552  tokens=1.892B  epoch=4  elapsed=2814s
+  step 38600/101725  loss=2.1533  tokens=1.897B  epoch=4  elapsed=2821s
+  step 38700/101725  loss=2.1504  tokens=1.902B  epoch=4  elapsed=2829s
+  step 38800/101725  loss=2.1428  tokens=1.907B  epoch=4  elapsed=2836s
+  step 38900/101725  loss=2.1204  tokens=1.912B  epoch=4  elapsed=2843s
+  step 39000/101725  loss=2.1791  tokens=1.917B  epoch=4  elapsed=2850s
+
+  [step 39000, 1.92B tokens, epoch 4] toy_loss_diff=0.3288 toy_acc=0.0000 | indist_loss_diff=0.3180 frac+=0.566
+  step 39100/101725  loss=2.1125  tokens=1.922B  epoch=4  elapsed=2858s
+  step 39200/101725  loss=2.1114  tokens=1.927B  epoch=4  elapsed=2865s
+  step 39300/101725  loss=2.1534  tokens=1.932B  epoch=4  elapsed=2872s
+  step 39400/101725  loss=2.0987  tokens=1.937B  epoch=4  elapsed=2879s
+  step 39500/101725  loss=2.1473  tokens=1.942B  epoch=4  elapsed=2887s
+  step 39600/101725  loss=2.1582  tokens=1.946B  epoch=4  elapsed=2894s
+  step 39700/101725  loss=2.1519  tokens=1.951B  epoch=4  elapsed=2901s
+  step 39800/101725  loss=2.1632  tokens=1.956B  epoch=4  elapsed=2908s
+  step 39900/101725  loss=2.1036  tokens=1.961B  epoch=4  elapsed=2916s
+  step 40000/101725  loss=2.1922  tokens=1.966B  epoch=4  elapsed=2923s
+
+  [step 40000, 1.97B tokens, epoch 4] toy_loss_diff=0.3485 toy_acc=0.0000 | indist_loss_diff=0.3148 frac+=0.569
+  step 40100/101725  loss=2.1453  tokens=1.971B  epoch=4  elapsed=2930s
+  step 40200/101725  loss=2.1314  tokens=1.976B  epoch=4  elapsed=2938s
+  step 40300/101725  loss=2.1006  tokens=1.981B  epoch=4  elapsed=2945s
+  step 40400/101725  loss=2.1129  tokens=1.986B  epoch=4  elapsed=2952s
+  step 40500/101725  loss=2.1308  tokens=1.991B  epoch=4  elapsed=2959s
+  step 40600/101725  loss=2.1468  tokens=1.996B  epoch=4  elapsed=2967s
+  step 40700/101725  loss=2.1219  tokens=2.000B  epoch=4  elapsed=2974s
+  step 40800/101725  loss=2.1462  tokens=2.005B  epoch=4  elapsed=2981s
+  step 40900/101725  loss=2.1389  tokens=2.010B  epoch=4  elapsed=2988s
+  step 41000/101725  loss=2.1369  tokens=2.015B  epoch=4  elapsed=2995s
+
+  [step 41000, 2.02B tokens, epoch 4] toy_loss_diff=0.3406 toy_acc=0.0000 | indist_loss_diff=0.3208 frac+=0.565
+  step 41100/101725  loss=2.1364  tokens=2.020B  epoch=4  elapsed=3003s
+  step 41200/101725  loss=2.1536  tokens=2.025B  epoch=4  elapsed=3010s
+  step 41300/101725  loss=2.0929  tokens=2.030B  epoch=4  elapsed=3017s
+  step 41400/101725  loss=2.1203  tokens=2.035B  epoch=4  elapsed=3025s
+  step 41500/101725  loss=2.1615  tokens=2.040B  epoch=4  elapsed=3032s
+  step 41600/101725  loss=2.0942  tokens=2.045B  epoch=4  elapsed=3039s
+  step 41700/101725  loss=2.1308  tokens=2.050B  epoch=4  elapsed=3046s
+  step 41800/101725  loss=2.1492  tokens=2.055B  epoch=4  elapsed=3053s
+  step 41900/101725  loss=2.1325  tokens=2.059B  epoch=4  elapsed=3061s
+  step 42000/101725  loss=2.1115  tokens=2.064B  epoch=4  elapsed=3068s
+
+  [step 42000, 2.06B tokens, epoch 4] toy_loss_diff=0.2761 toy_acc=0.0000 | indist_loss_diff=0.3151 frac+=0.559
+  step 42100/101725  loss=2.1470  tokens=2.069B  epoch=4  elapsed=3075s
+  step 42200/101725  loss=2.1503  tokens=2.074B  epoch=4  elapsed=3082s
+  step 42300/101725  loss=2.1042  tokens=2.079B  epoch=4  elapsed=3090s
+  step 42400/101725  loss=2.1086  tokens=2.084B  epoch=4  elapsed=3097s
+  step 42500/101725  loss=2.1191  tokens=2.089B  epoch=4  elapsed=3104s
+  step 42600/101725  loss=2.1404  tokens=2.094B  epoch=4  elapsed=3112s
+  step 42700/101725  loss=2.1102  tokens=2.099B  epoch=4  elapsed=3119s
+  step 42800/101725  loss=2.1367  tokens=2.104B  epoch=4  elapsed=3126s
+  step 42900/101725  loss=2.1197  tokens=2.109B  epoch=4  elapsed=3133s
+  step 43000/101725  loss=2.1293  tokens=2.114B  epoch=4  elapsed=3141s
+
+  [step 43000, 2.11B tokens, epoch 4] toy_loss_diff=0.3220 toy_acc=0.0000 | indist_loss_diff=0.3112 frac+=0.563
+  step 43100/101725  loss=2.1206  tokens=2.118B  epoch=4  elapsed=3148s
+  step 43200/101725  loss=2.1852  tokens=2.123B  epoch=4  elapsed=3155s
+  step 43300/101725  loss=2.1103  tokens=2.128B  epoch=4  elapsed=3163s
+  step 43400/101725  loss=2.1046  tokens=2.133B  epoch=4  elapsed=3170s
+  step 43500/101725  loss=2.1212  tokens=2.138B  epoch=4  elapsed=3177s
+  step 43600/101725  loss=2.1627  tokens=2.143B  epoch=4  elapsed=3184s
+  step 43700/101725  loss=2.1239  tokens=2.148B  epoch=4  elapsed=3191s
+  step 43800/101725  loss=2.0997  tokens=2.153B  epoch=4  elapsed=3199s
+  step 43900/101725  loss=2.1619  tokens=2.158B  epoch=4  elapsed=3206s
+  step 44000/101725  loss=2.1407  tokens=2.163B  epoch=4  elapsed=3213s
+
+  [step 44000, 2.16B tokens, epoch 4] toy_loss_diff=0.3751 toy_acc=0.0000 | indist_loss_diff=0.3098 frac+=0.566
+  step 44100/101725  loss=2.1077  tokens=2.168B  epoch=4  elapsed=3221s
+  step 44200/101725  loss=2.1372  tokens=2.173B  epoch=4  elapsed=3228s
+  step 44300/101725  loss=2.1294  tokens=2.177B  epoch=4  elapsed=3235s
+  step 44400/101725  loss=2.1705  tokens=2.182B  epoch=4  elapsed=3242s
+  step 44500/101725  loss=2.1239  tokens=2.187B  epoch=4  elapsed=3250s
+  step 44600/101725  loss=2.1250  tokens=2.192B  epoch=4  elapsed=3257s
+  step 44700/101725  loss=2.1397  tokens=2.197B  epoch=4  elapsed=3264s
+  step 44800/101725  loss=2.0876  tokens=2.202B  epoch=4  elapsed=3271s
+  step 44900/101725  loss=2.1585  tokens=2.207B  epoch=4  elapsed=3278s
+  step 45000/101725  loss=2.1413  tokens=2.212B  epoch=4  elapsed=3286s
+
+  [step 45000, 2.21B tokens, epoch 4] toy_loss_diff=0.3956 toy_acc=0.0000 | indist_loss_diff=0.3062 frac+=0.564
+  step 45100/101725  loss=2.1068  tokens=2.217B  epoch=4  elapsed=3293s
+  step 45200/101725  loss=2.1113  tokens=2.222B  epoch=4  elapsed=3301s
+  step 45300/101725  loss=2.1465  tokens=2.227B  epoch=4  elapsed=3308s
+  step 45400/101725  loss=2.1541  tokens=2.232B  epoch=4  elapsed=3315s
+  step 45500/101725  loss=2.1203  tokens=2.236B  epoch=4  elapsed=3322s
+  step 45600/101725  loss=2.1117  tokens=2.241B  epoch=4  elapsed=3330s
+  step 45700/101725  loss=2.1332  tokens=2.246B  epoch=4  elapsed=3337s
+  step 45800/101725  loss=2.1074  tokens=2.251B  epoch=4  elapsed=3344s
+  step 45900/101725  loss=2.1239  tokens=2.256B  epoch=4  elapsed=3351s
+  step 46000/101725  loss=2.0902  tokens=2.261B  epoch=4  elapsed=3359s
+
+  [step 46000, 2.26B tokens, epoch 4] toy_loss_diff=0.3986 toy_acc=0.0000 | indist_loss_diff=0.3186 frac+=0.569
+  step 46100/101725  loss=2.1446  tokens=2.266B  epoch=4  elapsed=3366s
+  step 46200/101725  loss=2.1016  tokens=2.271B  epoch=4  elapsed=3373s
+  step 46300/101725  loss=2.1374  tokens=2.276B  epoch=4  elapsed=3380s
+  step 46400/101725  loss=2.0937  tokens=2.281B  epoch=4  elapsed=3388s
+  step 46500/101725  loss=2.1272  tokens=2.286B  epoch=4  elapsed=3395s
+  step 46600/101725  loss=2.0908  tokens=2.290B  epoch=4  elapsed=3402s
+  step 46700/101725  loss=2.0974  tokens=2.295B  epoch=4  elapsed=3409s
+  step 46800/101725  loss=2.1437  tokens=2.300B  epoch=4  elapsed=3416s
+  step 46900/101725  loss=2.1075  tokens=2.305B  epoch=4  elapsed=3424s
+  step 47000/101725  loss=2.0997  tokens=2.310B  epoch=4  elapsed=3431s
+
+  [step 47000, 2.31B tokens, epoch 4] toy_loss_diff=0.3356 toy_acc=0.0000 | indist_loss_diff=0.3147 frac+=0.569
+  step 47100/101725  loss=2.0954  tokens=2.315B  epoch=4  elapsed=3438s
+  step 47200/101725  loss=2.1390  tokens=2.320B  epoch=4  elapsed=3445s
+  step 47300/101725  loss=2.1146  tokens=2.325B  epoch=4  elapsed=3453s
+  step 47400/101725  loss=2.1241  tokens=2.330B  epoch=4  elapsed=3460s
+  step 47500/101725  loss=2.0963  tokens=2.335B  epoch=4  elapsed=3467s
+  step 47600/101725  loss=2.1329  tokens=2.340B  epoch=4  elapsed=3475s
+  step 47700/101725  loss=2.0986  tokens=2.345B  epoch=4  elapsed=3482s
+  step 47800/101725  loss=2.1591  tokens=2.349B  epoch=4  elapsed=3489s
+  step 47900/101725  loss=2.0964  tokens=2.354B  epoch=4  elapsed=3496s
+  step 48000/101725  loss=2.1167  tokens=2.359B  epoch=4  elapsed=3504s
+
+  [step 48000, 2.36B tokens, epoch 4] toy_loss_diff=0.3874 toy_acc=0.0000 | indist_loss_diff=0.3107 frac+=0.564
+  step 48100/101725  loss=2.1356  tokens=2.364B  epoch=4  elapsed=3511s
+  step 48200/101725  loss=2.1260  tokens=2.369B  epoch=4  elapsed=3518s
+  step 48300/101725  loss=2.1100  tokens=2.374B  epoch=4  elapsed=3525s
+  step 48400/101725  loss=2.0987  tokens=2.379B  epoch=4  elapsed=3533s
+  step 48500/101725  loss=2.1143  tokens=2.384B  epoch=4  elapsed=3540s
+  step 48600/101725  loss=2.1236  tokens=2.389B  epoch=4  elapsed=3547s
+  step 48700/101725  loss=2.1232  tokens=2.394B  epoch=4  elapsed=3554s
+  step 48800/101725  loss=2.1426  tokens=2.399B  epoch=4  elapsed=3562s
+  step 48900/101725  loss=2.1297  tokens=2.404B  epoch=4  elapsed=3569s
+  step 49000/101725  loss=2.1346  tokens=2.408B  epoch=4  elapsed=3576s
+
+  [step 49000, 2.41B tokens, epoch 4] toy_loss_diff=0.3910 toy_acc=0.0000 | indist_loss_diff=0.3075 frac+=0.564
+  step 49100/101725  loss=2.0873  tokens=2.413B  epoch=4  elapsed=3583s
+  step 49200/101725  loss=2.1187  tokens=2.418B  epoch=4  elapsed=3591s
+  step 49300/101725  loss=2.1219  tokens=2.423B  epoch=4  elapsed=3598s
+  step 49400/101725  loss=2.1492  tokens=2.428B  epoch=4  elapsed=3605s
+  --- Epoch 5 ---
+  step 49500/101725  loss=2.1162  tokens=2.433B  epoch=5  elapsed=3612s
+  step 49600/101725  loss=2.1385  tokens=2.438B  epoch=5  elapsed=3620s
+  step 49700/101725  loss=2.1402  tokens=2.443B  epoch=5  elapsed=3627s
+  step 49800/101725  loss=2.0713  tokens=2.448B  epoch=5  elapsed=3634s
+  step 49900/101725  loss=2.1196  tokens=2.453B  epoch=5  elapsed=3641s
+  step 50000/101725  loss=2.1266  tokens=2.458B  epoch=5  elapsed=3649s
+
+  [step 50000, 2.46B tokens, epoch 5] toy_loss_diff=0.3516 toy_acc=0.0000 | indist_loss_diff=0.3216 frac+=0.567
+  step 50100/101725  loss=2.0986  tokens=2.463B  epoch=5  elapsed=3656s
+  step 50200/101725  loss=2.1359  tokens=2.467B  epoch=5  elapsed=3663s
+  step 50300/101725  loss=2.1317  tokens=2.472B  epoch=5  elapsed=3671s
+  step 50400/101725  loss=2.1294  tokens=2.477B  epoch=5  elapsed=3678s
+  step 50500/101725  loss=2.1068  tokens=2.482B  epoch=5  elapsed=3685s
+  step 50600/101725  loss=2.1250  tokens=2.487B  epoch=5  elapsed=3692s
+  step 50700/101725  loss=2.1093  tokens=2.492B  epoch=5  elapsed=3700s
+  step 50800/101725  loss=2.1301  tokens=2.497B  epoch=5  elapsed=3707s
+  step 50900/101725  loss=2.1052  tokens=2.502B  epoch=5  elapsed=3714s
+  step 51000/101725  loss=2.0928  tokens=2.507B  epoch=5  elapsed=3721s
+
+  [step 51000, 2.51B tokens, epoch 5] toy_loss_diff=0.3950 toy_acc=0.0000 | indist_loss_diff=0.3153 frac+=0.565
+  step 51100/101725  loss=2.1512  tokens=2.512B  epoch=5  elapsed=3729s
+  step 51200/101725  loss=2.1306  tokens=2.517B  epoch=5  elapsed=3736s
+  step 51300/101725  loss=2.1469  tokens=2.521B  epoch=5  elapsed=3743s
+  step 51400/101725  loss=2.1377  tokens=2.526B  epoch=5  elapsed=3750s
+  step 51500/101725  loss=2.1378  tokens=2.531B  epoch=5  elapsed=3758s
+  step 51600/101725  loss=2.1701  tokens=2.536B  epoch=5  elapsed=3765s
+  step 51700/101725  loss=2.0959  tokens=2.541B  epoch=5  elapsed=3772s
+  step 51800/101725  loss=2.1192  tokens=2.546B  epoch=5  elapsed=3779s
+  step 51900/101725  loss=2.1113  tokens=2.551B  epoch=5  elapsed=3786s
+  step 52000/101725  loss=2.1282  tokens=2.556B  epoch=5  elapsed=3794s
+
+  [step 52000, 2.56B tokens, epoch 5] toy_loss_diff=0.3361 toy_acc=0.0000 | indist_loss_diff=0.3290 frac+=0.575
+  step 52100/101725  loss=2.1313  tokens=2.561B  epoch=5  elapsed=3801s
+  step 52200/101725  loss=2.1140  tokens=2.566B  epoch=5  elapsed=3808s
+  step 52300/101725  loss=2.1178  tokens=2.571B  epoch=5  elapsed=3815s
+  step 52400/101725  loss=2.0837  tokens=2.576B  epoch=5  elapsed=3823s
+  step 52500/101725  loss=2.0772  tokens=2.580B  epoch=5  elapsed=3830s
+  step 52600/101725  loss=2.1062  tokens=2.585B  epoch=5  elapsed=3837s
+  step 52700/101725  loss=2.1146  tokens=2.590B  epoch=5  elapsed=3845s
+  step 52800/101725  loss=2.1388  tokens=2.595B  epoch=5  elapsed=3852s
+  step 52900/101725  loss=2.1049  tokens=2.600B  epoch=5  elapsed=3859s
+  step 53000/101725  loss=2.1174  tokens=2.605B  epoch=5  elapsed=3866s
+
+  [step 53000, 2.61B tokens, epoch 5] toy_loss_diff=0.3475 toy_acc=0.0000 | indist_loss_diff=0.3070 frac+=0.561
+  step 53100/101725  loss=2.0920  tokens=2.610B  epoch=5  elapsed=3874s
+  step 53200/101725  loss=2.1221  tokens=2.615B  epoch=5  elapsed=3881s
+  step 53300/101725  loss=2.1282  tokens=2.620B  epoch=5  elapsed=3888s
+  step 53400/101725  loss=2.1322  tokens=2.625B  epoch=5  elapsed=3895s
+  step 53500/101725  loss=2.1234  tokens=2.630B  epoch=5  elapsed=3903s
+  step 53600/101725  loss=2.1140  tokens=2.635B  epoch=5  elapsed=3910s
+  step 53700/101725  loss=2.1154  tokens=2.639B  epoch=5  elapsed=3917s
+  step 53800/101725  loss=2.1079  tokens=2.644B  epoch=5  elapsed=3924s
+  step 53900/101725  loss=2.1463  tokens=2.649B  epoch=5  elapsed=3932s
+  step 54000/101725  loss=2.0932  tokens=2.654B  epoch=5  elapsed=3939s
+
+  [step 54000, 2.65B tokens, epoch 5] toy_loss_diff=0.3470 toy_acc=0.0000 | indist_loss_diff=0.3084 frac+=0.566
+  step 54100/101725  loss=2.0863  tokens=2.659B  epoch=5  elapsed=3946s
+  step 54200/101725  loss=2.1062  tokens=2.664B  epoch=5  elapsed=3953s
+  step 54300/101725  loss=2.0872  tokens=2.669B  epoch=5  elapsed=3961s
+  step 54400/101725  loss=2.0900  tokens=2.674B  epoch=5  elapsed=3968s
+  step 54500/101725  loss=2.0795  tokens=2.679B  epoch=5  elapsed=3975s
+  step 54600/101725  loss=2.1028  tokens=2.684B  epoch=5  elapsed=3982s
+  step 54700/101725  loss=2.1011  tokens=2.689B  epoch=5  elapsed=3990s
+  step 54800/101725  loss=2.1050  tokens=2.694B  epoch=5  elapsed=3997s
+  step 54900/101725  loss=2.1102  tokens=2.698B  epoch=5  elapsed=4004s
+  step 55000/101725  loss=2.1159  tokens=2.703B  epoch=5  elapsed=4011s
+
+  [step 55000, 2.70B tokens, epoch 5] toy_loss_diff=0.4100 toy_acc=0.0000 | indist_loss_diff=0.3204 frac+=0.569
+  step 55100/101725  loss=2.1178  tokens=2.708B  epoch=5  elapsed=4019s
+  step 55200/101725  loss=2.1026  tokens=2.713B  epoch=5  elapsed=4026s
+  step 55300/101725  loss=2.1132  tokens=2.718B  epoch=5  elapsed=4033s
+  step 55400/101725  loss=2.0891  tokens=2.723B  epoch=5  elapsed=4041s
+  step 55500/101725  loss=2.1407  tokens=2.728B  epoch=5  elapsed=4048s
+  step 55600/101725  loss=2.1106  tokens=2.733B  epoch=5  elapsed=4055s
+  step 55700/101725  loss=2.1146  tokens=2.738B  epoch=5  elapsed=4062s
+  step 55800/101725  loss=2.1194  tokens=2.743B  epoch=5  elapsed=4070s
+  step 55900/101725  loss=2.1215  tokens=2.748B  epoch=5  elapsed=4077s
+  step 56000/101725  loss=2.0873  tokens=2.753B  epoch=5  elapsed=4084s
+
+  [step 56000, 2.75B tokens, epoch 5] toy_loss_diff=0.3825 toy_acc=0.0000 | indist_loss_diff=0.3177 frac+=0.566
+  step 56100/101725  loss=2.1059  tokens=2.757B  epoch=5  elapsed=4091s
+  step 56200/101725  loss=2.1209  tokens=2.762B  epoch=5  elapsed=4099s
+  step 56300/101725  loss=2.0983  tokens=2.767B  epoch=5  elapsed=4106s
+  step 56400/101725  loss=2.1042  tokens=2.772B  epoch=5  elapsed=4113s
+  step 56500/101725  loss=2.1048  tokens=2.777B  epoch=5  elapsed=4120s
+  step 56600/101725  loss=2.1010  tokens=2.782B  epoch=5  elapsed=4128s
+  step 56700/101725  loss=2.1385  tokens=2.787B  epoch=5  elapsed=4135s
+  step 56800/101725  loss=2.1229  tokens=2.792B  epoch=5  elapsed=4142s
+  step 56900/101725  loss=2.1285  tokens=2.797B  epoch=5  elapsed=4149s
+  step 57000/101725  loss=2.0958  tokens=2.802B  epoch=5  elapsed=4156s
+
+  [step 57000, 2.80B tokens, epoch 5] toy_loss_diff=0.3441 toy_acc=0.0000 | indist_loss_diff=0.3030 frac+=0.569
+  step 57100/101725  loss=2.0928  tokens=2.807B  epoch=5  elapsed=4164s
+  step 57200/101725  loss=2.0965  tokens=2.811B  epoch=5  elapsed=4171s
+  step 57300/101725  loss=2.1064  tokens=2.816B  epoch=5  elapsed=4178s
+  step 57400/101725  loss=2.1031  tokens=2.821B  epoch=5  elapsed=4185s
+  step 57500/101725  loss=2.1136  tokens=2.826B  epoch=5  elapsed=4193s
+  step 57600/101725  loss=2.0839  tokens=2.831B  epoch=5  elapsed=4200s
+  step 57700/101725  loss=2.1092  tokens=2.836B  epoch=5  elapsed=4207s
+  step 57800/101725  loss=2.1146  tokens=2.841B  epoch=5  elapsed=4215s
+  step 57900/101725  loss=2.0856  tokens=2.846B  epoch=5  elapsed=4222s
+  step 58000/101725  loss=2.0954  tokens=2.851B  epoch=5  elapsed=4229s
+
+  [step 58000, 2.85B tokens, epoch 5] toy_loss_diff=0.3891 toy_acc=0.0000 | indist_loss_diff=0.3126 frac+=0.568
+  step 58100/101725  loss=2.1496  tokens=2.856B  epoch=5  elapsed=4236s
+  step 58200/101725  loss=2.1022  tokens=2.861B  epoch=5  elapsed=4244s
+  step 58300/101725  loss=2.1074  tokens=2.866B  epoch=5  elapsed=4251s
+  step 58400/101725  loss=2.1140  tokens=2.870B  epoch=5  elapsed=4258s
+  step 58500/101725  loss=2.0894  tokens=2.875B  epoch=5  elapsed=4265s
+  step 58600/101725  loss=2.1207  tokens=2.880B  epoch=5  elapsed=4273s
+  step 58700/101725  loss=2.1041  tokens=2.885B  epoch=5  elapsed=4280s
+  step 58800/101725  loss=2.1049  tokens=2.890B  epoch=5  elapsed=4287s
+  step 58900/101725  loss=2.1143  tokens=2.895B  epoch=5  elapsed=4294s
+  step 59000/101725  loss=2.1166  tokens=2.900B  epoch=5  elapsed=4302s
+
+  [step 59000, 2.90B tokens, epoch 5] toy_loss_diff=0.3609 toy_acc=0.0000 | indist_loss_diff=0.3140 frac+=0.564
+  step 59100/101725  loss=2.1022  tokens=2.905B  epoch=5  elapsed=4309s
+  step 59200/101725  loss=2.1082  tokens=2.910B  epoch=5  elapsed=4316s
+  step 59300/101725  loss=2.0887  tokens=2.915B  epoch=5  elapsed=4323s
+  step 59400/101725  loss=2.0826  tokens=2.920B  epoch=5  elapsed=4331s
+  step 59500/101725  loss=2.1168  tokens=2.925B  epoch=5  elapsed=4338s
+  step 59600/101725  loss=2.0764  tokens=2.929B  epoch=5  elapsed=4345s
+  step 59700/101725  loss=2.1095  tokens=2.934B  epoch=5  elapsed=4352s
+  step 59800/101725  loss=2.1027  tokens=2.939B  epoch=5  elapsed=4360s
+  step 59900/101725  loss=2.0867  tokens=2.944B  epoch=5  elapsed=4367s
+  step 60000/101725  loss=2.1087  tokens=2.949B  epoch=5  elapsed=4374s
+
+  [step 60000, 2.95B tokens, epoch 5] toy_loss_diff=0.3901 toy_acc=0.0000 | indist_loss_diff=0.3073 frac+=0.565
+  step 60100/101725  loss=2.1034  tokens=2.954B  epoch=5  elapsed=4382s
+  step 60200/101725  loss=2.1087  tokens=2.959B  epoch=5  elapsed=4389s
+  step 60300/101725  loss=2.1187  tokens=2.964B  epoch=5  elapsed=4396s
+  step 60400/101725  loss=2.0645  tokens=2.969B  epoch=5  elapsed=4404s
+  step 60500/101725  loss=2.0846  tokens=2.974B  epoch=5  elapsed=4411s
+  step 60600/101725  loss=2.1040  tokens=2.979B  epoch=5  elapsed=4418s
+  step 60700/101725  loss=2.1172  tokens=2.984B  epoch=5  elapsed=4425s
+  step 60800/101725  loss=2.0837  tokens=2.988B  epoch=5  elapsed=4432s
+  step 60900/101725  loss=2.0766  tokens=2.993B  epoch=5  elapsed=4440s
+  step 61000/101725  loss=2.0909  tokens=2.998B  epoch=5  elapsed=4447s
+
+  [step 61000, 3.00B tokens, epoch 5] toy_loss_diff=0.3514 toy_acc=0.0000 | indist_loss_diff=0.3123 frac+=0.566
+  step 61100/101725  loss=2.1040  tokens=3.003B  epoch=5  elapsed=4454s
+  step 61200/101725  loss=2.1045  tokens=3.008B  epoch=5  elapsed=4461s
+  step 61300/101725  loss=2.0824  tokens=3.013B  epoch=5  elapsed=4469s
+  step 61400/101725  loss=2.0991  tokens=3.018B  epoch=5  elapsed=4476s
+  step 61500/101725  loss=2.0788  tokens=3.023B  epoch=5  elapsed=4483s
+  step 61600/101725  loss=2.0735  tokens=3.028B  epoch=5  elapsed=4490s
+  step 61700/101725  loss=2.0970  tokens=3.033B  epoch=5  elapsed=4498s
+  --- Epoch 6 ---
+  step 61800/101725  loss=2.0974  tokens=3.038B  epoch=6  elapsed=4505s
+  step 61900/101725  loss=2.0788  tokens=3.043B  epoch=6  elapsed=4512s
+  step 62000/101725  loss=2.1285  tokens=3.047B  epoch=6  elapsed=4519s
+
+  [step 62000, 3.05B tokens, epoch 6] toy_loss_diff=0.3643 toy_acc=0.0000 | indist_loss_diff=0.3106 frac+=0.565
+  step 62100/101725  loss=2.1002  tokens=3.052B  epoch=6  elapsed=4527s
+  step 62200/101725  loss=2.1408  tokens=3.057B  epoch=6  elapsed=4534s
+  step 62300/101725  loss=2.1149  tokens=3.062B  epoch=6  elapsed=4541s
+  step 62400/101725  loss=2.1050  tokens=3.067B  epoch=6  elapsed=4549s
+  step 62500/101725  loss=2.0874  tokens=3.072B  epoch=6  elapsed=4556s
+  step 62600/101725  loss=2.0988  tokens=3.077B  epoch=6  elapsed=4563s
+  step 62700/101725  loss=2.1148  tokens=3.082B  epoch=6  elapsed=4570s
+  step 62800/101725  loss=2.1583  tokens=3.087B  epoch=6  elapsed=4578s
+  step 62900/101725  loss=2.0977  tokens=3.092B  epoch=6  elapsed=4585s
+  step 63000/101725  loss=2.0950  tokens=3.097B  epoch=6  elapsed=4592s
+
+  [step 63000, 3.10B tokens, epoch 6] toy_loss_diff=0.3258 toy_acc=0.0000 | indist_loss_diff=0.3054 frac+=0.563
+  step 63100/101725  loss=2.0723  tokens=3.101B  epoch=6  elapsed=4600s
+  step 63200/101725  loss=2.1427  tokens=3.106B  epoch=6  elapsed=4607s
+  step 63300/101725  loss=2.1040  tokens=3.111B  epoch=6  elapsed=4614s
+  step 63400/101725  loss=2.0832  tokens=3.116B  epoch=6  elapsed=4621s
+  step 63500/101725  loss=2.0971  tokens=3.121B  epoch=6  elapsed=4628s
+  step 63600/101725  loss=2.0899  tokens=3.126B  epoch=6  elapsed=4636s
+  step 63700/101725  loss=2.1024  tokens=3.131B  epoch=6  elapsed=4643s
+  step 63800/101725  loss=2.0890  tokens=3.136B  epoch=6  elapsed=4650s
+  step 63900/101725  loss=2.0671  tokens=3.141B  epoch=6  elapsed=4657s
+  step 64000/101725  loss=2.1086  tokens=3.146B  epoch=6  elapsed=4665s
+
+  [step 64000, 3.15B tokens, epoch 6] toy_loss_diff=0.3759 toy_acc=0.0000 | indist_loss_diff=0.3142 frac+=0.565
+  step 64100/101725  loss=2.1269  tokens=3.151B  epoch=6  elapsed=4672s
+  step 64200/101725  loss=2.1263  tokens=3.156B  epoch=6  elapsed=4679s
+  step 64300/101725  loss=2.0729  tokens=3.160B  epoch=6  elapsed=4687s
+  step 64400/101725  loss=2.0711  tokens=3.165B  epoch=6  elapsed=4694s
+  step 64500/101725  loss=2.0610  tokens=3.170B  epoch=6  elapsed=4701s
+  step 64600/101725  loss=2.1085  tokens=3.175B  epoch=6  elapsed=4708s
+  step 64700/101725  loss=2.1153  tokens=3.180B  epoch=6  elapsed=4715s
+  step 64800/101725  loss=2.1037  tokens=3.185B  epoch=6  elapsed=4723s
+  step 64900/101725  loss=2.1159  tokens=3.190B  epoch=6  elapsed=4730s
+  step 65000/101725  loss=2.1134  tokens=3.195B  epoch=6  elapsed=4737s
+
+  [step 65000, 3.19B tokens, epoch 6] toy_loss_diff=0.3726 toy_acc=0.0000 | indist_loss_diff=0.3059 frac+=0.566
+  step 65100/101725  loss=2.0948  tokens=3.200B  epoch=6  elapsed=4745s
+  step 65200/101725  loss=2.0954  tokens=3.205B  epoch=6  elapsed=4752s
+  step 65300/101725  loss=2.0447  tokens=3.210B  epoch=6  elapsed=4759s
+  step 65400/101725  loss=2.1228  tokens=3.215B  epoch=6  elapsed=4767s
+  step 65500/101725  loss=2.0506  tokens=3.219B  epoch=6  elapsed=4774s
+  step 65600/101725  loss=2.1102  tokens=3.224B  epoch=6  elapsed=4781s
+  step 65700/101725  loss=2.0916  tokens=3.229B  epoch=6  elapsed=4788s
+  step 65800/101725  loss=2.0716  tokens=3.234B  epoch=6  elapsed=4796s
+  step 65900/101725  loss=2.0688  tokens=3.239B  epoch=6  elapsed=4803s
+  step 66000/101725  loss=2.0989  tokens=3.244B  epoch=6  elapsed=4810s
+
+  [step 66000, 3.24B tokens, epoch 6] toy_loss_diff=0.3706 toy_acc=0.0000 | indist_loss_diff=0.3117 frac+=0.567
+  step 66100/101725  loss=2.0720  tokens=3.249B  epoch=6  elapsed=4817s
+  step 66200/101725  loss=2.0745  tokens=3.254B  epoch=6  elapsed=4825s
+  step 66300/101725  loss=2.0710  tokens=3.259B  epoch=6  elapsed=4832s
+  step 66400/101725  loss=2.0804  tokens=3.264B  epoch=6  elapsed=4839s
+  step 66500/101725  loss=2.0537  tokens=3.269B  epoch=6  elapsed=4846s
+  step 66600/101725  loss=2.1098  tokens=3.274B  epoch=6  elapsed=4854s
+  step 66700/101725  loss=2.0694  tokens=3.278B  epoch=6  elapsed=4861s
+  step 66800/101725  loss=2.0905  tokens=3.283B  epoch=6  elapsed=4868s
+  step 66900/101725  loss=2.0754  tokens=3.288B  epoch=6  elapsed=4875s
+  step 67000/101725  loss=2.0867  tokens=3.293B  epoch=6  elapsed=4883s
+
+  [step 67000, 3.29B tokens, epoch 6] toy_loss_diff=0.3752 toy_acc=0.0000 | indist_loss_diff=0.3002 frac+=0.569
+  step 67100/101725  loss=2.0777  tokens=3.298B  epoch=6  elapsed=4890s
+  step 67200/101725  loss=2.0873  tokens=3.303B  epoch=6  elapsed=4897s
+  step 67300/101725  loss=2.0760  tokens=3.308B  epoch=6  elapsed=4904s
+  step 67400/101725  loss=2.0982  tokens=3.313B  epoch=6  elapsed=4912s
+  step 67500/101725  loss=2.1139  tokens=3.318B  epoch=6  elapsed=4919s
+  step 67600/101725  loss=2.0585  tokens=3.323B  epoch=6  elapsed=4926s
+  step 67700/101725  loss=2.1054  tokens=3.328B  epoch=6  elapsed=4934s
+  step 67800/101725  loss=2.1010  tokens=3.333B  epoch=6  elapsed=4941s
+  step 67900/101725  loss=2.0747  tokens=3.337B  epoch=6  elapsed=4948s
+  step 68000/101725  loss=2.1004  tokens=3.342B  epoch=6  elapsed=4955s
+
+  [step 68000, 3.34B tokens, epoch 6] toy_loss_diff=0.3666 toy_acc=0.0000 | indist_loss_diff=0.3008 frac+=0.564
+  step 68100/101725  loss=2.0891  tokens=3.347B  epoch=6  elapsed=4963s
+  step 68200/101725  loss=2.0941  tokens=3.352B  epoch=6  elapsed=4970s
+  step 68300/101725  loss=2.0744  tokens=3.357B  epoch=6  elapsed=4977s
+  step 68400/101725  loss=2.0918  tokens=3.362B  epoch=6  elapsed=4984s
+  step 68500/101725  loss=2.1107  tokens=3.367B  epoch=6  elapsed=4992s
+  step 68600/101725  loss=2.0897  tokens=3.372B  epoch=6  elapsed=4999s
+  step 68700/101725  loss=2.0618  tokens=3.377B  epoch=6  elapsed=5006s
+  step 68800/101725  loss=2.1114  tokens=3.382B  epoch=6  elapsed=5013s
+  step 68900/101725  loss=2.0615  tokens=3.387B  epoch=6  elapsed=5021s
+  step 69000/101725  loss=2.1252  tokens=3.391B  epoch=6  elapsed=5028s
+
+  [step 69000, 3.39B tokens, epoch 6] toy_loss_diff=0.3896 toy_acc=0.0000 | indist_loss_diff=0.3076 frac+=0.564
+  step 69100/101725  loss=2.1094  tokens=3.396B  epoch=6  elapsed=5035s
+  step 69200/101725  loss=2.1122  tokens=3.401B  epoch=6  elapsed=5042s
+  step 69300/101725  loss=2.1137  tokens=3.406B  epoch=6  elapsed=5050s
+  step 69400/101725  loss=2.0847  tokens=3.411B  epoch=6  elapsed=5057s
+  step 69500/101725  loss=2.0937  tokens=3.416B  epoch=6  elapsed=5064s
+  step 69600/101725  loss=2.0675  tokens=3.421B  epoch=6  elapsed=5071s
+  step 69700/101725  loss=2.0946  tokens=3.426B  epoch=6  elapsed=5079s
+  step 69800/101725  loss=2.1143  tokens=3.431B  epoch=6  elapsed=5086s
+  step 69900/101725  loss=2.1141  tokens=3.436B  epoch=6  elapsed=5093s
+  step 70000/101725  loss=2.1144  tokens=3.441B  epoch=6  elapsed=5100s
+
+  [step 70000, 3.44B tokens, epoch 6] toy_loss_diff=0.3862 toy_acc=0.0000 | indist_loss_diff=0.3092 frac+=0.563
+  step 70100/101725  loss=2.1149  tokens=3.446B  epoch=6  elapsed=5108s
+  step 70200/101725  loss=2.0895  tokens=3.450B  epoch=6  elapsed=5115s
+  step 70300/101725  loss=2.0955  tokens=3.455B  epoch=6  elapsed=5122s
+  step 70400/101725  loss=2.0857  tokens=3.460B  epoch=6  elapsed=5130s
+  step 70500/101725  loss=2.1195  tokens=3.465B  epoch=6  elapsed=5137s
+  step 70600/101725  loss=2.1238  tokens=3.470B  epoch=6  elapsed=5144s
+  step 70700/101725  loss=2.0662  tokens=3.475B  epoch=6  elapsed=5151s
+  step 70800/101725  loss=2.0867  tokens=3.480B  epoch=6  elapsed=5159s
+  step 70900/101725  loss=2.0606  tokens=3.485B  epoch=6  elapsed=5166s
+  step 71000/101725  loss=2.1048  tokens=3.490B  epoch=6  elapsed=5173s
+
+  [step 71000, 3.49B tokens, epoch 6] toy_loss_diff=0.3803 toy_acc=0.0000 | indist_loss_diff=0.3100 frac+=0.563
+  step 71100/101725  loss=2.0939  tokens=3.495B  epoch=6  elapsed=5180s
+  step 71200/101725  loss=2.0997  tokens=3.500B  epoch=6  elapsed=5188s
+  step 71300/101725  loss=2.0880  tokens=3.505B  epoch=6  elapsed=5195s
+  step 71400/101725  loss=2.0868  tokens=3.509B  epoch=6  elapsed=5202s
+  step 71500/101725  loss=2.1115  tokens=3.514B  epoch=6  elapsed=5209s
+  step 71600/101725  loss=2.0784  tokens=3.519B  epoch=6  elapsed=5217s
+  step 71700/101725  loss=2.0758  tokens=3.524B  epoch=6  elapsed=5224s
+  step 71800/101725  loss=2.1012  tokens=3.529B  epoch=6  elapsed=5231s
+  step 71900/101725  loss=2.0991  tokens=3.534B  epoch=6  elapsed=5238s
+  step 72000/101725  loss=2.0759  tokens=3.539B  epoch=6  elapsed=5245s
+
+  [step 72000, 3.54B tokens, epoch 6] toy_loss_diff=0.3550 toy_acc=0.0000 | indist_loss_diff=0.3183 frac+=0.571
+  step 72100/101725  loss=2.0909  tokens=3.544B  epoch=6  elapsed=5253s
+  step 72200/101725  loss=2.0760  tokens=3.549B  epoch=6  elapsed=5260s
+  step 72300/101725  loss=2.0922  tokens=3.554B  epoch=6  elapsed=5267s
+  step 72400/101725  loss=2.0979  tokens=3.559B  epoch=6  elapsed=5275s
+  step 72500/101725  loss=2.1077  tokens=3.564B  epoch=6  elapsed=5282s
+  step 72600/101725  loss=2.1002  tokens=3.568B  epoch=6  elapsed=5289s
+  step 72700/101725  loss=2.1203  tokens=3.573B  epoch=6  elapsed=5296s
+  step 72800/101725  loss=2.0638  tokens=3.578B  epoch=6  elapsed=5304s
+  step 72900/101725  loss=2.1049  tokens=3.583B  epoch=6  elapsed=5311s
+  step 73000/101725  loss=2.0974  tokens=3.588B  epoch=6  elapsed=5318s
+
+  [step 73000, 3.59B tokens, epoch 6] toy_loss_diff=0.3667 toy_acc=0.0000 | indist_loss_diff=0.3201 frac+=0.568
+  step 73100/101725  loss=2.1027  tokens=3.593B  epoch=6  elapsed=5326s
+  step 73200/101725  loss=2.0899  tokens=3.598B  epoch=6  elapsed=5333s
+  step 73300/101725  loss=2.0665  tokens=3.603B  epoch=6  elapsed=5340s
+  step 73400/101725  loss=2.0938  tokens=3.608B  epoch=6  elapsed=5347s
+  step 73500/101725  loss=2.0532  tokens=3.613B  epoch=6  elapsed=5355s
+  step 73600/101725  loss=2.0729  tokens=3.618B  epoch=6  elapsed=5362s
+  step 73700/101725  loss=2.1181  tokens=3.623B  epoch=6  elapsed=5369s
+  step 73800/101725  loss=2.0841  tokens=3.627B  epoch=6  elapsed=5376s
+  step 73900/101725  loss=2.0813  tokens=3.632B  epoch=6  elapsed=5383s
+  step 74000/101725  loss=2.1136  tokens=3.637B  epoch=6  elapsed=5391s
+
+  [step 74000, 3.64B tokens, epoch 6] toy_loss_diff=0.3825 toy_acc=0.0000 | indist_loss_diff=0.3143 frac+=0.565
+  step 74100/101725  loss=2.0997  tokens=3.642B  epoch=6  elapsed=5398s
+  --- Epoch 7 ---
+  step 74200/101725  loss=2.0778  tokens=3.647B  epoch=7  elapsed=5405s
+  step 74300/101725  loss=2.0854  tokens=3.652B  epoch=7  elapsed=5413s
+  step 74400/101725  loss=2.0564  tokens=3.657B  epoch=7  elapsed=5420s
+  step 74500/101725  loss=2.0711  tokens=3.662B  epoch=7  elapsed=5427s
+  step 74600/101725  loss=2.0759  tokens=3.667B  epoch=7  elapsed=5434s
+  step 74700/101725  loss=2.0797  tokens=3.672B  epoch=7  elapsed=5442s
+  step 74800/101725  loss=2.0688  tokens=3.677B  epoch=7  elapsed=5449s
+  step 74900/101725  loss=2.0480  tokens=3.681B  epoch=7  elapsed=5456s
+  step 75000/101725  loss=2.0859  tokens=3.686B  epoch=7  elapsed=5463s
+
+  [step 75000, 3.69B tokens, epoch 7] toy_loss_diff=0.3608 toy_acc=0.0000 | indist_loss_diff=0.3062 frac+=0.566
+  step 75100/101725  loss=2.0603  tokens=3.691B  epoch=7  elapsed=5471s
+  step 75200/101725  loss=2.0938  tokens=3.696B  epoch=7  elapsed=5478s
+  step 75300/101725  loss=2.1004  tokens=3.701B  epoch=7  elapsed=5485s
+  step 75400/101725  loss=2.0723  tokens=3.706B  epoch=7  elapsed=5493s
+  step 75500/101725  loss=2.0359  tokens=3.711B  epoch=7  elapsed=5500s
+  step 75600/101725  loss=2.1111  tokens=3.716B  epoch=7  elapsed=5507s
+  step 75700/101725  loss=2.0986  tokens=3.721B  epoch=7  elapsed=5514s
+  step 75800/101725  loss=2.1305  tokens=3.726B  epoch=7  elapsed=5522s
+  step 75900/101725  loss=2.0457  tokens=3.731B  epoch=7  elapsed=5529s
+  step 76000/101725  loss=2.0736  tokens=3.736B  epoch=7  elapsed=5536s
+
+  [step 76000, 3.74B tokens, epoch 7] toy_loss_diff=0.3676 toy_acc=0.0000 | indist_loss_diff=0.3159 frac+=0.560
+  step 76100/101725  loss=2.0679  tokens=3.740B  epoch=7  elapsed=5543s
+  step 76200/101725  loss=2.0751  tokens=3.745B  epoch=7  elapsed=5551s
+  step 76300/101725  loss=2.0972  tokens=3.750B  epoch=7  elapsed=5558s
+  step 76400/101725  loss=2.0891  tokens=3.755B  epoch=7  elapsed=5565s
+  step 76500/101725  loss=2.0763  tokens=3.760B  epoch=7  elapsed=5572s
+  step 76600/101725  loss=2.0540  tokens=3.765B  epoch=7  elapsed=5580s
+  step 76700/101725  loss=2.0816  tokens=3.770B  epoch=7  elapsed=5587s
+  step 76800/101725  loss=2.0865  tokens=3.775B  epoch=7  elapsed=5594s
+  step 76900/101725  loss=2.1146  tokens=3.780B  epoch=7  elapsed=5601s
+  step 77000/101725  loss=2.0789  tokens=3.785B  epoch=7  elapsed=5608s
+
+  [step 77000, 3.78B tokens, epoch 7] toy_loss_diff=0.3646 toy_acc=0.0000 | indist_loss_diff=0.3109 frac+=0.566
+  step 77100/101725  loss=2.0637  tokens=3.790B  epoch=7  elapsed=5616s
+  step 77200/101725  loss=2.0734  tokens=3.795B  epoch=7  elapsed=5623s
+  step 77300/101725  loss=2.0398  tokens=3.799B  epoch=7  elapsed=5630s
+  step 77400/101725  loss=2.0783  tokens=3.804B  epoch=7  elapsed=5638s
+  step 77500/101725  loss=2.1058  tokens=3.809B  epoch=7  elapsed=5645s
+  step 77600/101725  loss=2.0327  tokens=3.814B  epoch=7  elapsed=5652s
+  step 77700/101725  loss=2.1098  tokens=3.819B  epoch=7  elapsed=5659s
+  step 77800/101725  loss=2.0702  tokens=3.824B  epoch=7  elapsed=5667s
+  step 77900/101725  loss=2.0916  tokens=3.829B  epoch=7  elapsed=5674s
+  step 78000/101725  loss=2.0719  tokens=3.834B  epoch=7  elapsed=5681s
+
+  [step 78000, 3.83B tokens, epoch 7] toy_loss_diff=0.3626 toy_acc=0.0000 | indist_loss_diff=0.3163 frac+=0.566
+  step 78100/101725  loss=2.0722  tokens=3.839B  epoch=7  elapsed=5689s
+  step 78200/101725  loss=2.0729  tokens=3.844B  epoch=7  elapsed=5696s
+  step 78300/101725  loss=2.0988  tokens=3.849B  epoch=7  elapsed=5703s
+  step 78400/101725  loss=2.0783  tokens=3.854B  epoch=7  elapsed=5710s
+  step 78500/101725  loss=2.0909  tokens=3.858B  epoch=7  elapsed=5717s
+  step 78600/101725  loss=2.0422  tokens=3.863B  epoch=7  elapsed=5725s
+  step 78700/101725  loss=2.0840  tokens=3.868B  epoch=7  elapsed=5732s
+  step 78800/101725  loss=2.0871  tokens=3.873B  epoch=7  elapsed=5739s
+  step 78900/101725  loss=2.0494  tokens=3.878B  epoch=7  elapsed=5746s
+  step 79000/101725  loss=2.0671  tokens=3.883B  epoch=7  elapsed=5754s
+
+  [step 79000, 3.88B tokens, epoch 7] toy_loss_diff=0.3543 toy_acc=0.0000 | indist_loss_diff=0.3216 frac+=0.566
+  step 79100/101725  loss=2.0735  tokens=3.888B  epoch=7  elapsed=5761s
+  step 79200/101725  loss=2.0523  tokens=3.893B  epoch=7  elapsed=5768s
+  step 79300/101725  loss=2.0853  tokens=3.898B  epoch=7  elapsed=5776s
+  step 79400/101725  loss=2.0703  tokens=3.903B  epoch=7  elapsed=5783s
+  step 79500/101725  loss=2.0516  tokens=3.908B  epoch=7  elapsed=5790s
+  step 79600/101725  loss=2.0585  tokens=3.912B  epoch=7  elapsed=5797s
+  step 79700/101725  loss=2.0554  tokens=3.917B  epoch=7  elapsed=5805s
+  step 79800/101725  loss=2.0590  tokens=3.922B  epoch=7  elapsed=5812s
+  step 79900/101725  loss=2.0490  tokens=3.927B  epoch=7  elapsed=5819s
+  step 80000/101725  loss=2.0640  tokens=3.932B  epoch=7  elapsed=5826s
+
+  [step 80000, 3.93B tokens, epoch 7] toy_loss_diff=0.3837 toy_acc=0.0000 | indist_loss_diff=0.3069 frac+=0.566
+  step 80100/101725  loss=2.0800  tokens=3.937B  epoch=7  elapsed=5834s
+  step 80200/101725  loss=2.0862  tokens=3.942B  epoch=7  elapsed=5841s
+  step 80300/101725  loss=2.0743  tokens=3.947B  epoch=7  elapsed=5848s
+  step 80400/101725  loss=2.0871  tokens=3.952B  epoch=7  elapsed=5856s
+  step 80500/101725  loss=2.0869  tokens=3.957B  epoch=7  elapsed=5863s
+  step 80600/101725  loss=2.0599  tokens=3.962B  epoch=7  elapsed=5870s
+  step 80700/101725  loss=2.0545  tokens=3.967B  epoch=7  elapsed=5877s
+  step 80800/101725  loss=2.0706  tokens=3.971B  epoch=7  elapsed=5884s
+  step 80900/101725  loss=2.0844  tokens=3.976B  epoch=7  elapsed=5892s
+  step 81000/101725  loss=2.0876  tokens=3.981B  epoch=7  elapsed=5899s
+
+  [step 81000, 3.98B tokens, epoch 7] toy_loss_diff=0.3632 toy_acc=0.0000 | indist_loss_diff=0.3036 frac+=0.564
+  step 81100/101725  loss=2.0840  tokens=3.986B  epoch=7  elapsed=5906s
+  step 81200/101725  loss=2.0729  tokens=3.991B  epoch=7  elapsed=5914s
+  step 81300/101725  loss=2.0612  tokens=3.996B  epoch=7  elapsed=5921s
+  step 81400/101725  loss=2.1161  tokens=4.001B  epoch=7  elapsed=5928s
+  step 81500/101725  loss=2.1096  tokens=4.006B  epoch=7  elapsed=5935s
+  step 81600/101725  loss=2.0306  tokens=4.011B  epoch=7  elapsed=5943s
+  step 81700/101725  loss=2.0464  tokens=4.016B  epoch=7  elapsed=5950s
+  step 81800/101725  loss=2.0661  tokens=4.021B  epoch=7  elapsed=5957s
+  step 81900/101725  loss=2.0718  tokens=4.026B  epoch=7  elapsed=5964s
+  step 82000/101725  loss=2.0589  tokens=4.030B  epoch=7  elapsed=5972s
+
+  [step 82000, 4.03B tokens, epoch 7] toy_loss_diff=0.3904 toy_acc=0.0000 | indist_loss_diff=0.3107 frac+=0.565
+  step 82100/101725  loss=2.0491  tokens=4.035B  epoch=7  elapsed=5979s
+  step 82200/101725  loss=2.0826  tokens=4.040B  epoch=7  elapsed=5986s
+  step 82300/101725  loss=2.0708  tokens=4.045B  epoch=7  elapsed=5993s
+  step 82400/101725  loss=2.0961  tokens=4.050B  epoch=7  elapsed=6001s
+  step 82500/101725  loss=2.0845  tokens=4.055B  epoch=7  elapsed=6008s
+  step 82600/101725  loss=2.0843  tokens=4.060B  epoch=7  elapsed=6015s
+  step 82700/101725  loss=2.0895  tokens=4.065B  epoch=7  elapsed=6023s
+  step 82800/101725  loss=2.1170  tokens=4.070B  epoch=7  elapsed=6030s
+  step 82900/101725  loss=2.0714  tokens=4.075B  epoch=7  elapsed=6037s
+  step 83000/101725  loss=2.0695  tokens=4.080B  epoch=7  elapsed=6044s
+
+  [step 83000, 4.08B tokens, epoch 7] toy_loss_diff=0.3978 toy_acc=0.0000 | indist_loss_diff=0.3146 frac+=0.565
+  step 83100/101725  loss=2.0569  tokens=4.085B  epoch=7  elapsed=6052s
+  step 83200/101725  loss=2.0887  tokens=4.089B  epoch=7  elapsed=6059s
+  step 83300/101725  loss=2.0717  tokens=4.094B  epoch=7  elapsed=6066s
+  step 83400/101725  loss=2.0941  tokens=4.099B  epoch=7  elapsed=6073s
+  step 83500/101725  loss=2.0784  tokens=4.104B  epoch=7  elapsed=6081s
+  step 83600/101725  loss=2.0714  tokens=4.109B  epoch=7  elapsed=6088s
+  step 83700/101725  loss=2.0328  tokens=4.114B  epoch=7  elapsed=6095s
+  step 83800/101725  loss=2.0889  tokens=4.119B  epoch=7  elapsed=6102s
+  step 83900/101725  loss=2.0499  tokens=4.124B  epoch=7  elapsed=6110s
+  step 84000/101725  loss=2.0784  tokens=4.129B  epoch=7  elapsed=6117s
+
+  [step 84000, 4.13B tokens, epoch 7] toy_loss_diff=0.3732 toy_acc=0.0000 | indist_loss_diff=0.3117 frac+=0.564
+  step 84100/101725  loss=2.0760  tokens=4.134B  epoch=7  elapsed=6124s
+  step 84200/101725  loss=2.0649  tokens=4.139B  epoch=7  elapsed=6131s
+  step 84300/101725  loss=2.0765  tokens=4.144B  epoch=7  elapsed=6139s
+  step 84400/101725  loss=2.0675  tokens=4.148B  epoch=7  elapsed=6146s
+  step 84500/101725  loss=2.0633  tokens=4.153B  epoch=7  elapsed=6153s
+  step 84600/101725  loss=2.0610  tokens=4.158B  epoch=7  elapsed=6160s
+  step 84700/101725  loss=2.0710  tokens=4.163B  epoch=7  elapsed=6168s
+  step 84800/101725  loss=2.0503  tokens=4.168B  epoch=7  elapsed=6175s
+  step 84900/101725  loss=2.0722  tokens=4.173B  epoch=7  elapsed=6182s
+  step 85000/101725  loss=2.0541  tokens=4.178B  epoch=7  elapsed=6189s
+
+  [step 85000, 4.18B tokens, epoch 7] toy_loss_diff=0.3735 toy_acc=0.0000 | indist_loss_diff=0.3149 frac+=0.566
+  step 85100/101725  loss=2.0943  tokens=4.183B  epoch=7  elapsed=6197s
+  step 85200/101725  loss=2.0831  tokens=4.188B  epoch=7  elapsed=6204s
+  step 85300/101725  loss=2.0833  tokens=4.193B  epoch=7  elapsed=6212s
+  step 85400/101725  loss=2.0506  tokens=4.198B  epoch=7  elapsed=6219s
+  step 85500/101725  loss=2.0785  tokens=4.202B  epoch=7  elapsed=6226s
+  step 85600/101725  loss=2.0377  tokens=4.207B  epoch=7  elapsed=6233s
+  step 85700/101725  loss=2.0482  tokens=4.212B  epoch=7  elapsed=6241s
+  step 85800/101725  loss=2.0497  tokens=4.217B  epoch=7  elapsed=6248s
+  step 85900/101725  loss=2.0582  tokens=4.222B  epoch=7  elapsed=6255s
+  step 86000/101725  loss=2.0596  tokens=4.227B  epoch=7  elapsed=6262s
+
+  [step 86000, 4.23B tokens, epoch 7] toy_loss_diff=0.3703 toy_acc=0.0000 | indist_loss_diff=0.3095 frac+=0.569
+  step 86100/101725  loss=2.0576  tokens=4.232B  epoch=7  elapsed=6270s
+  step 86200/101725  loss=2.0907  tokens=4.237B  epoch=7  elapsed=6277s
+  step 86300/101725  loss=2.0976  tokens=4.242B  epoch=7  elapsed=6284s
+  step 86400/101725  loss=2.0887  tokens=4.247B  epoch=7  elapsed=6291s
+  step 86500/101725  loss=2.0762  tokens=4.252B  epoch=7  elapsed=6299s
+  --- Epoch 8 ---
+  step 86600/101725  loss=2.0623  tokens=4.257B  epoch=8  elapsed=6306s
+  step 86700/101725  loss=2.0615  tokens=4.261B  epoch=8  elapsed=6313s
+  step 86800/101725  loss=2.0920  tokens=4.266B  epoch=8  elapsed=6320s
+  step 86900/101725  loss=2.0720  tokens=4.271B  epoch=8  elapsed=6327s
+  step 87000/101725  loss=2.0831  tokens=4.276B  epoch=8  elapsed=6335s
+
+  [step 87000, 4.28B tokens, epoch 8] toy_loss_diff=0.3636 toy_acc=0.0000 | indist_loss_diff=0.3118 frac+=0.566
+  step 87100/101725  loss=2.0679  tokens=4.281B  epoch=8  elapsed=6343s
+  step 87200/101725  loss=2.0244  tokens=4.286B  epoch=8  elapsed=6350s
+  step 87300/101725  loss=2.0988  tokens=4.291B  epoch=8  elapsed=6358s
+  step 87400/101725  loss=2.0390  tokens=4.296B  epoch=8  elapsed=6366s
+  step 87500/101725  loss=2.0601  tokens=4.301B  epoch=8  elapsed=6373s
+  step 87600/101725  loss=2.0955  tokens=4.306B  epoch=8  elapsed=6380s
+  step 87700/101725  loss=2.0666  tokens=4.311B  epoch=8  elapsed=6388s
+  step 87800/101725  loss=2.1154  tokens=4.316B  epoch=8  elapsed=6395s
+  step 87900/101725  loss=2.0633  tokens=4.320B  epoch=8  elapsed=6402s
+  step 88000/101725  loss=2.0993  tokens=4.325B  epoch=8  elapsed=6409s
+
+  [step 88000, 4.33B tokens, epoch 8] toy_loss_diff=0.3516 toy_acc=0.0000 | indist_loss_diff=0.3088 frac+=0.567
+  step 88100/101725  loss=2.0610  tokens=4.330B  epoch=8  elapsed=6417s
+  step 88200/101725  loss=2.0776  tokens=4.335B  epoch=8  elapsed=6424s
+  step 88300/101725  loss=2.0809  tokens=4.340B  epoch=8  elapsed=6431s
+  step 88400/101725  loss=2.0864  tokens=4.345B  epoch=8  elapsed=6438s
+  step 88500/101725  loss=2.0591  tokens=4.350B  epoch=8  elapsed=6446s
+  step 88600/101725  loss=2.0807  tokens=4.355B  epoch=8  elapsed=6453s
+  step 88700/101725  loss=2.0654  tokens=4.360B  epoch=8  elapsed=6460s
+  step 88800/101725  loss=2.0777  tokens=4.365B  epoch=8  elapsed=6467s
+  step 88900/101725  loss=2.0584  tokens=4.370B  epoch=8  elapsed=6475s
+  step 89000/101725  loss=2.0685  tokens=4.375B  epoch=8  elapsed=6482s
+
+  [step 89000, 4.37B tokens, epoch 8] toy_loss_diff=0.3858 toy_acc=0.0000 | indist_loss_diff=0.3094 frac+=0.568
+  step 89100/101725  loss=2.0464  tokens=4.379B  epoch=8  elapsed=6489s
+  step 89200/101725  loss=2.0706  tokens=4.384B  epoch=8  elapsed=6496s
+  step 89300/101725  loss=2.1080  tokens=4.389B  epoch=8  elapsed=6504s
+  step 89400/101725  loss=2.0548  tokens=4.394B  epoch=8  elapsed=6511s
+  step 89500/101725  loss=2.0907  tokens=4.399B  epoch=8  elapsed=6518s
+  step 89600/101725  loss=2.0758  tokens=4.404B  epoch=8  elapsed=6525s
+  step 89700/101725  loss=2.0602  tokens=4.409B  epoch=8  elapsed=6533s
+  step 89800/101725  loss=2.0533  tokens=4.414B  epoch=8  elapsed=6540s
+  step 89900/101725  loss=2.0265  tokens=4.419B  epoch=8  elapsed=6547s
+  step 90000/101725  loss=2.0606  tokens=4.424B  epoch=8  elapsed=6554s
+
+  [step 90000, 4.42B tokens, epoch 8] toy_loss_diff=0.3715 toy_acc=0.0000 | indist_loss_diff=0.3172 frac+=0.563
+  step 90100/101725  loss=2.1135  tokens=4.429B  epoch=8  elapsed=6562s
+  step 90200/101725  loss=2.0820  tokens=4.434B  epoch=8  elapsed=6569s
+  step 90300/101725  loss=2.0636  tokens=4.438B  epoch=8  elapsed=6576s
+  step 90400/101725  loss=2.0687  tokens=4.443B  epoch=8  elapsed=6584s
+  step 90500/101725  loss=2.0686  tokens=4.448B  epoch=8  elapsed=6591s
+  step 90600/101725  loss=2.0842  tokens=4.453B  epoch=8  elapsed=6598s
+  step 90700/101725  loss=2.0570  tokens=4.458B  epoch=8  elapsed=6605s
+  step 90800/101725  loss=2.0602  tokens=4.463B  epoch=8  elapsed=6613s
+  step 90900/101725  loss=2.0805  tokens=4.468B  epoch=8  elapsed=6620s
+  step 91000/101725  loss=2.0888  tokens=4.473B  epoch=8  elapsed=6627s
+
+  [step 91000, 4.47B tokens, epoch 8] toy_loss_diff=0.3585 toy_acc=0.0000 | indist_loss_diff=0.3117 frac+=0.564
+  step 91100/101725  loss=2.0602  tokens=4.478B  epoch=8  elapsed=6634s
+  step 91200/101725  loss=2.0761  tokens=4.483B  epoch=8  elapsed=6642s
+  step 91300/101725  loss=2.0922  tokens=4.488B  epoch=8  elapsed=6649s
+  step 91400/101725  loss=2.0480  tokens=4.492B  epoch=8  elapsed=6656s
+  step 91500/101725  loss=2.0953  tokens=4.497B  epoch=8  elapsed=6663s
+  step 91600/101725  loss=2.0681  tokens=4.502B  epoch=8  elapsed=6671s
+  step 91700/101725  loss=2.0873  tokens=4.507B  epoch=8  elapsed=6678s
+  step 91800/101725  loss=2.0788  tokens=4.512B  epoch=8  elapsed=6685s
+  step 91900/101725  loss=2.0905  tokens=4.517B  epoch=8  elapsed=6692s
+  step 92000/101725  loss=2.0486  tokens=4.522B  epoch=8  elapsed=6700s
+
+  [step 92000, 4.52B tokens, epoch 8] toy_loss_diff=0.3744 toy_acc=0.0000 | indist_loss_diff=0.3094 frac+=0.563
+  step 92100/101725  loss=2.0647  tokens=4.527B  epoch=8  elapsed=6707s
+  step 92200/101725  loss=2.0767  tokens=4.532B  epoch=8  elapsed=6714s
+  step 92300/101725  loss=2.0380  tokens=4.537B  epoch=8  elapsed=6722s
+  step 92400/101725  loss=2.0441  tokens=4.542B  epoch=8  elapsed=6729s
+  step 92500/101725  loss=2.0635  tokens=4.547B  epoch=8  elapsed=6736s
+  step 92600/101725  loss=2.0692  tokens=4.551B  epoch=8  elapsed=6744s
+  step 92700/101725  loss=2.0407  tokens=4.556B  epoch=8  elapsed=6751s
+  step 92800/101725  loss=2.0500  tokens=4.561B  epoch=8  elapsed=6758s
+  step 92900/101725  loss=2.0858  tokens=4.566B  epoch=8  elapsed=6765s
+  step 93000/101725  loss=2.0626  tokens=4.571B  epoch=8  elapsed=6772s
+
+  [step 93000, 4.57B tokens, epoch 8] toy_loss_diff=0.3671 toy_acc=0.0000 | indist_loss_diff=0.3144 frac+=0.565
+  step 93100/101725  loss=2.0899  tokens=4.576B  epoch=8  elapsed=6780s
+  step 93200/101725  loss=2.0766  tokens=4.581B  epoch=8  elapsed=6787s
+  step 93300/101725  loss=2.0655  tokens=4.586B  epoch=8  elapsed=6794s
+  step 93400/101725  loss=2.0411  tokens=4.591B  epoch=8  elapsed=6801s
+  step 93500/101725  loss=2.0869  tokens=4.596B  epoch=8  elapsed=6809s
+  step 93600/101725  loss=2.0801  tokens=4.601B  epoch=8  elapsed=6816s
+  step 93700/101725  loss=2.0519  tokens=4.606B  epoch=8  elapsed=6823s
+  step 93800/101725  loss=2.0730  tokens=4.610B  epoch=8  elapsed=6830s
+  step 93900/101725  loss=2.0356  tokens=4.615B  epoch=8  elapsed=6838s
+  step 94000/101725  loss=2.0757  tokens=4.620B  epoch=8  elapsed=6845s
+
+  [step 94000, 4.62B tokens, epoch 8] toy_loss_diff=0.3690 toy_acc=0.0000 | indist_loss_diff=0.3169 frac+=0.568
+  step 94100/101725  loss=2.0442  tokens=4.625B  epoch=8  elapsed=6852s
+  step 94200/101725  loss=2.1019  tokens=4.630B  epoch=8  elapsed=6860s
+  step 94300/101725  loss=2.0368  tokens=4.635B  epoch=8  elapsed=6867s
+  step 94400/101725  loss=2.0739  tokens=4.640B  epoch=8  elapsed=6874s
+  step 94500/101725  loss=2.0660  tokens=4.645B  epoch=8  elapsed=6881s
+  step 94600/101725  loss=2.0646  tokens=4.650B  epoch=8  elapsed=6889s
+  step 94700/101725  loss=2.0508  tokens=4.655B  epoch=8  elapsed=6896s
+  step 94800/101725  loss=2.0649  tokens=4.660B  epoch=8  elapsed=6903s
+  step 94900/101725  loss=2.0739  tokens=4.665B  epoch=8  elapsed=6910s
+  step 95000/101725  loss=2.0867  tokens=4.669B  epoch=8  elapsed=6917s
+
+  [step 95000, 4.67B tokens, epoch 8] toy_loss_diff=0.3643 toy_acc=0.0000 | indist_loss_diff=0.3131 frac+=0.563
+  step 95100/101725  loss=2.0570  tokens=4.674B  epoch=8  elapsed=6925s
+  step 95200/101725  loss=2.0666  tokens=4.679B  epoch=8  elapsed=6932s
+  step 95300/101725  loss=2.1008  tokens=4.684B  epoch=8  elapsed=6940s
+  step 95400/101725  loss=2.0140  tokens=4.689B  epoch=8  elapsed=6947s
+  step 95500/101725  loss=2.0489  tokens=4.694B  epoch=8  elapsed=6954s
+  step 95600/101725  loss=2.0854  tokens=4.699B  epoch=8  elapsed=6961s
+  step 95700/101725  loss=2.0956  tokens=4.704B  epoch=8  elapsed=6969s

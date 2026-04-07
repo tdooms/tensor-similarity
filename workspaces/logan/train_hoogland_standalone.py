@@ -29,7 +29,6 @@ import numpy as np
 from torch.utils.data import IterableDataset, Dataset, DataLoader
 from torch.optim.lr_scheduler import LambdaLR
 from einops import rearrange, einsum
-from tqdm import tqdm
 
 
 # =============================================================================
@@ -461,7 +460,7 @@ def main(batch_size=64, use_compile=True):
     # Training
     induction_found = False
     step = 0
-    pbar = tqdm(total=max_steps, desc="Hoogland replication")
+    t0 = time.time()
 
     for batch in train_dl:
         if step >= max_steps or induction_found:
@@ -480,12 +479,14 @@ def main(batch_size=64, use_compile=True):
         scheduler.step()
         step += 1
 
-        pbar.set_postfix(loss=f"{loss.item():.4f}")
-        pbar.update(1)
-
-        # Log every 1000 steps
-        if step % 1000 == 0:
+        # Log every 10 steps
+        if step % 10 == 0:
+            elapsed = time.time() - t0
+            tokens_so_far = step * tokens_per_step
             log({"train_loss": loss.item(), "lr": scheduler.get_last_lr()[0]}, step)
+            if step % 100 == 0:
+                print(f"  step {step}/{max_steps}  loss={loss.item():.4f}  "
+                      f"tokens={tokens_so_far/1e9:.3f}B  elapsed={elapsed:.0f}s")
 
         # Eval + induction every 2500 steps
         if step % 2500 == 0:
@@ -518,8 +519,6 @@ def main(batch_size=64, use_compile=True):
                 "step": step,
                 "model_state_dict": model.state_dict(),
             }, run_dir / "checkpoints" / f"step_{step}.pt")
-
-    pbar.close()
 
     # Final eval
     if not induction_found:

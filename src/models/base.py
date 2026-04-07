@@ -6,7 +6,7 @@ from itertools import accumulate
 from abc import abstractmethod
 from operator import mul
 
-from src.components import Component
+from src.components.base import Component
 
 class Model(nn.Module):
     def __init__(self, config) -> None:
@@ -16,20 +16,6 @@ class Model(nn.Module):
     @abstractmethod
     def components(self):
         raise NotImplementedError()
-    
-    # def gauges(self):
-    #     """compute the gauges that diagonalise the full model."""
-    #     networks = [component.network() for component in self.components()]
-        
-    #     # Make all (but the last) layers orthogonal through recursive input self contractions.
-    #     # data = (grammian, exponent)
-    #     orth = list(accumulate(networks[:-1], lambda data, net: Component.isc(net, data[0]), initial=(None, 0)))[1:]
-
-    #     # Make all layers diagonal through parallel output self contractions.
-    #     diag = [Gauge.from_gram(*Component.osc(net, gauge), absorb='mid') for net, gauge in zip(networks[1:], orth)]
-
-    #     # Combine both gauges.
-    #     return [o.inject(d) for o, d in zip(orth, diag)]
     
     def norm(self):
         cp = self.n_copies_per_layer()

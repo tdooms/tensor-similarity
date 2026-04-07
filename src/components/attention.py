@@ -3,7 +3,7 @@ from einops import rearrange, einsum
 from quimb.tensor import Tensor, TensorNetwork
 import torch
 
-from src.components.base import Component
+from src.components.base import Component, Term, spider
 from src.components.compose import pad
 
 
@@ -29,16 +29,15 @@ class Rotary(Component):
     
     def network(self, mod, device, dtype):
         data = [[[[1, 0], [0, 1]], [[0, -1], [1, 0]]], [[[0, 1], [-1, 0]], [[1, 0], [0, 1]]]]
-        inds = [f'{mod}:iq', f'{mod}:ik', f'{mod}:2q', f'{mod}:2k'] 
-        black = Tensor(torch.tensor(data, device=device, dtype=dtype), inds=inds, tags=['#'])
+        inds = (f'{mod}:iq', f'{mod}:ik', f'{mod}:2q', f'{mod}:2k')
+        black = Tensor(torch.tensor(data, device=device, dtype=dtype), inds=inds, tags=('#',))
         
         emb = torch.stack([self.cos, self.sin], dim=-1)
-        q = Tensor(emb, inds=['out:s', f'{mod}:h', f'{mod}:iq'], tags=['E'])
-        k = Tensor(emb, inds=['in:s', f'{mod}:h', f'{mod}:ik'], tags=['E'])
+        q = Tensor(emb, inds=('out:s', f'{mod}:h', f'{mod}:iq'), tags=('E',))
+        k = Tensor(emb, inds=('in:s', f'{mod}:h', f'{mod}:ik'), tags=('E',))
         
         return black & q & k
 
-    
 class Mask(Component):
     def __init__(self, n_ctx: int, kind: str) -> None:
         super().__init__()
@@ -55,11 +54,11 @@ class Mask(Component):
         return x * self.mask[None, None, :x.size(-2), :x.size(-1)]
     
     def network(self, tag='M'):
-        return Tensor(self.mask.data, inds=['out:s', 'in:s'], tags=[tag])
+        return Tensor(self.mask.data, inds=('out:s', 'in:s'), tags=(tag,))
 
 class Attention(Component):
     """Attention replacement using a quadratic scoring function."""
-    def __init__(self, d_model: int, n_head: int, n_ctx: int, mask: str, scale: int = 1, bias: bool = True) -> None:
+    def __init__(self, d_model: int, n_head: int, n_ctx: int, mask: str, bias: bool = False, scale: int = 1) -> None:
         super().__init__()
         self.d_head = d_model // n_head
         self.n_head = n_head
@@ -88,7 +87,7 @@ class Attention(Component):
         
         z = einsum(pattern, v, "... n_head seq_q seq_k, ... seq_k n_head d_head -> ... seq_q n_head d_head")
         z = rearrange(z, '... seq n_head d_head -> ... seq (n_head d_head)')
-        return (x * (1 - self.scale)) + self.o(z) * self.scale
+        return torch.lerp(x, self.o(z), self.scale)
 
     def _like(self):
         return dict(device=self.o.weight.device, dtype=self.o.weight.dtype)
@@ -96,22 +95,22 @@ class Attention(Component):
     def attention(self, q: Tensor, k: Tensor, mod: str):
         """Creates the QK-circuit with rotary embeddings."""
         r = self.rotary.network(mod, **self._like())
-        s = Tensor(torch.full((self.d_head // 2,), 1.0 / self.d_head, **self._like()), inds=[f'{mod}:h'], tags=['S'])
+        s = Tensor(torch.full((self.d_head // 2,), 1.0 / self.d_head, **self._like()), inds=(f'{mod}:h',), tags=('S',)) # what the fuck was this?
 
-        rename = {idx: f'{mod}:{idx}' for idx in ['2q', '2k', 'h', 'q', 'k']}
+        rename = {idx: f'{mod}:{idx}' for idx in ('2q', '2k', 'h', 'q', 'k')}
         return r & q.reindex(rename) & k.reindex(rename) & s
 
     def network(self):
         """Attention-only TN (without residual). No constant output dim."""
         d, n, h = self.d_model, self.n_head, self.d_head
 
-        o = Tensor(self.scale * self.o.weight.view(d, n, h), inds=['out:d', 'n', 'ov:h'], tags=['O'])
-        v = Tensor(pad(self.v.weight, self.v.bias, constant=False).view(n, h, d + 1), inds=['n', 'ov:h', 'in:d0'], tags=['V'])
+        o = Tensor(self.scale * self.o.weight.view(d, n, h), inds=('out:d', 'n', 'ov:h'), tags=('O',))
+        v = Tensor(pad(self.v.weight, self.v.bias, constant=False).view(n, h, d + 1), inds=('n', 'ov:h', 'in:d0'), tags=('V',))
 
-        q1 = Tensor(pad(self.q1.weight, self.q1.bias, constant=False).view(n, 2, h // 2, d + 1), inds=['n', '2q', 'h', 'q'], tags=['Q'])
-        k1 = Tensor(pad(self.k1.weight, self.k1.bias, constant=False).view(n, 2, h // 2, d + 1), inds=['n', '2k', 'h', 'k'], tags=['K'])
-        q2 = Tensor(pad(self.q2.weight, self.q2.bias, constant=False).view(n, 2, h // 2, d + 1), inds=['n', '2q', 'h', 'q'], tags=['Q'])
-        k2 = Tensor(pad(self.k2.weight, self.k2.bias, constant=False).view(n, 2, h // 2, d + 1), inds=['n', '2k', 'h', 'k'], tags=['K'])
+        q1 = Tensor(pad(self.q1.weight, self.q1.bias, constant=False).view(n, 2, h // 2, d + 1), inds=('n', '2q', 'h', 'q'), tags=('Q',))
+        k1 = Tensor(pad(self.k1.weight, self.k1.bias, constant=False).view(n, 2, h // 2, d + 1), inds=('n', '2k', 'h', 'k'), tags=('K',))
+        q2 = Tensor(pad(self.q2.weight, self.q2.bias, constant=False).view(n, 2, h // 2, d + 1), inds=('n', '2q', 'h', 'q'), tags=('Q',))
+        k2 = Tensor(pad(self.k2.weight, self.k2.bias, constant=False).view(n, 2, h // 2, d + 1), inds=('n', '2k', 'h', 'k'), tags=('K',))
 
         left = self.attention(q1, k1, 'left')
         right = self.attention(q2, k2, 'right')
@@ -119,3 +118,27 @@ class Attention(Component):
 
         rename = {'left:k': 'in:d1', 'right:k': 'in:d2', 'left:q': 'in:d3', 'right:q': 'in:d4'}
         return TensorNetwork([o, v, mask, left, right], check_collisions=False).reindex(rename)
+
+    def terms(self, n_ctx, **like):
+        d, d1 = self.d_model, self.d_model + 1
+
+        # Term 1: residual — constant dim preserved, data dims scaled by (1-s)
+        scale = torch.cat([torch.ones(1, **like), (1 - self.scale) * torch.ones(d, **like)])
+        identity = TensorNetwork([
+            Tensor(torch.diag(scale), inds=('out:d', 'in:d0')),
+            Tensor(spider(1, n_ctx, **like), inds=('in:s0', 'out:s')),
+        ])
+
+        # Term 2: active attention, embedded from d → d+1 output via [0; I] tensor
+        active = self.network().reindex({'out:d': 'mid:d'})
+        embed = torch.zeros(d1, d, **like)
+        embed[1:] = torch.eye(d, **like)
+        active &= Tensor(embed, inds=('out:d', 'mid:d'))
+
+        # Give each input leg a unique position index, tied to the TN's internal
+        # positions (in:s for K/V, out:s for Q) via delta/spider tensors.
+        active &= Tensor(spider(3, n_ctx, **like), inds=('in:s0', 'in:s1', 'in:s2', 'in:s'))
+        active &= Tensor(spider(2, n_ctx, **like), inds=('in:s3', 'in:s4', 'out:s'))
+
+        legs = {f'in:d{i}': f'in:s{i}' for i in range(5)}
+        return [Term(identity, {'in:d0': 'in:s0'}), Term(active, legs)]

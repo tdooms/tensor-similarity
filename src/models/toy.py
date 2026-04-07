@@ -47,6 +47,9 @@ class ToyModel(nn.Module):
     def _like(self):
         return dict(device=next(self.parameters()).device, dtype=next(self.parameters()).dtype)
 
+    def components(self):
+        return [self.embed, self.body, self.head]
+
     def forward(self, inputs):
         x = self.flatten(inputs)
         x = self.embed(x)
