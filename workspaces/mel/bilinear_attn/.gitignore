@@ -30,6 +30,7 @@ wandb/
 *.pth
 *.npy
 *.npz
+*.png
 
 # IDE settings
 .idea/
