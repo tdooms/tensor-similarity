@@ -204,7 +204,8 @@ def main():
 
     # ── run dir ──────────────────────────────────────────────────────────
     timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-    run_dir = Path("experiments/induction_heads/runs") / f"{timestamp}_induction"
+    run_name = cfg.get('name', 'induction')
+    run_dir = Path("experiments/induction_heads/runs") / f"{run_name}_{timestamp}"
     run_dir.mkdir(parents=True, exist_ok=True)
     metrics_file = run_dir / "metrics.jsonl"
 
@@ -223,6 +224,11 @@ def main():
         )
 
     (run_dir / "checkpoints").mkdir(exist_ok=True)
+
+    # Save initial weights as step_0.pt
+    ckpt_path_0 = run_dir / "checkpoints" / "step_0.pt"
+    torch.save({"step": 0, "model_state_dict": model.state_dict()}, ckpt_path_0)
+    print(f"Saved initial weights to {ckpt_path_0}")
 
     # ── training loop ────────────────────────────────────────────────────
     print(f"Training for {max_steps} steps  (eval every {eval_every}) ...")

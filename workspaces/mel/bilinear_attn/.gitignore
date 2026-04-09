@@ -19,7 +19,6 @@ __pycache__/
 .pytest_cache/
 
 # Training outputs / experiment artifacts
-runs/
 checkpoints/
 logs/
 *.ckpt
@@ -57,3 +56,11 @@ simple_stories_train/
 *.md
 !README.md
 !models/README.md
+
+# ignore everything in runs
+/runs/**
+
+# allow ONLY this run
+/experiments/induction_heads/runs/**
+!/experiments/induction_heads/runs/mini_induction_checkpoints_2026-04-09_141409/
+!/experiments/induction_heads/runs/mini_induction_checkpoints_2026-04-09_141409/**
