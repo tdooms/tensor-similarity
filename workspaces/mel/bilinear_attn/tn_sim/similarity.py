@@ -33,7 +33,9 @@ Performance:
 import torch
 from typing import Union
 
-from src.components.similarity import similarity as _compute_similarity, State
+# Use local numpy-based similarity to avoid torch memory fragmentation
+# (141GB -> 2GB for n_ctx=8 models)
+from .similarity_numpy import similarity as _compute_similarity, State
 from models.components.model import AttentionLMComponent, _validate_model_for_tn_similarity
 
 

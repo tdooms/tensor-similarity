@@ -45,13 +45,13 @@ MC_ABS_TOL = 0.1     # MC vs TN absolute tolerance
 
 
 def make_tn_compatible_config(
-    vocab_size=32,
-    n_ctx=3,      # Reduced from 8 to match main codebase tests
+    vocab_size=8,
+    n_ctx=8,      # Reduced from 8 to match main codebase tests
     d_model=8,    # Reduced from 16 to match main codebase tests
     n_head=2,
-    n_layers=1,
+    n_layers=2,
     attn_scale=0.5,
-    attn_type="bilinear",
+    attn_type="quadratic",
     use_bias_qk=True,
 ):
     """Create a TN-compatible model config (no normalization)."""

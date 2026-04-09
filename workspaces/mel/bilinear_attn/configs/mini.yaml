@@ -12,14 +12,14 @@ model:
   d_model: 8
   n_ctx: 8
   n_head: 2
-  n_layers: 2
+  n_layers: 1
   norm_places: []
   norm_type: none
   rope_base: 1000
   use_bias_qk: false
   use_rmsnorm_qk: false
   vocab_size: 8
-name: mini_induction_checkpoints
+name: 1l_mini_induction_checkpoints
 seed: 42
 train:
   batch_size: 64
