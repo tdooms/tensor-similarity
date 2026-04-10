@@ -24,7 +24,6 @@ import re
 from pathlib import Path
 from typing import Optional
 
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import yaml
@@ -32,7 +31,8 @@ from tqdm import tqdm
 
 from models import AttentionLM
 from tn_sim import cosine_similarity as tn_cosine_similarity
-from tn_sim.mc_similarity import mc_similarity_gaussian
+from tn_sim.mc_similarity import mc_similarity_gaussian, mc_similarity
+from experiments.induction_heads.data import create_repeated_token_dataloaders
 
 
 def parse_step_from_filename(filename: str) -> int:
@@ -193,6 +193,17 @@ def compute_pairwise_similarity(
     vocab_size = cfg["model"]["vocab_size"]
     n_ctx = cfg["model"]["n_ctx"]
     
+    # Create validation dataloader for mc_val method
+    val_dataloader = None
+    if method == "mc_val":
+        _, val_dataloader = create_repeated_token_dataloaders(
+            vocab_size=vocab_size,
+            n_ctx=n_ctx,
+            batch_size=64,
+            n_val=mc_samples,
+            seed=43,  # Different seed from training
+        )
+    
     # Build list of pairs to compute
     pairs_to_compute = []
     for i in range(n):
@@ -222,9 +233,17 @@ def compute_pairwise_similarity(
                         device=device,
                         n_samples=mc_samples,
                     )
-                else:  # tn
+                elif method == "mc_val":
+                    sim = mc_similarity(
+                        model_i, model_j,
+                        dataloader=val_dataloader,
+                        device=device,
+                    )
+                elif method == "tn":
                     # TN similarity uses numpy backend internally, so GPU is fine
                     sim = tn_cosine_similarity(model_i, model_j, device=device, dtype=torch.float64)
+                else:
+                    raise ValueError(f"Unknown method: {method}")
                 
                 sim_matrix[i, j] = sim
                 sim_matrix[j, i] = sim  # Symmetric
@@ -249,56 +268,6 @@ def compute_pairwise_similarity(
     
     print(f"Computed {computed} new pairs, skipped {skipped} cached pairs")
     return sim_matrix
-
-
-def plot_heatmap(
-    sim_matrix: np.ndarray,
-    step_labels: list[str],
-    title: str = "TN Cosine Similarity Heatmap",
-    output_path: Optional[Path] = None,
-    show: bool = True,
-):
-    """Plot similarity heatmap.
-    
-    NaN values (not computed) are shown in gray.
-    
-    Args:
-        sim_matrix: n x n similarity matrix (may contain NaN)
-        step_labels: Labels for each checkpoint (e.g., step numbers)
-        title: Plot title
-        output_path: Path to save figure (optional)
-        show: Whether to display the plot
-    """
-    n = len(step_labels)
-    
-    fig, ax = plt.subplots(figsize=(8, 6))
-    
-    # Use masked array to handle NaN values (shown as gray)
-    masked_matrix = np.ma.masked_invalid(sim_matrix)
-    cmap = plt.cm.RdBu_r.copy()
-    cmap.set_bad(color="lightgray")
-    
-    im = ax.imshow(masked_matrix, vmin=-1, vmax=1, cmap=cmap, aspect="equal")
-    
-    ax.set_title(title)
-    ax.set_xticks(range(n))
-    ax.set_xticklabels(step_labels, rotation=45, ha="right")
-    ax.set_yticks(range(n))
-    ax.set_yticklabels(step_labels)
-    ax.set_xlabel("Checkpoint step")
-    ax.set_ylabel("Checkpoint step")
-    
-    plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-    plt.tight_layout()
-    
-    if output_path:
-        plt.savefig(output_path, dpi=150, bbox_inches="tight")
-        print(f"Saved heatmap to {output_path}")
-    
-    if show:
-        plt.show()
-    
-    return fig
 
 
 def generate_heatmap(
@@ -362,8 +331,14 @@ def generate_heatmap(
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     
+    # Create subdirectories for data and images
+    data_dir = output_dir / "heatmap"
+    images_dir = output_dir / "images"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    images_dir.mkdir(parents=True, exist_ok=True)
+    
     # Load existing matrix if available (method-specific file)
-    old_matrix, old_steps = load_existing_matrix(output_dir, method)
+    old_matrix, old_steps = load_existing_matrix(data_dir, method)
     if old_matrix is not None:
         print(f"Loaded existing {method.upper()} matrix with {len(old_steps)} checkpoints")
     
@@ -381,9 +356,9 @@ def generate_heatmap(
     # Merge with existing matrix (copies known values, marks unknown as NaN)
     sim_matrix = merge_matrices(old_matrix, old_steps, steps_array)
     
-    # Determine output paths (method-specific filenames)
-    heatmap_path = output_dir / f"similarity_heatmap_{method}.png"
-    data_path = output_dir / f"similarity_data_{method}.npz"
+    # Determine output paths (method-specific filenames in subdirs)
+    data_path = data_dir / f"similarity_data_{method}.npz"
+    heatmap_path = images_dir / f"heatmap_{method}.png"
     
     # Compute missing pairwise similarities (saves incrementally to data_path)
     print(f"\nComputing {method.upper()} cosine similarities (window={window})...")
@@ -393,25 +368,34 @@ def generate_heatmap(
         output_path=data_path,
     )
     
-    # Plot and save
-    step_labels = [str(s) for s in steps]
-    
-    plot_heatmap(
-        sim_matrix,
-        step_labels,
-        title=f"{method.upper()} Cosine Similarity Between Checkpoints",
-        output_path=heatmap_path,
-        show=show,
-    )
-    
-    # Save raw data
+    # Final save of raw data
     np.savez(
         data_path,
         sim_matrix=sim_matrix,
         steps=steps_array,
         method=method,
     )
-    print(f"Saved raw data to {data_path}")
+    print(f"Saved data to {data_path}")
+    
+    # Plot using the new plotting module
+    from experiments.tn_sim_induction.plot_heatmap import plot_single_heatmap, load_metrics
+    
+    # Try to load metrics for val loss curve
+    metrics_path = output_dir / "metrics.jsonl"
+    metrics = None
+    if metrics_path.exists():
+        metrics = load_metrics(metrics_path)
+    
+    plot_single_heatmap(
+        sim_matrix,
+        steps_array,
+        method,
+        output_path=heatmap_path,
+        metrics=metrics,
+        show=show,
+        tick_every=1000,
+    )
+    print(f"Saved heatmap to {heatmap_path}")
     
     return sim_matrix, steps
 
@@ -452,8 +436,8 @@ def main():
         "--method", "-m",
         type=str,
         default="mc",
-        choices=["mc", "tn"],
-        help="Similarity method: 'mc' (Monte Carlo, fast) or 'tn' (tensor network, slow)",
+        choices=["mc", "mc_val", "tn"],
+        help="Similarity method: 'mc' (random tokens), 'mc_val' (validation data), 'tn' (tensor network)",
     )
     parser.add_argument(
         "--mc-samples",
