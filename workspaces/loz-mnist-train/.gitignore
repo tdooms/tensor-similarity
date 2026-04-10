@@ -30,3 +30,9 @@ build/
 
 # Old files
 old/
+
+# Model weights
+weights/
+
+# Claude settings
+.claude/
