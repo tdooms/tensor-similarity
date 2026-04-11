@@ -43,7 +43,7 @@ def _contract(tn, bridges, output_inds):
         for b in bridges:
             full &= b
         _EXPR_CACHE[key] = full.contract(output_inds=output_inds, optimize='greedy', get='expression')
-    return _EXPR_CACHE[key](*(t.data for t in tn), *(b.data for b in bridges))
+    return _EXPR_CACHE[key](*(t.data.detach() for t in tn), *(b.data.detach() for b in bridges))
 
 
 def _isserlis(tn, legs, S_for_pair, mu_for_leg, output_inds):
