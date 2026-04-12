@@ -108,7 +108,7 @@ def main():
         
         import yaml
         from models import AttentionLM
-        from data import create_dataloaders
+        from data.cached import create_dataloaders
         
         with open(args.config) as f:
             cfg = yaml.safe_load(f)
