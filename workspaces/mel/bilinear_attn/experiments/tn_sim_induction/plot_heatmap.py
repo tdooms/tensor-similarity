@@ -51,8 +51,7 @@ def get_method_title(method: str) -> str:
     """Get human-readable title for method."""
     titles = {
         "tn": "Tensor Network Similarity",
-        "mc": "MC Similarity (Random Tokens)",
-        "mc_val": "MC Similarity (Validation Data)",
+        "mc": "MC Similarity (Gaussian residual stream)",
     }
     return titles.get(method, f"{method.upper()} Similarity")
 

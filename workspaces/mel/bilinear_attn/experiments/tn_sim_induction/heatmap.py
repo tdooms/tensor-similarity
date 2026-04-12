@@ -13,7 +13,8 @@ Supports:
 - Incremental caching: load existing matrix and fill in missing entries
 - Checkpoint filtering: select checkpoints at specified intervals
 
-Uses MC (Monte Carlo) similarity by default, which is fast and practical.
+Uses MC (Monte Carlo) similarity by default, sampling Gaussian residual-stream inputs.
+Random similarity samples discrete-uniform token sequences over the vocab.
 TN similarity is available but requires massive memory (~8GB+ for small models).
 
 Self-similarity is assumed to be 1.0 (not computed).
@@ -30,9 +31,10 @@ import yaml
 from tqdm import tqdm
 
 from models import AttentionLM
+from models.components import AttentionLMComponent
 from tn_sim import cosine_similarity as tn_cosine_similarity
-from tn_sim.mc_similarity import mc_similarity_gaussian, mc_similarity
-from experiments.induction_heads.data import create_repeated_token_dataloaders
+from tn_sim import cosine_similarity_batch as tn_cosine_similarity_batch
+from tn_sim.mc_similarity import mc_similarity, random_sim
 
 
 def parse_step_from_filename(filename: str) -> int:
@@ -102,7 +104,7 @@ def load_existing_matrix(output_dir: Path, method: str) -> tuple[Optional[np.nda
     
     Args:
         output_dir: Directory containing the data file
-        method: "mc" or "tn" - used to select the correct file
+        method: "mc", "random", or "tn" - used to select the correct file
     
     Returns:
         Tuple of (sim_matrix, steps) or (None, None) if not found
@@ -138,7 +140,7 @@ def merge_matrices(
     
     if old_matrix is None or old_steps is None:
         return new_matrix
-    
+
     # Build step -> index mapping for old matrix
     old_step_to_idx = {s: i for i, s in enumerate(old_steps)}
     
@@ -154,15 +156,20 @@ def merge_matrices(
     return new_matrix
 
 
+def _chunked(values, size):
+    for start in range(0, len(values), size):
+        yield values[start:start + size]
+
+
 def compute_pairwise_similarity(
     models: list,
     steps: list[int],
     sim_matrix: np.ndarray,
     device: str,
-    cfg: dict,
     method: str = "mc",
     mc_samples: int = 4000,
     window: Optional[int] = None,
+    tn_batch_size: Optional[int] = None,
     output_path: Optional[Path] = None,
 ) -> np.ndarray:
     """Compute pairwise cosine similarity matrix.
@@ -176,11 +183,12 @@ def compute_pairwise_similarity(
         steps: List of step numbers corresponding to models
         sim_matrix: Existing matrix with NaN for missing entries
         device: Device for computation
-        cfg: Model config dict (needed for MC similarity)
-        method: "mc" (Monte Carlo, fast) or "tn" (tensor network, slow/memory-intensive)
-        mc_samples: Number of samples for MC similarity
+        method: "mc" (Gaussian residual stream), "random" (uniform vocab tokens),
+            or "tn" (tensor network, slow/memory-intensive)
+        mc_samples: Number of samples for MC/random similarity
         window: If set, only compute similarity for pairs within this distance
                 (i.e., |i - j| <= window). None means compute all pairs.
+        tn_batch_size: For method="tn", number of pairs to process per device batch.
         output_path: Path to save npz file incrementally (optional)
         
     Returns:
@@ -190,19 +198,11 @@ def compute_pairwise_similarity(
     computed = 0
     skipped = 0
     
-    vocab_size = cfg["model"]["vocab_size"]
-    n_ctx = cfg["model"]["n_ctx"]
-    
-    # Create validation dataloader for mc_val method
-    val_dataloader = None
-    if method == "mc_val":
-        _, val_dataloader = create_repeated_token_dataloaders(
-            vocab_size=vocab_size,
-            n_ctx=n_ctx,
-            batch_size=64,
-            n_val=mc_samples,
-            seed=43,  # Different seed from training
-        )
+    if method == "tn":
+        models = [
+            m if isinstance(m, AttentionLMComponent) else AttentionLMComponent.from_trained_model(m)
+            for m in models
+        ]
     
     # Build list of pairs to compute
     pairs_to_compute = []
@@ -217,54 +217,90 @@ def compute_pairwise_similarity(
     
     if skipped > 0:
         print(f"Skipping {skipped} cached pairs, computing {len(pairs_to_compute)} remaining")
-    
-    for i, j in tqdm(pairs_to_compute, desc=f"{method.upper()} similarity", unit="pair"):
-            
-            # Move models to device for computation
-            model_i = models[i].to(device)
-            model_j = models[j].to(device)
-            
+
+    if method == "tn" and tn_batch_size:
+        progress = tqdm(total=len(pairs_to_compute), desc=f"{method.upper()} similarity", unit="pair")
+        for batch in _chunked(pairs_to_compute, tn_batch_size):
+            batch_indices = sorted({idx for pair in batch for idx in pair})
+            loaded = {}
             try:
-                if method == "mc":
-                    sim = mc_similarity_gaussian(
-                        model_i, model_j,
-                        vocab_size=vocab_size,
-                        n_ctx=n_ctx,
-                        device=device,
-                        n_samples=mc_samples,
-                    )
-                elif method == "mc_val":
-                    sim = mc_similarity(
-                        model_i, model_j,
-                        dataloader=val_dataloader,
-                        device=device,
-                    )
-                elif method == "tn":
-                    # TN similarity uses numpy backend internally, so GPU is fine
-                    sim = tn_cosine_similarity(model_i, model_j, device=device, dtype=torch.float64)
-                else:
-                    raise ValueError(f"Unknown method: {method}")
-                
-                sim_matrix[i, j] = sim
-                sim_matrix[j, i] = sim  # Symmetric
-                computed += 1
-                print(f"  sim(step {steps[i]}, step {steps[j]}) = {sim:.4f}")
-                
-                # Save incrementally after each pair
-                if output_path is not None:
-                    np.savez(
-                        output_path,
-                        sim_matrix=sim_matrix,
-                        steps=np.array(steps),
-                        method=method,
-                    )
+                for idx in batch_indices:
+                    loaded[idx] = models[idx].to(device)
+
+                batch_models_a = [loaded[i] for i, _ in batch]
+                batch_models_b = [loaded[j] for _, j in batch]
+                sims = tn_cosine_similarity_batch(
+                    batch_models_a,
+                    batch_models_b,
+                    device=device,
+                    dtype=torch.float64,
+                )
+
+                for (i, j), sim in zip(batch, sims):
+                    sim_matrix[i, j] = sim
+                    sim_matrix[j, i] = sim  # Symmetric
+                    computed += 1
+                    print(f"  sim(step {steps[i]}, step {steps[j]}) = {sim:.4f}")
+
+                    if output_path is not None:
+                        np.savez(
+                            output_path,
+                            sim_matrix=sim_matrix,
+                            steps=np.array(steps),
+                            method=method,
+                        )
+                progress.update(len(batch))
             finally:
-                # Move back to CPU and clear GPU memory
-                models[i] = model_i.cpu()
-                models[j] = model_j.cpu()
-                del model_i, model_j
+                for idx, model in loaded.items():
+                    models[idx] = model.cpu()
                 if device != "cpu":
                     torch.cuda.empty_cache()
+        progress.close()
+    else:
+        for i, j in tqdm(pairs_to_compute, desc=f"{method.upper()} similarity", unit="pair"):
+                
+                # Move models to device for computation
+                model_i = models[i].to(device)
+                model_j = models[j].to(device)
+                
+                try:
+                    if method == "mc":
+                        sim = mc_similarity(
+                            model_i, model_j,
+                            device=device,
+                            n_samples=mc_samples,
+                        )
+                    elif method == "random":
+                        sim = random_sim(
+                            model_i, model_j,
+                            device=device,
+                            n_samples=mc_samples,
+                        )
+                    elif method == "tn":
+                        sim = tn_cosine_similarity(model_i, model_j, device=device, dtype=torch.float64)
+                    else:
+                        raise ValueError(f"Unknown method: {method}")
+                    
+                    sim_matrix[i, j] = sim
+                    sim_matrix[j, i] = sim  # Symmetric
+                    computed += 1
+                    print(f"  sim(step {steps[i]}, step {steps[j]}) = {sim:.4f}")
+                    
+                    # Save incrementally after each pair
+                    if output_path is not None:
+                        np.savez(
+                            output_path,
+                            sim_matrix=sim_matrix,
+                            steps=np.array(steps),
+                            method=method,
+                        )
+                finally:
+                    # Move back to CPU and clear GPU memory
+                    models[i] = model_i.cpu()
+                    models[j] = model_j.cpu()
+                    del model_i, model_j
+                    if device != "cpu":
+                        torch.cuda.empty_cache()
     
     print(f"Computed {computed} new pairs, skipped {skipped} cached pairs")
     return sim_matrix
@@ -278,6 +314,7 @@ def generate_heatmap(
     window: Optional[int] = None,
     method: str = "mc",
     mc_samples: int = 4000,
+    tn_batch_size: Optional[int] = None,
     show: bool = True,
 ) -> tuple[np.ndarray, list[int]]:
     """Generate cosine similarity heatmap from checkpoint directory.
@@ -294,8 +331,10 @@ def generate_heatmap(
         window: Only compute similarity for pairs within this index distance.
                 E.g., window=5 means only compute sim(i, j) where |i-j| <= 5.
                 Can be increased later to compute more pairs.
-        method: "mc" (Monte Carlo, fast) or "tn" (tensor network, slow/memory-intensive)
-        mc_samples: Number of samples for MC similarity
+        method: "mc" (Gaussian residual stream), "random" (uniform vocab tokens),
+            or "tn" (tensor network, slow/memory-intensive)
+        mc_samples: Number of samples for MC/random similarity
+        tn_batch_size: For method="tn", number of pairs to process per device batch.
         show: Whether to display the plot
         
     Returns:
@@ -363,8 +402,9 @@ def generate_heatmap(
     # Compute missing pairwise similarities (saves incrementally to data_path)
     print(f"\nComputing {method.upper()} cosine similarities (window={window})...")
     sim_matrix = compute_pairwise_similarity(
-        models, steps, sim_matrix, device, cfg,
+        models, steps, sim_matrix, device,
         method=method, mc_samples=mc_samples, window=window,
+        tn_batch_size=tn_batch_size,
         output_path=data_path,
     )
     
@@ -436,14 +476,20 @@ def main():
         "--method", "-m",
         type=str,
         default="mc",
-        choices=["mc", "mc_val", "tn"],
-        help="Similarity method: 'mc' (random tokens), 'mc_val' (validation data), 'tn' (tensor network)",
+        choices=["mc", "random", "tn"],
+        help="Similarity method: 'mc' (Gaussian residual stream), 'random' (uniform vocab tokens), 'tn' (tensor network)",
     )
     parser.add_argument(
         "--mc-samples",
         type=int,
         default=4000,
-        help="Number of samples for MC similarity (default: 4000)",
+        help="Number of samples for MC/random similarity (default: 4000)",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=None,
+        help="For method='tn', number of pairs to process per device batch",
     )
     parser.add_argument(
         "--no-show",
@@ -460,6 +506,7 @@ def main():
         window=args.window,
         method=args.method,
         mc_samples=args.mc_samples,
+        tn_batch_size=args.batch_size,
         show=not args.no_show,
     )
 
