@@ -73,7 +73,7 @@ BATCH_STAT_CLASSES = (
 )
 from train.optim import create_optimizer, create_scheduler, Optimizers
 from experiments.induction_heads.data import create_repeated_token_dataloaders
-from data import create_dataloaders as create_stories_dataloaders
+from data.cached import create_dataloaders as create_stories_dataloaders
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
