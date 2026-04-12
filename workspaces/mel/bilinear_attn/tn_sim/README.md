@@ -1,12 +1,7 @@
 # TN Similarity for Bilinear Attention Models
 
 This module provides exact tensor network (TN) similarity computation for bilinear attention models using the main codebase's algorithm (`src/components/similarity.py`).
-
-## Migration Summary
-
-**Status:** ✅ Migration complete and validated
-
-The custom TN similarity implementation has been replaced with the main codebase's exact algorithm. All custom files (`tn_similarity.py`, `tn_similarity_quimb.py`, etc.) have been deleted.
+It adds batching support for better memory efficiency. I shall add an accelerator for batching soon.
 
 ## Usage
 
@@ -77,7 +72,7 @@ Tested on: `n_ctx=4, d_model=8, n_layers=2, n_head=2`
 | Metric | Value |
 |--------|-------|
 | **Time** | 47 seconds |
-| **Memory** | 7.9 GB |
+| **Memory** | 2.2 GB |
 | **Self-similarity** | 1.0 (exact) |
 
 ### Scaling
@@ -156,46 +151,6 @@ python debug_minimal.py
 
 ### Configuration
 - `tn_sim/config_minimal_tn.yaml` - Minimal TN-compatible config
-
-## Troubleshooting
-
-### "Model configuration is not compatible with TN similarity"
-
-Your model has normalization enabled. Create a new model with:
-```python
-cfg["model"]["norm_type"] = "none"
-cfg["model"]["norm_places"] = []
-cfg["model"]["use_rmsnorm_qk"] = False
-```
-
-### Out of Memory
-
-The model is too large. Try:
-1. Reduce `n_ctx` (biggest impact)
-2. Reduce `d_model`
-3. Reduce `n_layers`
-4. Use `dtype=torch.float32` instead of `float64` (less accurate)
-
-### Taking Too Long
-
-This is expected. The algorithm is exponentially complex. Consider:
-1. Using MC similarity instead (`mc_similarity_gaussian`)
-2. Training smaller models for TN analysis
-3. Using the old custom implementation (not recommended)
-
-## Recommendations
-
-### For Research/Analysis
-- Use **MC similarity** for most purposes (fast, works with normalization)
-- Use **TN similarity** only for:
-  - Validating MC similarity
-  - Theoretical analysis requiring exact computation
-  - Very small proof-of-concept models
-
-### For Production
-- **Do not use** for production models (too slow/memory-intensive)
-- Train separate small "TN-compatible" models for analysis
-- Use MC similarity for checkpoint comparison
 
 ## Migration Notes
 

@@ -21,7 +21,6 @@ Limitations:
     - Only supports models with norm_type='none' and norm_places=[]
     - Only supports 'bilinear' and 'quadratic' attention types
     - Does not support use_rmsnorm_qk=True
-    - Slower than the previous custom implementation (~10-100x)
     - Exact for Gaussian inputs (no approximations)
 
 Performance:
@@ -33,10 +32,15 @@ Performance:
 import torch
 from typing import Union
 
-# Use local numpy-based similarity to avoid torch memory fragmentation
-# (141GB -> 2GB for n_ctx=8 models)
-from .similarity_numpy import similarity as _compute_similarity, State
+from src.components.similarity import similarity as _compute_similarity, State
 from models.components.model import AttentionLMComponent, _validate_model_for_tn_similarity
+
+
+def _as_component(model):
+    if isinstance(model, AttentionLMComponent):
+        return model
+    _validate_model_for_tn_similarity(model)
+    return AttentionLMComponent.from_trained_model(model)
 
 
 def compute_tn_similarity(
@@ -67,22 +71,18 @@ def compute_tn_similarity(
     Raises:
         ValueError: If models have incompatible configurations for TN similarity
     """
-    # Validate both models
-    _validate_model_for_tn_similarity(model_A)
-    _validate_model_for_tn_similarity(model_B)
-    
+    # Convert to Component-compatible versions (skip conversion if already components)
+    comp_A = _as_component(model_A)
+    comp_B = _as_component(model_B)
+
     # Check model compatibility
-    _validate_model_compatibility(model_A, model_B)
+    _validate_model_compatibility(comp_A, comp_B)
     
     # Determine device and dtype
     if device is None:
-        device = next(model_A.parameters()).device
+        device = next(comp_A.parameters()).device
     if dtype is None:
-        dtype = next(model_A.parameters()).dtype
-    
-    # Convert models to Component-compatible versions
-    comp_A = AttentionLMComponent.from_trained_model(model_A)
-    comp_B = AttentionLMComponent.from_trained_model(model_B)
+        dtype = next(comp_A.parameters()).dtype
     
     # Move to specified device/dtype
     comp_A = comp_A.to(device=device, dtype=dtype)

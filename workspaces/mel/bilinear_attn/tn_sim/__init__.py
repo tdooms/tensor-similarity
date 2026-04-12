@@ -10,7 +10,7 @@ Main exports:
 - self_similarity: Convenience function for self-similarity
 
 Monte Carlo baseline:
-- mc_similarity_gaussian: MC similarity using uniform random tokens
+- mc_similarity: MC similarity using Gaussian residual-stream samples
 
 Limitations:
 - Only supports models with norm_type='none' and norm_places=[]
@@ -24,12 +24,19 @@ from .similarity import (
     inner_product,
     self_similarity,
 )
-from .mc_similarity import mc_similarity_gaussian
+from .similarity_batch import (
+    compute_tn_similarity_batch,
+    cosine_similarity_batch,
+)
+from .mc_similarity import mc_similarity, random_sim
 
 __all__ = [
     "compute_tn_similarity",
     "cosine_similarity",
     "inner_product",
     "self_similarity",
-    "mc_similarity_gaussian",
+    "compute_tn_similarity_batch",
+    "cosine_similarity_batch",
+    "mc_similarity",
+    "random_sim",
 ]
