@@ -25,6 +25,8 @@ from typing import Optional
 import matplotlib.pyplot as plt
 import numpy as np
 
+from experiments.tn_sim_induction.score_metrics import load_or_compute_scores
+
 
 def load_metrics(metrics_path: Path) -> dict:
     """Load metrics from jsonl file."""
@@ -62,6 +64,7 @@ def plot_single_heatmap(
     method: str,
     output_path: Optional[Path] = None,
     metrics: Optional[dict] = None,
+    score_metrics: Optional[dict] = None,
     show: bool = True,
     tick_every: int = 1000,
 ):
@@ -77,18 +80,36 @@ def plot_single_heatmap(
             tick_labels.append(f"{step // 1000}k" if step >= 1000 else str(step))
     
     # Create figure with proper layout - colorbar at bottom for width alignment
-    if metrics is not None:
-        fig = plt.figure(figsize=(10, 15))
-        gs = fig.add_gridspec(3, 1, height_ratios=[1, 4, 0.15], hspace=0.25)
-        ax_loss = fig.add_subplot(gs[0])
-        ax_heatmap = fig.add_subplot(gs[1])
-        ax_cbar = fig.add_subplot(gs[2])
-    else:
-        fig = plt.figure(figsize=(10, 11))
-        gs = fig.add_gridspec(2, 1, height_ratios=[4, 0.15], hspace=0.2)
-        ax_heatmap = fig.add_subplot(gs[0])
-        ax_cbar = fig.add_subplot(gs[1])
-        ax_loss = None
+    has_loss = metrics is not None
+    has_scores = score_metrics is not None
+    fig_height = 11 + (4 if has_loss else 0) + (4 if has_scores else 0)
+
+    rows = []
+    if has_loss:
+        rows.append("loss")
+    if has_scores:
+        rows.append("scores")
+    rows.extend(["heatmap", "cbar"])
+
+    height_ratios = [1 if row in {"loss", "scores"} else 4 if row == "heatmap" else 0.15 for row in rows]
+
+    fig = plt.figure(figsize=(10, fig_height))
+    gs = fig.add_gridspec(len(rows), 1, height_ratios=height_ratios, hspace=0.25)
+
+    idx = 0
+    ax_loss = None
+    if has_loss:
+        ax_loss = fig.add_subplot(gs[idx])
+        idx += 1
+
+    ax_scores = None
+    if has_scores:
+        ax_scores = fig.add_subplot(gs[idx])
+        idx += 1
+
+    ax_heatmap = fig.add_subplot(gs[idx])
+    idx += 1
+    ax_cbar = fig.add_subplot(gs[idx])
     
     # Plot val loss if available
     if ax_loss is not None and metrics is not None:
@@ -102,7 +123,47 @@ def plot_single_heatmap(
         # Match x-axis ticks with heatmap
         ax_loss.set_xticks([steps[i] for i in tick_indices])
         ax_loss.set_xticklabels(tick_labels)
-    
+
+    if ax_scores is not None and score_metrics is not None:
+        series = score_metrics.get("series", {})
+        score_steps = score_metrics.get("steps", steps)
+
+        if "2gram_score" in series and np.isfinite(series["2gram_score"]).any():
+            ax_scores.plot(
+                score_steps,
+                series["2gram_score"],
+                label="2-gram score",
+                marker="o",
+                markersize=3,
+            )
+        if "3gram_score" in series and np.isfinite(series["3gram_score"]).any():
+            ax_scores.plot(
+                score_steps,
+                series["3gram_score"],
+                label="3-gram score",
+                marker="o",
+                markersize=3,
+            )
+        if "repeat_icl" in series and np.isfinite(series["repeat_icl"]).any():
+            ax_scores.plot(
+                score_steps,
+                series["repeat_icl"],
+                label="Repeat ICL (repeat - first)",
+                linestyle="--",
+                color="tab:red",
+            )
+
+        ax_scores.axhline(y=1.0, color="gray", linestyle="--", alpha=0.4)
+        ax_scores.axhline(y=0.0, color="gray", linestyle=":", alpha=0.4)
+        ax_scores.set_ylabel("Score", fontsize=11)
+        ax_scores.set_xlabel("Training Step", fontsize=11)
+        ax_scores.set_title("N-gram Scores & Repeat ICL", fontsize=12, fontweight="bold")
+        ax_scores.grid(True, alpha=0.3)
+        ax_scores.set_xlim(steps[0], steps[-1])
+        ax_scores.set_xticks([steps[i] for i in tick_indices])
+        ax_scores.set_xticklabels(tick_labels)
+        ax_scores.legend(loc="upper right")
+
     # Plot heatmap
     masked_matrix = np.ma.masked_invalid(sim_matrix)
     cmap = plt.cm.RdBu_r.copy()
@@ -144,6 +205,7 @@ def plot_diff_heatmap(
     method_b: str,
     output_path: Optional[Path] = None,
     metrics: Optional[dict] = None,
+    score_metrics: Optional[dict] = None,
     show: bool = True,
     tick_every: int = 1000,
 ):
@@ -160,18 +222,36 @@ def plot_diff_heatmap(
             tick_labels.append(f"{step // 1000}k" if step >= 1000 else str(step))
     
     # Create figure with proper layout - colorbar at bottom for width alignment
-    if metrics is not None:
-        fig = plt.figure(figsize=(10, 13))
-        gs = fig.add_gridspec(3, 1, height_ratios=[1, 4, 0.15], hspace=0.25)
-        ax_loss = fig.add_subplot(gs[0])
-        ax_heatmap = fig.add_subplot(gs[1])
-        ax_cbar = fig.add_subplot(gs[2])
-    else:
-        fig = plt.figure(figsize=(10, 11))
-        gs = fig.add_gridspec(2, 1, height_ratios=[4, 0.15], hspace=0.2)
-        ax_heatmap = fig.add_subplot(gs[0])
-        ax_cbar = fig.add_subplot(gs[1])
-        ax_loss = None
+    has_loss = metrics is not None
+    has_scores = score_metrics is not None
+    fig_height = 11 + (4 if has_loss else 0) + (4 if has_scores else 0)
+
+    rows = []
+    if has_loss:
+        rows.append("loss")
+    if has_scores:
+        rows.append("scores")
+    rows.extend(["heatmap", "cbar"])
+
+    height_ratios = [1 if row in {"loss", "scores"} else 4 if row == "heatmap" else 0.15 for row in rows]
+
+    fig = plt.figure(figsize=(10, fig_height))
+    gs = fig.add_gridspec(len(rows), 1, height_ratios=height_ratios, hspace=0.25)
+
+    idx = 0
+    ax_loss = None
+    if has_loss:
+        ax_loss = fig.add_subplot(gs[idx])
+        idx += 1
+
+    ax_scores = None
+    if has_scores:
+        ax_scores = fig.add_subplot(gs[idx])
+        idx += 1
+
+    ax_heatmap = fig.add_subplot(gs[idx])
+    idx += 1
+    ax_cbar = fig.add_subplot(gs[idx])
     
     # Plot val loss if available
     if ax_loss is not None and metrics is not None:
@@ -185,6 +265,46 @@ def plot_diff_heatmap(
         ax_loss.set_xticks([steps[i] for i in tick_indices])
         ax_loss.set_xticklabels(tick_labels)
     
+    if ax_scores is not None and score_metrics is not None:
+        series = score_metrics.get("series", {})
+        score_steps = score_metrics.get("steps", steps)
+
+        if "2gram_score" in series and np.isfinite(series["2gram_score"]).any():
+            ax_scores.plot(
+                score_steps,
+                series["2gram_score"],
+                label="2-gram score",
+                marker="o",
+                markersize=3,
+            )
+        if "3gram_score" in series and np.isfinite(series["3gram_score"]).any():
+            ax_scores.plot(
+                score_steps,
+                series["3gram_score"],
+                label="3-gram score",
+                marker="o",
+                markersize=3,
+            )
+        if "repeat_icl" in series and np.isfinite(series["repeat_icl"]).any():
+            ax_scores.plot(
+                score_steps,
+                series["repeat_icl"],
+                label="Repeat ICL (repeat - first)",
+                linestyle="--",
+                color="tab:red",
+            )
+
+        ax_scores.axhline(y=1.0, color="gray", linestyle="--", alpha=0.4)
+        ax_scores.axhline(y=0.0, color="gray", linestyle=":", alpha=0.4)
+        ax_scores.set_ylabel("Score", fontsize=11)
+        ax_scores.set_xlabel("Training Step", fontsize=11)
+        ax_scores.set_title("N-gram Scores & Repeat ICL", fontsize=12, fontweight="bold")
+        ax_scores.grid(True, alpha=0.3)
+        ax_scores.set_xlim(steps[0], steps[-1])
+        ax_scores.set_xticks([steps[i] for i in tick_indices])
+        ax_scores.set_xticklabels(tick_labels)
+        ax_scores.legend(loc="upper right")
+        
     # Plot diff heatmap
     masked_matrix = np.ma.masked_invalid(diff_matrix)
     
@@ -337,6 +457,23 @@ def main():
         help="Path to metrics.jsonl for val loss curve",
     )
     parser.add_argument(
+        "--checkpoint-dir",
+        type=str,
+        default=None,
+        help="Checkpoint directory for n-gram/ICL scoring (defaults to inferred)",
+    )
+    parser.add_argument(
+        "--no-scores",
+        action="store_true",
+        help="Skip computing/plotting n-gram and repeat ICL scores",
+    )
+    parser.add_argument(
+        "--score-device",
+        type=str,
+        default=None,
+        help="Device for score computation (default: auto)",
+    )
+    parser.add_argument(
         "--output", "-o",
         type=str,
         default=None,
@@ -365,6 +502,15 @@ def main():
     metrics = None
     if args.metrics:
         metrics = load_metrics(Path(args.metrics))
+
+    score_metrics = None
+    if not args.no_scores:
+        score_metrics = load_or_compute_scores(
+            steps,
+            npz_path,
+            checkpoint_dir=Path(args.checkpoint_dir) if args.checkpoint_dir else None,
+            device=args.score_device,
+        )
     
     # Determine output path
     output_path = None
@@ -391,6 +537,7 @@ def main():
             method, diff_method,
             output_path=output_path,
             metrics=metrics,
+            score_metrics=score_metrics,
             show=not args.no_show,
             tick_every=args.tick_every,
         )
@@ -404,6 +551,7 @@ def main():
             sim_matrix, steps, method,
             output_path=output_path,
             metrics=metrics,
+            score_metrics=score_metrics,
             show=not args.no_show,
             tick_every=args.tick_every,
         )
