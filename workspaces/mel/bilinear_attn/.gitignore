@@ -64,3 +64,6 @@ simple_stories_train/
 /experiments/induction_heads/runs/**
 !/experiments/induction_heads/runs/mini_induction_checkpoints_muon_2026-04-09_141409/
 !/experiments/induction_heads/runs/mini_induction_checkpoints_muon_2026-04-09_141409/**
+
+!/experiments/induction_heads/runs/mini_induction_checkpoints_adam_2026-04-13_212815/
+!/experiments/induction_heads/runs/mini_induction_checkpoints_adam_2026-04-13_212815/**
