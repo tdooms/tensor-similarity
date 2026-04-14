@@ -2,7 +2,7 @@ import torch
 from torch import nn
 from quimb.tensor import Tensor, TensorNetwork
 
-from src.components.base import Term, spider
+from src.components.base import Term
 
 
 class Linear(nn.Linear):
@@ -19,6 +19,4 @@ class Linear(nn.Linear):
         return TensorNetwork([Tensor(w, inds=('out:d', 'in:d0'), tags=('E',))])
 
     def terms(self, n_ctx, **like):
-        tn = self.network()
-        tn &= Tensor(spider(1, n_ctx, **like), inds=('in:s0', 'out:s'))
-        return [Term(tn, {'in:d0': 'in:s0'})]
+        return [Term(self.network(), {'in:d0': 'out:s'})]
