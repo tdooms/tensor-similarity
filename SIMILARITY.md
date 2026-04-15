@@ -111,11 +111,17 @@ is 945 matchings. Key optimizations, in order of leverage:
 3. **`cotengra.ReusableHyperOptimizer`** with `minimize='combo'` and kahypar —
    path quality is 5-100× better than greedy at realistic scales, persistent
    disk cache so warmup pays once per architecture.
-4. **Hot/cold split**: `similarity()` builds `ca.terms()` on CPU up front;
-   `propagate()` is pure GPU (no Python-data allocations, no sync points). The
-   hot path is amenable to `torch.cuda.CUDAGraph` capture for ~6× extra on replay.
+4. **Hot/cold split**: `_run()` is pure-GPU (no Python-data allocations, no
+   sync points); `State.from_model` and `ca.terms()` are lifted out of
+   `propagate`.
 5. **Batched Wick sum**: `torch.stack + torch.einsum('i,i...->...', w, x)` in
    place of N sequential adds.
+6. **Implicit CUDA-graph capture (JAX-like)**: on CUDA, `similarity(a, b)`
+   captures a graph on the first call for a given (architecture, device,
+   dtype) signature and replays on subsequent calls with new weights copied
+   into static buffers. ~6× extra on the hot path, no `compile_similarity`
+   ceremony — the signature covers both the checkpoint-matrix and
+   training-loop use cases.
 
 Memory scales as `n_ctx² · d_model²` for the block state; contraction
 intermediates stay quadratic in each dimension (enforced by kahypar paths).

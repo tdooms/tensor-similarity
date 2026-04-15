@@ -9,12 +9,12 @@ from src.models.transformer import Transformer
 
 
 def inner_product(state):
-    return torch.einsum('ijij->', state.S_ab[:, 1:, :, 1:]).item()
+    return torch.einsum('ijij->', state.s_ab[:, 1:, :, 1:]).item()
 
 
 def cosine(state):
-    tr = lambda S: torch.einsum('ijij->', S[:, 1:, :, 1:])
-    return (tr(state.S_ab) / (tr(state.S_aa) * tr(state.S_bb)) ** 0.5).item()
+    tr = lambda s: torch.einsum('ijij->', s[:, 1:, :, 1:])
+    return (tr(state.s_ab) / (tr(state.s_aa) * tr(state.s_bb)) ** 0.5).item()
 
 
 def mc_inner_product(model_a, model_b, d_input, n_samples=1_000_000, **like):
