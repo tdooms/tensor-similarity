@@ -1,109 +1,183 @@
-import torch
-from math import prod
+"""Exact Gaussian functional similarity via second-moment propagation.
+
+See SIMILARITY.md for the math. `similarity` does all CPU setup up front;
+`propagate` is a pure-GPU hot path safe for `torch.cuda.CUDAGraph` capture.
+"""
 from dataclasses import dataclass
+from functools import cache
+from math import prod
+from pathlib import Path
+
+import cotengra as ctg
+import torch
 from quimb.tensor import Tensor, TensorNetwork
 
 _EXPR_CACHE = {}
 
+_PATH_CACHE_DIR = Path.home() / '.cache' / 'tensor-mars' / 'ctg-paths'
+_PATH_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+_PATH_OPTIMIZER = ctg.ReusableHyperOptimizer(
+    directory=str(_PATH_CACHE_DIR),
+    minimize='combo',
+    methods=('greedy', 'kahypar'),
+    max_repeats=32,
+    parallel=False,
+    progbar=False,
+)
+
+
+def _contract(core_tn, bridge_specs, output_inds):
+    """Contract `core_tn` with bridges given as `(data, inds)` tuples. Cached."""
+    key = tuple(t.inds for t in core_tn) + tuple(inds for _, inds in bridge_specs)
+    expr = _EXPR_CACHE.get(key)
+    if expr is None:
+        full = core_tn.copy()
+        for data, inds in bridge_specs:
+            full &= Tensor(data, inds=inds)
+        expr = full.contract(output_inds=output_inds, optimize=_PATH_OPTIMIZER, get='expression')
+        _EXPR_CACHE[key] = expr
+    return expr(*(t.data for t in core_tn), *(data for data, _ in bridge_specs))
+
 
 @dataclass
 class State:
-    """Second-moment state S = E[ff^T] in (s, d, s, d) layout for a pair of models."""
-    S_aa: torch.Tensor  # (n_ctx, d+1, n_ctx, d+1)
-    S_bb: torch.Tensor
+    """Second moments `S_xy = E[f_x(·) f_y(·)^T]` for model pair (a, b)."""
+    S_aa: torch.Tensor
     S_ab: torch.Tensor
+    S_bb: torch.Tensor
 
     @staticmethod
     def from_model(model):
         comps = model.components()
         n_ctx = next((c.n_ctx for c in comps if hasattr(c, 'n_ctx')), 1)
         d = comps[0].network().ind_size('in:d0') - 1
-        like = dict(device=next(model.parameters()).device, dtype=next(model.parameters()).dtype)
-        S = torch.eye(n_ctx * (d + 1), **like).reshape(n_ctx, d + 1, n_ctx, d + 1)
-        return State(S, S.clone(), S.clone())
+        p = next(model.parameters())
+        eye_n = Tensor(torch.eye(n_ctx, device=p.device, dtype=p.dtype), inds=('_s', '_sp'))
+        eye_d = Tensor(torch.eye(d + 1, device=p.device, dtype=p.dtype), inds=('_k', '_l'))
+        S = (eye_n & eye_d).contract(output_inds=('_s', '_k', '_sp', '_l')).data
+        return State(S, S, S)
 
 
-
-def _matchings(legs):
-    """All perfect matchings (Wick pairings) of a list of legs."""
-    if not legs:
-        return [()]
-    return [
-        ((legs[0], legs[i]),) + rest
-        for i in range(1, len(legs))
-        for rest in _matchings(legs[1:i] + legs[i+1:])
-    ]
-
-
-def _contract(tn, bridges, output_inds):
-    """Contract TN with bridge tensors. Caches the contraction expression by index structure."""
-    key = tuple(t.inds for t in tn) + tuple(b.inds for b in bridges)
-    if key not in _EXPR_CACHE:
-        full = tn.copy()
-        for b in bridges:
-            full &= b
-        _EXPR_CACHE[key] = full.contract(output_inds=output_inds, optimize='greedy', get='expression')
-    return _EXPR_CACHE[key](*(t.data.detach() for t in tn), *(b.data.detach() for b in bridges))
+@cache
+def _matching_indices(n):
+    """All perfect matchings of {0, …, n−1} as tuples of (i, j) pairs."""
+    def build(xs):
+        if not xs:
+            return [()]
+        return [((xs[0], xs[i]),) + rest
+                for i in range(1, len(xs))
+                for rest in build(xs[1:i] + xs[i + 1:])]
+    return tuple(build(tuple(range(n))))
 
 
-def _isserlis(tn, legs, S_for_pair, mu_for_leg, output_inds):
-    """Corrected Isserlis: Σ_matchings Π S[paired legs] - (n-1) × μ product.
+def _dedupe(matchings, group):
+    """Group matchings by orbit under leg-name permutations `group`.
+    Returns (rep, orbit_size) so Σ orbit_size · rep equals the full Wick sum."""
+    def perm_pair(perm, a, b):
+        pa = (a[0], perm.get(a[1], a[1]), a[2])
+        pb = (b[0], perm.get(b[1], b[1]), b[2])
+        return (pa, pb) if pa <= pb else (pb, pa)
 
-    Each leg is (pos_index, data_index, model_tag).
-    TN bridge indices are leg[:2], model selection uses leg[2].
+    out = {}
+    for m in matchings:
+        k = min(tuple(sorted(perm_pair(p, a, b) for a, b in m)) for p in group)
+        out[k] = (out[k][0], out[k][1] + 1) if k in out else (m, 1)
+    return list(out.values())
+
+
+@cache
+def _isserlis_plan(legs, group):
+    """Cold structural plan for an Isserlis sum — cached, purely combinatorial.
+
+    Returns `(matchings, mu_sides, mu_inds, correction)` where `matchings` is a
+    tuple of `(side_pairs, bridge_inds, weight)` triples, one per deduped Wick
+    matching. The hot path only needs to index `S[side_pair]` for each pair.
     """
-    def bridge(l1, l2):
-        return Tensor(S_for_pair(l1, l2), inds=l1[:2] + l2[:2])
+    matchings = [tuple((legs[i], legs[j]) for i, j in m)
+                 for m in _matching_indices(len(legs))]
+    deduped = _dedupe(matchings, [dict(g) for g in group])
+    plan = tuple(
+        (tuple((a[2], b[2]) for a, b in m),
+         tuple(a[:2] + b[:2] for a, b in m),
+         w)
+        for m, w in deduped)
+    mu_sides = tuple((l[2], l[2]) for l in legs)
+    mu_inds = tuple(l[:2] for l in legs)
+    correction = prod(range(1, len(legs), 2)) - 1
+    return plan, mu_sides, mu_inds, correction
 
-    result = sum(
-        _contract(tn, [bridge(l1, l2) for l1, l2 in matching], output_inds)
-        for matching in _matchings(legs))
 
-    mu_bridges = [Tensor(mu_for_leg(leg), inds=leg[:2]) for leg in legs]
-    n_matchings = prod(range(1, len(legs), 2))
-    return result - (n_matchings - 1) * _contract(tn, mu_bridges, output_inds)
+@cache
+def _plan_weights(plan, device, dtype):
+    """Device-resident weight vector — cached per (plan, device, dtype) so the
+    hot path does zero host→device copies."""
+    return torch.tensor([w for _, _, w in plan], device=device, dtype=dtype)
 
 
-def _second_moment(term_a, term_b, state):
-    """E[term_a(x) term_b(x)^T] via doubled TN with Isserlis bridges."""
-    prefix = lambda tn, p: tn.reindex({i: f'{p}:{i}' for i in tn.ind_map})
+def _isserlis(tn, legs, S, output_inds, group=({},)):
+    """Corrected Isserlis sum over Wick pairings. Hot path: pure tensor ops."""
+    plan, mu_sides, mu_inds, correction = _isserlis_plan(
+        tuple(legs), tuple(frozenset(g.items()) for g in group))
+
+    contribs = torch.stack([
+        _contract(tn, [(S[sp], inds) for sp, inds in zip(sps, inds_list)], output_inds)
+        for sps, inds_list, _ in plan])
+    weights = _plan_weights(plan, contribs.device, contribs.dtype)
+    result = torch.einsum('i,i...->...', weights, contribs)
+
+    mu_specs = [(S[sp][:, :, 0, 0], inds) for sp, inds in zip(mu_sides, mu_inds)]
+    return result - correction * _contract(tn, mu_specs, output_inds)
+
+
+def _second_moment(term_l, term_r, ml, mr, S):
+    """E[term_l(·) term_r(·)^T]. Legs tagged with model indices (ml, mr); the
+    TN prefix 'a'/'b' disambiguates left/right in the joint network."""
     tn = TensorNetwork(
-        list(prefix(term_a.tn, 'a')) + list(prefix(term_b.tn, 'b')),
+        list(term_l.tn.reindex({i: f'a:{i}' for i in term_l.tn.ind_map}))
+        + list(term_r.tn.reindex({i: f'b:{i}' for i in term_r.tn.ind_map})),
         check_collisions=False)
 
-    legs = [(f'{p}:{pos}', f'{p}:{data}', p)
-            for term, p in [(term_a, 'a'), (term_b, 'b')]
+    legs = [(f'{p}:{pos}', f'{p}:{data}', m)
+            for term, p, m in [(term_l, 'a', ml), (term_r, 'b', mr)]
             for data, pos in sorted(term.legs.items())]
 
-    S_map = {'aa': state.S_aa, 'ab': state.S_ab, 'ba': state.S_ab, 'bb': state.S_bb}
-    mu_map = {'a': state.S_aa[:, :, 0, 0], 'b': state.S_bb[:, :, 0, 0]}
+    ga = [{f'a:{k}': f'a:{v}' for k, v in p.items()} for p in term_l.symmetries]
+    gb = [{f'b:{k}': f'b:{v}' for k, v in p.items()} for p in term_r.symmetries]
+    group = [{}, *ga, *gb, *({**a, **b} for a in ga for b in gb)]
 
-    return _isserlis(
-        tn, legs,
-        S_for_pair=lambda l1, l2: S_map[l1[2] + l2[2]],
-        mu_for_leg=lambda l: mu_map[l[2]],
-        output_inds=('a:out:s', 'a:out:d', 'b:out:s', 'b:out:d'))
+    return _isserlis(tn, legs, S, ('a:out:s', 'a:out:d', 'b:out:s', 'b:out:d'), group)
 
 
-def propagate(state, ca, cb):
-    """Propagate second-moment state through one layer for both models."""
-    n_ctx = state.S_aa.shape[0]
-    like = dict(device=state.S_aa.device, dtype=state.S_aa.dtype)
-    terms_a = ca.terms(n_ctx, **like)
-    terms_b = cb.terms(n_ctx, **like)
+def propagate(state, terms_a, terms_b):
+    """Propagate second moments through one layer. Pure-GPU hot path.
 
-    def second_moments(terms_left, terms_right, s):
-        return sum(_second_moment(a, b, s) for a in terms_left for b in terms_right)
+    Leg ordering keeps (ml, mr) ∈ {(0,0), (0,1), (1,1)}, so no S[(1,0)] entry
+    is ever needed.
+    """
+    S = {(0, 0): state.S_aa, (0, 1): state.S_ab, (1, 1): state.S_bb}
+
+    def block(tl, tr, ml, mr):
+        return sum(_second_moment(a, b, ml, mr, S) for a in tl for b in tr)
 
     return State(
-        second_moments(terms_a, terms_a, State(state.S_aa, state.S_aa, state.S_aa)),
-        second_moments(terms_b, terms_b, State(state.S_bb, state.S_bb, state.S_bb)),
-        second_moments(terms_a, terms_b, state))
+        block(terms_a, terms_a, 0, 0),
+        block(terms_a, terms_b, 0, 1),
+        block(terms_b, terms_b, 1, 1),
+    )
 
 
 def similarity(model_a, model_b):
-    """Compute exact Gaussian functional similarity between two models."""
+    """Exact Gaussian functional similarity between two models.
+
+    CPU-side setup (build terms, find paths, compile plans) happens up front;
+    the `propagate` loop is pure GPU and safe for CUDA-graph capture.
+    """
     state = State.from_model(model_a)
-    for ca, cb in zip(model_a.components(), model_b.components()):
-        state = propagate(state, ca, cb)
+    like = dict(device=state.S_aa.device, dtype=state.S_aa.dtype)
+    n_ctx = state.S_aa.shape[0]
+    layers = [(ca.terms(n_ctx, **like), cb.terms(n_ctx, **like))
+              for ca, cb in zip(model_a.components(), model_b.components())]
+    for terms_a, terms_b in layers:
+        state = propagate(state, terms_a, terms_b)
     return state

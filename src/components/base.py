@@ -6,19 +6,17 @@ from abc import abstractmethod
 
 
 class Term(NamedTuple):
-    """A TN term with sequence wires and leg-to-position mapping."""
+    """A TN term with sequence wires, leg-to-position map, and optional symmetries.
+
+    `symmetries` is a tuple of dict permutations on input-leg data names under
+    which the term value is invariant. Used by Isserlis to dedupe matchings —
+    each permutation maps leg-data names (e.g. 'in:d1') to leg-data names.
+    """
     tn: TensorNetwork
-    legs: dict  # {'in:d0': 'in:s0', ...}
+    legs: dict
+    symmetries: tuple = ()
 
 
-def spider(n_legs, n_ctx, **like):
-    """(N+1)-way delta tensor: 1 iff all position indices are equal."""
-    shape = (n_ctx,) * (n_legs + 1)
-    data = torch.zeros(shape, **like)
-    for s in range(n_ctx):
-        data[(s,) * (n_legs + 1)] = 1
-    return data
-   
 class Component(nn.Module):
     """A wrapper class for all compositional modules.
 
@@ -64,13 +62,14 @@ class Component(nn.Module):
         return [idx for idx in self.network().ind_map.keys() if idx.startswith('h:d' if only_dims else 'h:')]
     
     def terms(self, n_ctx, **like):
-        """TN terms with sequence wires. f(x) = sum of terms."""
+        """TN terms with sequence wires. f(x) = sum of terms.
+
+        Default: all input legs and the output share the same sequence position
+        (handled implicitly by all legs pointing to 'out:s').
+        """
         tn = self.network()
         legs = sorted(idx for idx in tn.outer_inds() if idx.startswith('in:d'))
-        n = len(legs)
-        s_inds = [f'in:s{i}' for i in range(n)] + ['out:s']
-        tn &= Tensor(spider(n, n_ctx, **like), inds=s_inds)
-        return [Term(tn, {f'in:d{i}': f'in:s{i}' for i in range(n)})]
+        return [Term(tn, {leg: 'out:s' for leg in legs})]
 
     def permutations(self):
         """Returns all Wick matchings (perfect matchings) of the input legs.

@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 import os
 
-os.chdir('/Users/wroe/Documents/AI/mnist-sim-clean')
+os.chdir(Path(__file__).parent)
 
 # Add project root to path
 project_root = Path.cwd()
@@ -18,12 +18,50 @@ import torch
 import numpy as np
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 from kornia.augmentation import RandomGaussianNoise
 from copy import deepcopy
 
+from einops import einsum as einops_einsum
 from functions.model import Model, Config
 from functions.datasets import MNIST
 from functions.tn_sim import get_interaction_matrix, tensor_similarity, model_similarity, covariance_similarity
+
+def _cos_sim(a, b):
+    a, b = a.flatten().double(), b.flatten().double()
+    return (a @ b / (a.norm() * b.norm())).item()
+
+def slice_similarity(model1, model2, digit, include_embedding=True, symmetrize=True):
+    """Cosine similarity between the digit-th slice of each model's interaction matrix."""
+    M1 = get_interaction_matrix(model1, include_embedding, symmetrize)
+    M2 = get_interaction_matrix(model2, include_embedding, symmetrize)
+    return _cos_sim(M1[digit], M2[digit])
+
+def component_similarities(model1, model2):
+    """Cosine similarity for embed, unembed, el, and er between two models."""
+    e1, e2 = model1.embed.weight, model2.embed.weight
+    u1, u2 = model1.w_u, model2.w_u
+    l1, r1 = model1.w_lr[0].unbind()
+    l2, r2 = model2.w_lr[0].unbind()
+
+    el1 = einops_einsum(e1, l1, "e i, h e -> i h")
+    el2 = einops_einsum(e2, l2, "e i, h e -> i h")
+    er1 = einops_einsum(e1, r1, "e i, h e -> i h")
+    er2 = einops_einsum(e2, r2, "e i, h e -> i h")
+
+    result = {
+        'embed':   _cos_sim(e1, e2),
+        'unembed': _cos_sim(u1, u2),
+        'el':      _cos_sim(el1, el2),
+        'er':      _cos_sim(er1, er2),
+    }
+    for d in local_digits:
+        result[f'u_row_{d}'] = _cos_sim(u1[d], u2[d])
+    return result
+
+local_digits = [0, 6, 9]
+component_keys = ['embed', 'unembed', 'el', 'er']
+unembed_row_keys = [f'u_row_{d}' for d in local_digits]
 
 device = "mps" if torch.backends.mps.is_available() else "cpu"
 device = "cpu"
@@ -67,22 +105,6 @@ digit_curriculum = [
     {'name': 'add 9', 'digits': list(range(10)), 'epochs': 20, 'lr': 1e-3},
     {'name': 'remove 9', 'digits': list(range(9)), 'epochs': 20, 'lr': 1e-3},    # {0,1,2,3,4,5,6,7,8}
     {'name': 're-add 9', 'digits': list(range(10)), 'epochs': 20, 'lr': 1e-3},    # {0,1,2,3,4,5,6,7,8,9}
-    # {'name': 'remove_9_again', 'digits': list(range(9)), 'epochs': 20, 'lr': 1e-3},    # {0,1,2,3,4,5,6,7,8}
-    # {'name': 're-add_9_again', 'digits': list(range(10)), 'epochs': 20, 'lr': 1e-3},    # {0,1,2,3,4,5,6,7,8,9}
-    # {'name': 'remove_9_again2', 'digits': list(range(9)), 'epochs': 20, 'lr': 1e-3},    # {0,1,2,3,4,5,6,7,8}
-    # {'name': 're-add_9_again2', 'digits': list(range(10)), 'epochs': 20, 'lr': 1e-3},    # {0,1,2,3,4,5,6,7,8,9}
-    # {'name': 'remove_9_again3', 'digits': list(range(9)), 'epochs': 20, 'lr': 1e-3},    # {0,1,2,3,4,5,6,7,8}
-    # {'name': 're-add_9_again3', 'digits': list(range(10)), 'epochs': 20, 'lr': 1e-3},    # {0,1,2,3,4,5,6,7,8,9}
-    # {'name': 'remove_9_again4', 'digits': list(range(9)), 'epochs': 20, 'lr': 1e-3},    # {0,1,2,3,4,5,6,7,8}
-    # {'name': 're-add_9_again4', 'digits': list(range(10)), 'epochs': 20, 'lr': 1e-3},    # {0,1,2,3,4,5,6,7,8,9}
-    # {'name': 'remove_9_again5', 'digits': list(range(9)), 'epochs': 20, 'lr': 1e-3},    # {0,1,2,3,4,5,6,7,8}
-    # {'name': 're-add_9_again5', 'digits': list(range(10)), 'epochs': 20, 'lr': 1e-3},    # {0,1,2,3,4,5,6,7,8,9}
-    # {'name': 'remove_9_again6', 'digits': list(range(9)), 'epochs': 20, 'lr': 1e-3},    # {0,1,2,3,4,5,6,7,8}
-    # {'name': 're-add_9_again6', 'digits': list(range(10)), 'epochs': 20, 'lr': 1e-3},    # {0,1,2,3,4,5,6,7,8,9}
-    # {'name': 'remove_9_again7', 'digits': list(range(9)), 'epochs': 20, 'lr': 1e-3},    # {0,1,2,3,4,5,6,7,8}
-    # {'name': 're-add_9_again7', 'digits': list(range(10)), 'epochs': 20, 'lr': 1e-3},    # {0,1,2,3,4,5,6,7,8,9}
-    # {'name': 'remove_9_again8', 'digits': list(range(9)), 'epochs': 20, 'lr': 1e-3},    # {0,1,2,3,4,5,6,7,8}
-    # {'name': 're-add_9_again8', 'digits': list(range(10)), 'epochs': 20, 'lr': 1e-3},    # {0,1,2,3,4,5,6,7,8,9}
 ]
 
 colors_progressive = {
@@ -94,22 +116,6 @@ colors_progressive = {
     'add 9': 'brown',
     'remove 9': 'cyan',
     're-add 9': 'magenta',
-    # 'remove_9_again': 'gray',
-    # 're-add_9_again': 'black',
-    # 'remove_9_again2': 'pink',
-    # 're-add_9_again2': 'olive',
-    # 'remove_9_again3': 'teal',
-    # 're-add_9_again3': 'navy',
-    # 'remove_9_again4': 'maroon',
-    # 're-add_9_again4': 'lime',
-    # 'remove_9_again5': 'coral',
-    # 're-add_9_again5': 'gold',
-    # 'remove_9_again6': 'silver',
-    # 're-add_9_again6': 'cyan',
-    # 'remove_9_again7': 'magenta',
-    # 're-add_9_again7': 'black',
-    # 'remove_9_again8': 'gray',
-    # 're-add_9_again8': 'orange',
 }
 
 
@@ -223,6 +229,21 @@ for seed in seeds:
         base_state = deepcopy(model.state_dict())
 
 #%%
+# Save key checkpoints
+SaveWeightsBool = False
+if SaveWeightsBool == True:
+    weights_dir = Path("weights")
+    weights_dir.mkdir(exist_ok=True)
+
+    checkpoint_stages = ['base', 'add 9', 'remove 9', 're-add 9']
+    checkpoint_filenames = ['base', 'add9', 'remove9', 'readd9']
+
+    for stage_name, filename in zip(checkpoint_stages, checkpoint_filenames):
+        save_path = weights_dir / f"seed42_{filename}.pt"
+        torch.save(progressive_models[42][stage_name].state_dict(), save_path)
+        print(f"Saved {stage_name} -> {save_path}")
+
+#%%
 # Compute similarities: All seeds compared to seed 42's final model
 print("\n=== Computing progressive similarity evolution ===")
 
@@ -232,6 +253,9 @@ reference_model = progressive_models[reference_seed]['add 9']  # Seed 42's final
 
 progressive_similarities = {
     'tensor': {seed: {} for seed in seeds},
+    'local': {digit: {seed: {} for seed in seeds} for digit in local_digits},
+    'components': {comp: {seed: {} for seed in seeds} for comp in component_keys},
+    'unembed_rows': {key: {seed: {} for seed in seeds} for key in unembed_row_keys},
 }
 
 progressive_accuracies = {
@@ -252,15 +276,18 @@ for seed in seeds:
         test_data_stage = MNIST(train=False, download=True, device=device, digits=stage_digits)
         
         tensor_sims = []
+        local_sims = {digit: [] for digit in local_digits}
+        comp_sims = {comp: [] for comp in component_keys}
+        unembed_sims = {key: [] for key in unembed_row_keys}
         train_accs = []
         test_accs = []
-        
+
         for cp in tqdm(progressive_checkpoints[seed][stage_name], desc=f"Seed {seed} {stage_name}"):
             model_temp = Model.from_config(**base_model_config).to(device)
             model_temp.load_state_dict(cp['state_dict'])
             model_temp.eval()
-            
-            # Tensor similarity to seed 42's final
+
+            # Global tensor similarity to reference
             tensor_sim = model_similarity(
                 model_temp,
                 reference_model,
@@ -268,16 +295,34 @@ for seed in seeds:
                 symmetrize=True
             )
             tensor_sims.append(tensor_sim)
-            
+
+            # Local (per-slice) similarity for digits 0, 6, 9
+            for digit in local_digits:
+                local_sims[digit].append(slice_similarity(model_temp, reference_model, digit))
+
+            # Component similarities: embed, unembed, el, er
+            comp = component_similarities(model_temp, reference_model)
+            for key in component_keys:
+                comp_sims[key].append(comp[key])
+
+            for key in unembed_row_keys:
+                unembed_sims[key].append(comp[key])            
+
             # Compute accuracies on this stage's data
             with torch.no_grad():
                 train_loss, train_acc = model_temp.step(train_data_stage.x, train_data_stage.y)
                 test_loss, test_acc = model_temp.step(test_data_stage.x, test_data_stage.y)
-                
+
                 train_accs.append(train_acc.item())
                 test_accs.append(test_acc.item())
-            
+
         progressive_similarities['tensor'][seed][stage_name] = tensor_sims
+        for digit in local_digits:
+            progressive_similarities['local'][digit][seed][stage_name] = local_sims[digit]
+        for key in component_keys:
+            progressive_similarities['components'][key][seed][stage_name] = comp_sims[key]
+        for key in unembed_row_keys:
+            progressive_similarities['unembed_rows'][key][seed][stage_name] = unembed_sims[key]
         progressive_accuracies['train'][seed][stage_name] = train_accs
         progressive_accuracies['test'][seed][stage_name] = test_accs
 
@@ -407,256 +452,146 @@ if savefigBool:
 plt.show()
 
 
-
-
 #%%
-# CALCUALTE COARSE HEATMAP (AT KEY CHECKPOINTS ONLY)
-print("\n=== Computing similarity heatmap at key checkpoints ===")
+# Plot: Global + local (digit 0, 6, 9) similarity vs reference
+local_linestyles = {0: '--', 6: ':', 9: '-.'}
 
-reference_seed = 42
+fig, ax = plt.subplots(figsize=(16, 8))
 
-# Select checkpoints: base start, then middle and end of each stage
-checkpoint_labels = []
-checkpoint_models = []
+for seed in seeds:
+    cumulative_batch = 0
 
-for stage_idx, stage_config in enumerate(digit_curriculum):
-    stage_name = stage_config['name']
-    checkpoints = progressive_checkpoints[reference_seed][stage_name]
-    
-    n_checkpoints = len(checkpoints)
-    
-    if stage_idx == 0:
-        # First stage (base): include start
-        start_idx = 0
-        checkpoint_labels.append(f"{stage_name} (start)")
-        model_temp = Model.from_config(**base_model_config).to(device)
-        model_temp.load_state_dict(checkpoints[start_idx]['state_dict'])
-        checkpoint_models.append(model_temp)
-    
-    # All stages: include middle and end
-    mid_idx = n_checkpoints // 2
-    end_idx = n_checkpoints - 1
-    
-    for label_suffix, idx in [('mid', mid_idx), ('end', end_idx)]:
-        checkpoint_labels.append(f"{stage_name} ({label_suffix})")
-        
-        # Load model at this checkpoint
-        model_temp = Model.from_config(**base_model_config).to(device)
-        model_temp.load_state_dict(checkpoints[idx]['state_dict'])
-        checkpoint_models.append(model_temp)
+    for stage_config in digit_curriculum:
+        stage_name = stage_config['name']
+        checkpoints = progressive_checkpoints[seed][stage_name]
+        batch_steps = [cumulative_batch + cp['batch'] for cp in checkpoints]
+        color = colors_progressive[stage_name]
 
-# Compute pairwise similarity matrix
-n_checkpoints = len(checkpoint_models)
-similarity_matrix = np.zeros((n_checkpoints, n_checkpoints))
+        # Global similarity — solid
+        ax.plot(batch_steps, progressive_similarities['tensor'][seed][stage_name],
+                color=color, linewidth=2.5, linestyle='-',
+                label=f'{stage_name} (global)' if seed == reference_seed else None)
 
-print(f"Computing {n_checkpoints}x{n_checkpoints} similarity matrix...")
-for i in tqdm(range(n_checkpoints), desc="Computing similarities"):
-    for j in range(n_checkpoints):
-        sim = model_similarity(
-            checkpoint_models[i],
-            checkpoint_models[j],
-            include_embedding=True,
-            symmetrize=True
-        )
-        similarity_matrix[i, j] = sim
+        # Local similarities — dashed / dotted / dash-dot
+        for digit in local_digits:
+            ax.plot(batch_steps, progressive_similarities['local'][digit][seed][stage_name],
+                    color=color, linewidth=1.5, linestyle=local_linestyles[digit], alpha=0.7,
+                    label=f'{stage_name} (digit {digit})' if seed == reference_seed else None)
 
-#%%
-# PLOT COARSE HEATMAP
-fig, ax = plt.subplots(figsize=(16, 14))
+        cumulative_batch = batch_steps[-1]
 
-# Mask upper triangle and diagonal
-similarity_matrix_masked = np.copy(similarity_matrix)
-for i in range(n_checkpoints):
-    for j in range(n_checkpoints):
-        if j >= i:  # Upper triangle and diagonal
-            similarity_matrix_masked[i, j] = np.nan
+ax.set_xlabel('Batch Steps')
+ax.set_ylabel('Tensor Similarity')
+ax.set_ylim([-0.1, 1.05])
+ax.grid(True, alpha=0.3)
 
-im = ax.imshow(similarity_matrix, cmap='RdYlBu_r', aspect='auto', vmin=0, vmax=1)
-
-# Set ticks and labels
-ax.set_xticks(range(n_checkpoints))
-ax.set_yticks(range(n_checkpoints))
-ax.set_xticklabels(checkpoint_labels, rotation=90, ha='right')
-ax.set_yticklabels(checkpoint_labels)
-
-# Add colorbar
-cbar = plt.colorbar(im, ax=ax, label='Tensor Similarity', fraction=0.046, pad=0.04)
-
-# Add text annotations (only for lower triangle)
-for i in range(n_checkpoints):
-    for j in range(n_checkpoints):
-        # if j < i:  # Only lower triangle
-        text = ax.text(j, i, f'{similarity_matrix[i, j]:.2f}',
-                        ha="center", va="center", 
-                        color="black" if similarity_matrix[i, j] > 0.3 else "white",
-                        fontsize=14)
-
-# Add gridlines to separate stages
-# First stage has 3 checkpoints (start, mid, end), rest have 2 (mid, end)
-stage_boundaries = [2.5]  # After base stage (3 checkpoints)
-cumulative = 3
-for stage_idx in range(1, len(digit_curriculum)):
-    cumulative += 2  # 2 checkpoints per subsequent stage (mid, end)
-    if stage_idx < len(digit_curriculum) - 1:
-        stage_boundaries.append(cumulative - 0.5)
-
-for boundary in stage_boundaries:
-    ax.axhline(y=boundary, color='black', linewidth=2, alpha=0.7)
-    ax.axvline(x=boundary, color='black', linewidth=2, alpha=0.7)
-
-ax.set_xlabel('Checkpoint')
-ax.set_ylabel('Checkpoint')
+# Build a clean legend: stage colours + linestyle meaning
+from matplotlib.lines import Line2D
+stage_handles = [Line2D([0], [0], color=colors_progressive[s['name']], linewidth=2.5, label=s['name'])
+                 for s in digit_curriculum]
+style_handles = [
+    Line2D([0], [0], color='gray', linewidth=2.5, linestyle='-',  label='global'),
+    Line2D([0], [0], color='gray', linewidth=1.5, linestyle='--', label='digit 0'),
+    Line2D([0], [0], color='gray', linewidth=1.5, linestyle=':',  label='digit 6'),
+    Line2D([0], [0], color='gray', linewidth=1.5, linestyle='-.', label='digit 9'),
+]
+ax.legend(handles=stage_handles + style_handles, bbox_to_anchor=(1.05, 1), loc='upper left')
 
 plt.tight_layout()
 if savefigBool:
-    plt.savefig(figures_dir / "progressive_similarity_heatmap.png", dpi=300, bbox_inches='tight')
+    plt.savefig(figures_dir / "progressive_addition_local_similarity.png", dpi=300, bbox_inches='tight')
 plt.show()
 
-
 #%%
-# CALCUALTE FINE-GRAINED HEATMAP SIMILARITY
+# Plot: Component similarities (embed, unembed, el, er) vs reference
+component_linestyles = {'embed': '--', 'unembed': ':', 'el': '-.', 'er': (0, (3, 1, 1, 1, 1, 1))}
 
-print("\n=== Computing 500x500 similarity heatmap (uniformly sampled, optimized) ===")
+fig, ax = plt.subplots(figsize=(16, 8))
 
-reference_seed = 42
+for seed in seeds:
+    cumulative_batch = 0
 
-# Collect ALL checkpoints with CUMULATIVE batch numbers
-all_checkpoints = []
-all_stage_names = []
-all_cumulative_batches = []
+    for stage_config in digit_curriculum:
+        stage_name = stage_config['name']
+        checkpoints = progressive_checkpoints[seed][stage_name]
+        batch_steps = [cumulative_batch + cp['batch'] for cp in checkpoints]
+        color = colors_progressive[stage_name]
 
-cumulative_batch = 0
-for stage_config in digit_curriculum:
-    stage_name = stage_config['name']
-    checkpoints = progressive_checkpoints[reference_seed][stage_name]
-    
-    for cp in checkpoints:
-        all_checkpoints.append(cp)
-        all_stage_names.append(stage_name)
-        # Add this checkpoint's batch to cumulative total
-        all_cumulative_batches.append(cumulative_batch + cp['batch'])
-    
-    # Update cumulative for next stage (last checkpoint's batch in this stage)
-    if len(checkpoints) > 0:
-        cumulative_batch += checkpoints[-1]['batch']
+        # Global similarity — solid, thicker
+        ax.plot(batch_steps, progressive_similarities['tensor'][seed][stage_name],
+                color=color, linewidth=2.5, linestyle='-',
+                label=f'{stage_name} (global)' if seed == reference_seed else None)
 
-total_checkpoints = len(all_checkpoints)
-print(f"Total available checkpoints: {total_checkpoints}")
-print(f"Total cumulative batches: {cumulative_batch}")
+        # Component similarities
+        for key in component_keys:
+            ax.plot(batch_steps, progressive_similarities['components'][key][seed][stage_name],
+                    color=color, linewidth=1.5, linestyle=component_linestyles[key], alpha=0.7,
+                    label=f'{stage_name} ({key})' if seed == reference_seed else None)
 
-# Sample exactly N checkpoints uniformly
-n_sample = min(N_SimSteps, total_checkpoints)
-sample_indices = np.linspace(0, total_checkpoints-1, n_sample, dtype=int)
+        cumulative_batch = batch_steps[-1]
 
-print(f"Sampling {n_sample} checkpoints uniformly...")
+ax.set_xlabel('Batch Steps')
+ax.set_ylabel('Cosine Similarity')
+ax.set_ylim([0, 1.05])
+ax.grid(True, alpha=0.3)
 
-checkpoint_models = []
-checkpoint_labels = []
-sampled_stages = []
-sampled_batches = []
-
-for idx in tqdm(sample_indices, desc="Loading sampled checkpoints"):
-    cp = all_checkpoints[idx]
-    
-    # Load model at this checkpoint
-    model_temp = Model.from_config(**base_model_config).to(device)
-    model_temp.load_state_dict(cp['state_dict'])
-    checkpoint_models.append(model_temp)
-    
-    checkpoint_labels.append(f"{all_stage_names[idx]} #{idx}")
-    sampled_stages.append(all_stage_names[idx])
-    sampled_batches.append(all_cumulative_batches[idx])  # Use cumulative batches
-
-# Identify stage boundaries in the sampled checkpoints
-stage_boundaries = [0]
-stage_boundary_batches = [sampled_batches[0]]
-current_stage = sampled_stages[0]
-
-for i, stage in enumerate(sampled_stages):
-    if stage != current_stage:
-        stage_boundaries.append(i)
-        stage_boundary_batches.append(sampled_batches[i])
-        current_stage = stage
-        
-stage_boundaries.append(len(sampled_stages))
-stage_boundary_batches.append(sampled_batches[-1])
-
-# Compute pairwise similarity matrix (OPTIMIZED: only lower triangle)
-n_checkpoints = len(checkpoint_models)
-similarity_matrix = np.zeros((n_checkpoints, n_checkpoints))
-
-# Only compute lower triangle (including diagonal)
-total_comparisons = (n_checkpoints * (n_checkpoints + 1)) // 2
-print(f"Computing {total_comparisons} similarities (lower triangle only)...")
-
-comparison_count = 0
-for i in tqdm(range(n_checkpoints), desc="Computing similarities"):
-    for j in range(i + 1):  # Only compute j <= i (lower triangle + diagonal)
-        sim = model_similarity(
-            checkpoint_models[i],
-            checkpoint_models[j],
-            include_embedding=True,
-            symmetrize=True
-        )
-        similarity_matrix[i, j] = sim
-        similarity_matrix[j, i] = sim  # Mirror to upper triangle
-        comparison_count += 1
-
-print(f"Computed {comparison_count} similarities (saved {250000 - comparison_count} redundant calculations)")
-
-
-
-#%%
-# PLOT FINE-GRAINED HEATMAP
-fig, ax = plt.subplots(figsize=(20, 18))
-
-# Get batch numbers for extent
-batch_min = sampled_batches[0]
-batch_max = sampled_batches[-1]
-
-# Use extent to map checkpoint indices to batch numbers
-im = ax.imshow(similarity_matrix, cmap='RdYlBu_r', aspect='auto', vmin=0, vmax=1,
-              extent=[batch_min, batch_max, batch_max, batch_min],
-              origin='upper')
-
-# Add colorbar
-cbar = plt.colorbar(im, ax=ax, label='Tensor Similarity', fraction=0.046, pad=0.04)
-
-# Add bright colored lines to separate stages (in batch coordinates)
-colors_boundaries = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'cyan', 'magenta']
-
-for i, boundary_batch in enumerate(stage_boundary_batches[1:-1]):
-    color = colors_boundaries[i % len(colors_boundaries)]
-    
-    # Draw thick bright lines at batch positions
-    ax.axhline(y=boundary_batch, color=color, linewidth=3, alpha=0.9)
-    ax.axvline(x=boundary_batch, color=color, linewidth=3, alpha=0.9)
-
-# Add stage labels on the side (in batch coordinates)
-for i in range(len(stage_boundary_batches) - 1):
-    start_batch = stage_boundary_batches[i]
-    end_batch = stage_boundary_batches[i+1]
-    mid_batch = (start_batch + end_batch) / 2
-    
-    if i < len(digit_curriculum):
-        stage_name = digit_curriculum[i]['name']
-        color = colors_boundaries[i % len(colors_boundaries)]
-        
-        # Label on top
-        ax.text(mid_batch, batch_min - (batch_max - batch_min)*0.05, stage_name, 
-               ha='center', va='bottom', fontsize=16, fontweight='bold', color=color, rotation=45)
-
-ax.set_xlabel('Cumulative Batch Step')
-ax.set_ylabel('Cumulative Batch Step')
-
-# Set proper axis limits
-ax.set_xlim([batch_min, batch_max])
-ax.set_ylim([batch_max, batch_min])
+stage_handles = [Line2D([0], [0], color=colors_progressive[s['name']], linewidth=2.5, label=s['name'])
+                 for s in digit_curriculum]
+style_handles = [Line2D([0], [0], color='gray', linewidth=2.5, linestyle='-', label='global')] + [
+    Line2D([0], [0], color='gray', linewidth=1.5, linestyle=component_linestyles[k], label=k)
+    for k in component_keys
+]
+ax.legend(handles=stage_handles + style_handles, bbox_to_anchor=(1.05, 1), loc='upper left')
 
 plt.tight_layout()
 if savefigBool:
-    plt.savefig(figures_dir / "progressive_similarity_heatmap_500x500.png", dpi=300, bbox_inches='tight')
+    plt.savefig(figures_dir / "progressive_addition_component_similarity.png", dpi=300, bbox_inches='tight')
 plt.show()
 
+#%%
+# Plot: Per-row unembedding similarity for digits 0, 6, 9
+unembed_row_linestyles = {f'u_row_{d}': ls for d, ls in zip(local_digits, ['--', ':', '-.'])}
+
+fig, ax = plt.subplots(figsize=(16, 8))
+
+for seed in seeds:
+    cumulative_batch = 0
+
+    for stage_config in digit_curriculum:
+        stage_name = stage_config['name']
+        checkpoints = progressive_checkpoints[seed][stage_name]
+        batch_steps = [cumulative_batch + cp['batch'] for cp in checkpoints]
+        color = colors_progressive[stage_name]
+
+        # Global similarity — solid
+        ax.plot(batch_steps, progressive_similarities['tensor'][seed][stage_name],
+                color=color, linewidth=2.5, linestyle='-',
+                label=f'{stage_name} (global)' if seed == reference_seed else None)
+
+        # Per-row unembed similarity for digits 0, 6, 9
+        for d, key in zip(local_digits, unembed_row_keys):
+            ax.plot(batch_steps, progressive_similarities['unembed_rows'][key][seed][stage_name],
+                    color=color, linewidth=1.5, linestyle=unembed_row_linestyles[key], alpha=0.7,
+                    label=f'{stage_name} (u row {d})' if seed == reference_seed else None)
+
+        cumulative_batch = batch_steps[-1]
+
+ax.set_xlabel('Batch Steps')
+ax.set_ylabel('Cosine Similarity')
+ax.set_ylim([-0.1, 1.05])
+ax.grid(True, alpha=0.3)
+
+stage_handles = [Line2D([0], [0], color=colors_progressive[s['name']], linewidth=2.5, label=s['name'])
+                 for s in digit_curriculum]
+style_handles = [Line2D([0], [0], color='gray', linewidth=2.5, linestyle='-', label='global')] + [
+    Line2D([0], [0], color='gray', linewidth=1.5, linestyle=unembed_row_linestyles[k], label=f'u row {d}')
+    for d, k in zip(local_digits, unembed_row_keys)
+]
+ax.legend(handles=stage_handles + style_handles, bbox_to_anchor=(1.05, 1), loc='upper left')
+
+plt.tight_layout()
+if savefigBool:
+    plt.savefig(figures_dir / "progressive_addition_unembed_row_similarity.png", dpi=300, bbox_inches='tight')
+plt.show()
 
 # %%

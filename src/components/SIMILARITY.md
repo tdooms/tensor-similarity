@@ -11,93 +11,111 @@ We propagate the **second moment** `S = E[ff^T]` through layers, not the
 mean and covariance separately. This works because Isserlis' theorem
 (Wick's theorem) for `E[product of Gaussians]` needs only pairwise moments.
 
-The trick that makes this work: **the padded representation** bakes bias into the
-weights by prepending a constant 1 to the input: `x_padded = [1; x]`. This means
-`S = E[x_padded x_padded^T]` encodes both the mean and covariance:
-
-```
-S = [[1,    mu^T  ],    = sigma + mu mu^T
-     [mu,   sigma + mu mu^T]]
-```
-
-So a single matrix S carries all the information. Each layer reads S, computes
-the new second moment via Isserlis, and outputs the new S.
+The trick: **the padded representation** bakes bias into the weights by prepending
+a constant 1 to the input: `x_padded = [1; x]`. So `S = E[x_padded x_padded^T]`
+encodes both the mean and covariance in one matrix.
 
 ## The Overcounting Correction
 
-Using S directly in Wick's theorem overcounts the mean contribution.
-Each of the `(2N-1)!!` matchings independently contributes a `mu^(2N)` term,
-but the correct answer has this term only once. The correction:
+Using S = sigma + mu*mu^T directly as the Wick bridge overcounts the mean
+contribution. The general overcounting factor for k mu-pairs out of N total
+pairs is `(2k-1)!!`. We correct the all-mu term (k=N):
 
 ```
 S_corrected = S_raw - ((2N-1)!! - 1) * mu_product_a (x) mu_product_b
 ```
 
-where `mu_product = TN(mu)` is the network evaluated at the mean (one cheap
-contraction). For zero-mean components (attention active path), the correction
-is zero. For Linear (1 matching), the correction is zero. Only MLP (3 matchings,
-non-zero mean) needs the `-2 * mu (x) mu` correction.
+where `mu_product = TN(mu)` is the TN evaluated at the mean (one cheap contraction).
 
-**Why this works for N <= 2**: For 4 legs, the overcounting is ONLY in the
-all-mu partition (verified by expanding all terms). For 6+ legs with non-zero
-mean, higher-order corrections exist but our attention legs are zero-mean so
-they don't arise.
+### Exactness proof for our components
 
-## The Algorithm (5 functions, 109 lines)
+This correction handles ONLY the k=N (all-mu) overcounting. The k=2,...,N-1
+corrections are missing. However, **the correction is exact for ALL our
+current term pairs**, not just N <= 2. Here's why:
 
-### `similarity(model_a, model_b) -> State`
-Entry point. Initializes `S = I` and propagates through each layer pair.
+| Term pair | Legs | N | Non-zero mu legs | Why exact |
+|---|---|---|---|---|
+| Linear (embed/head) | 2 | 1 | 2 | N=1: only k=0,1. No overcounting. |
+| MLP (bilinear) | 4 | 2 | 4 | N=2: only k=0,1,2. k<=1 don't overcount. k=2 is all-mu, corrected. |
+| Identity x Identity | 2 | 1 | 2 | N=1: no overcounting. |
+| Identity x Active | 6 | 3 | 2 (identity legs only) | k>=2 needs >=4 mu-legs, but only 2 are non-zero. All k>=2 terms vanish. |
+| Active x Active | 10 | 5 | 0 (zero constant column) | All k>=1 terms vanish. No correction needed. |
 
-### `propagate(state, comp_a, comp_b) -> State`
-One layer. Gets `terms()` from each component, computes second moments
-for all term cross-products (aa, bb, ab), returns new State.
+**When would it break?** A component with >= 3 input legs AND >= 2 having non-zero
+mean. Example: a trilinear layer `f(x) = D(Ax . Bx . Cx)` with bias would have
+N=3 with 3 non-zero-mu legs, leaving k=2 overcounting uncorrected.
 
-### `_second_moment(term_a, term_b, state) -> Tensor`
-Doubles the TN (prefix 'a:'/'b:'), builds legs with model tags,
-calls `_isserlis` with S/mu dispatchers.
+## Assumptions and Limitations
 
-### `_isserlis(tn, legs, S_for_pair, mu_for_leg, output_inds) -> Tensor`
-The core: sum over Wick matchings with S bridges, minus the mean correction.
-Each matching inserts bridge tensors into the TN and contracts via cotengra.
+### What's exact
+- **Gaussian input**: The Isserlis theorem is exact for Gaussian random variables.
+  The initial `S = I` encodes `x ~ N(0, I)`.
+- **Single layer**: Each layer's output second moment is computed exactly from
+  the input second moment, assuming the input is Gaussian.
+- **Rotary embeddings**: Fully inside the TN, contracted automatically.
+- **Causal masking**: The mask tensor is inside the TN.
+- **Bias**: Encoded via the padded constant dim.
+- **Residual connections**: Decomposed into separate terms, cross-products computed exactly.
+- **Permutation invariance**: Similarity is invariant to hidden-neuron permutations
+  (the TN traces over hidden dimensions).
 
-### `_contract(tn, bridges, output_inds) -> Tensor`
-Contracts a TN with bridge tensors. Caches the contraction expression
-(cotengra `Contractor`) by index structure for reuse.
+### What's approximate
+- **Multi-layer propagation**: After the first polynomial layer, the output is
+  NOT Gaussian — it's a polynomial function of a Gaussian. We treat it as
+  Gaussian with matching second moment S. This is the **Gaussian closure
+  approximation**. Accuracy degrades with depth, but residual connections
+  keep the distribution near-Gaussian (empirically <1% error for 2-layer
+  transformers with scale=0.5).
+
+### What's NOT supported
+- **Softmax attention**: Non-polynomial. Isserlis requires polynomial functions.
+- **Non-polynomial activations**: ReLU, GELU, SiLU, etc.
+- **Layer normalization / RMSNorm**: Non-polynomial. Would need moment-matching
+  approximations.
+- **Non-Gaussian input**: The entire approach assumes Gaussian input. For non-Gaussian,
+  higher-order cumulants would be needed.
+
+## The Algorithm (5 functions, ~110 lines)
+
+Propagate S through layers. At each layer, decompose output into TN terms,
+compute E[term_a * term_b^T] for all term cross-products via Isserlis, sum.
+
+```
+similarity(model_a, model_b):
+    S = I
+    for each layer pair (ca, cb):
+        for each term pair (ta, tb) from ca.terms() x cb.terms():
+            S_new += sum over Wick matchings of: TN(ta, tb) bridged with S
+            S_new -= (n_matchings - 1) * TN_at_mu(ta) (x) TN_at_mu(tb)
+    return S
+```
 
 ## Component Interface
 
-Each component provides `terms(n_ctx, **like) -> [Term(tn, legs)]`:
+Each component provides `terms(n_ctx, **like) -> [Term(tn, legs, symmetries=())]`:
 
-- **Linear/MLP**: 1 term. The TN includes residual via padded weights.
-  Spider ties per-leg sequence positions to output position.
-- **Attention**: 2 terms. Identity (residual) + active (attention circuit).
-  Active TN has internal sequence structure (mask, rotary). Each input leg
-  gets a unique position index tied to the TN's internal `in:s`/`out:s` via
-  delta/spider tensors.
-
-The `terms()` decomposition is what makes attention exact: instead of
-approximating `(1-s)x + s*attn(x)` as a single polynomial, we decompose
-into two terms and compute all cross-products:
-`E[f f^T] = E[(t1+t2)(t1+t2)^T] = E[t1 t1^T] + E[t1 t2^T] + E[t2 t1^T] + E[t2 t2^T]`
-
-## The S Layout: (s, d, s, d)
-
-S has shape `(n_ctx, d+1, n_ctx, d+1)` with meaning `S[s1, d1, s2, d2] = E[f[s1,d1] * f[s2,d2]]`.
-
-This matches the TN's natural output order `(a:out:s, a:out:d, b:out:s, b:out:d)`,
-so no permutation is ever needed. The bridge tensor is just S with the right index names.
-
-Extracting the mean: `mu[s, d] = S[s, d, 0, 0]` (contract with position 0, constant dim 0).
+- **Linear/MLP**: 1 term. Residual folded into padded weights. All legs point at
+  `out:s` (implicit position identification — no delta tensors materialized).
+- **Attention**: 2 terms. Identity (residual) + active (attention circuit). V/K₁/K₂
+  legs share the `in:s` position; Q₁/Q₂ legs share `out:s`. The active term declares
+  the `(K₁↔K₂, Q₁↔Q₂)` Z₂ symmetry.
 
 ## Performance
 
-The bottleneck is the number of Wick matchings: `(2N-1)!!` where N is the number
-of input leg pairs. For attention (10 legs): 945 matchings. Each matching requires
-a 37-tensor contraction via cotengra (~0.5ms with cached expression).
+Bottleneck: `(2N−1)!!` Wick matchings per term pair — attention active × active
+is 945 matchings. Key optimizations, in order of leverage:
 
-Caching contraction expressions (`_EXPR_CACHE`) is critical: each unique index
-structure gets its contraction path computed once. Subsequent calls reuse the
-compiled `Contractor`, skipping path-finding entirely.
+1. **Sparse spiders**: leg-position identification via shared index names instead
+   of dense δ-tensors. Eliminates the `n_ctx^(N+1)` materialization.
+2. **Symmetry dedup** (attention Z₂×Z₂): 945 → 265 unique matchings.
+3. **`cotengra.ReusableHyperOptimizer`** with `minimize='combo'` and kahypar —
+   path quality is 5-100× better than greedy at realistic scales, persistent
+   disk cache so warmup pays once per architecture.
+4. **Hot/cold split**: `similarity()` builds `ca.terms()` on CPU up front;
+   `propagate()` is pure GPU (no Python-data allocations, no sync points). The
+   hot path is amenable to `torch.cuda.CUDAGraph` capture for ~6× extra on replay.
+5. **Batched Wick sum**: `torch.stack + torch.einsum('i,i...->...', w, x)` in
+   place of N sequential adds.
 
-Total wall time: ~20s for 16 tests covering Linear, MLP, Attention, and
-1/2-layer Transformers with rotary embeddings.
+Memory scales as `n_ctx² · d_model²` for the block state; contraction
+intermediates stay quadratic in each dimension (enforced by kahypar paths).

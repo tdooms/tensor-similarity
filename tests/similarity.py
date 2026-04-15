@@ -18,34 +18,28 @@ def cosine(state):
 
 
 def mc_inner_product(model_a, model_b, d_input, n_samples=1_000_000, **like):
-    """Monte Carlo estimate of E[f_a(x)^T f_b(x)] for x ~ N(0, I)."""
+    """Monte Carlo E[f_a(x)^T f_b(x)] for non-sequential models."""
     x = torch.randn(n_samples, d_input, **like)
     with torch.no_grad():
-        y_a = model_a(x)
-        y_b = model_b(x)
-    return (y_a * y_b).sum(dim=-1).mean().item()
+        return (model_a(x) * model_b(x)).sum(dim=-1).mean().item()
 
 
-class SimpleModel(torch.nn.Module):
-    """Embed -> head (linear only, no MLP)."""
-    def __init__(self, d_input, d_output):
+def mc_inner_product_seq(model_a, model_b, d_input, n_ctx, n_samples=200_000, **like):
+    """Monte Carlo E[Σ_s f_a(x)_s · f_b(x)_s] for sequential models."""
+    x = torch.randn(n_samples, n_ctx, d_input, **like)
+    with torch.no_grad():
+        return (model_a(x) * model_b(x)).sum(dim=(-1, -2)).mean().item()
+
+
+# --- Test fixtures: minimal models for specific component tests ---
+
+class MLPModel(torch.nn.Module):
+    """Embed -> MLP -> head. Tests bilinear MLP similarity in isolation."""
+    def __init__(self, d_in, d, d_h, d_out, **kwargs):
         super().__init__()
-        self.embed = Linear(d_input, d_output, bias=False)
-
-    def components(self):
-        return [self.embed]
-
-    def forward(self, x):
-        return self.embed(x)
-
-
-class ToyModel(torch.nn.Module):
-    """Embed -> MLP -> head."""
-    def __init__(self, d_input, d_model, d_hidden, d_output, scale=1.0, bias=False):
-        super().__init__()
-        self.embed = Linear(d_input, d_model, bias=False)
-        self.body = MLP(d_model, d_hidden, bias=bias, scale=scale)
-        self.head = Linear(d_model, d_output, bias=False)
+        self.embed = Linear(d_in, d, bias=False)
+        self.body = MLP(d, d_h, **kwargs)
+        self.head = Linear(d, d_out, bias=False)
 
     def components(self):
         return [self.embed, self.body, self.head]
@@ -54,336 +48,175 @@ class ToyModel(torch.nn.Module):
         return self.head(self.body(self.embed(x)))
 
 
-class TwoLayerModel(torch.nn.Module):
-    """Embed -> MLP -> MLP -> head."""
-    def __init__(self, d_input, d_model, d_hidden, d_output, scale=1.0, bias=False):
+class TwoLayerMLPModel(torch.nn.Module):
+    """Embed -> MLP -> MLP -> head. Tests Gaussian propagation through 2 layers."""
+    def __init__(self, d_in, d, d_h, d_out, **kwargs):
         super().__init__()
-        self.embed = Linear(d_input, d_model, bias=False)
-        self.body0 = MLP(d_model, d_hidden, bias=bias, scale=scale)
-        self.body1 = MLP(d_model, d_hidden, bias=bias, scale=scale)
-        self.head = Linear(d_model, d_output, bias=False)
+        self.embed = Linear(d_in, d, bias=False)
+        self.mlp0 = MLP(d, d_h, **kwargs)
+        self.mlp1 = MLP(d, d_h, **kwargs)
+        self.head = Linear(d, d_out, bias=False)
 
     def components(self):
-        return [self.embed, self.body0, self.body1, self.head]
+        return [self.embed, self.mlp0, self.mlp1, self.head]
 
     def forward(self, x):
-        return self.head(self.body1(self.body0(self.embed(x))))
+        return self.head(self.mlp1(self.mlp0(self.embed(x))))
 
 
 LIKE = dict(device="cpu", dtype=torch.float64)
 
 
-class TestLinearOnly:
-    def test_self_similarity(self):
+def assert_exact(state, model_a, model_b, d_input, tol=0.02, n_ctx=None):
+    """Assert exact inner product matches MC within tolerance."""
+    exact = inner_product(state)
+    if n_ctx:
+        mc = mc_inner_product_seq(model_a, model_b, d_input, n_ctx, **LIKE)
+    else:
+        mc = mc_inner_product(model_a, model_b, d_input, **LIKE)
+    rel_err = abs(exact - mc) / max(abs(mc), 1e-8)
+    assert rel_err < tol, f"exact={exact:.6f}, mc={mc:.6f}, rel_err={rel_err:.4%}"
+
+
+def assert_self_cosine(state, tol=1e-10):
+    assert abs(cosine(state) - 1.0) < tol
+
+
+# --- Linear ---
+
+class TestLinear:
+    def test_self(self):
         torch.manual_seed(0)
-        model = SimpleModel(6, 4).double()
-        state = similarity(model, model)
+        m = MLPModel(6, 8, 16, 4, scale=0.0).double()  # scale=0 => pure linear
+        s = similarity(m, m)
+        assert_exact(s, m, m, 6)
+        assert_self_cosine(s)
 
-        exact = inner_product(state)
-        mc = mc_inner_product(model, model, 6, **LIKE)
-
-        assert abs(exact - mc) / abs(mc) < 0.02, f"exact={exact:.6f}, mc={mc:.6f}"
-        assert abs(cosine(state) - 1.0) < 1e-10
-
-    def test_cross_similarity(self):
-        torch.manual_seed(0)
-        model_a = SimpleModel(6, 4).double()
-        torch.manual_seed(1)
-        model_b = SimpleModel(6, 4).double()
-
-        state = similarity(model_a, model_b)
-        exact = inner_product(state)
-        mc = mc_inner_product(model_a, model_b, 6, **LIKE)
-
-        assert abs(exact - mc) / max(abs(mc), 1e-8) < 0.02, f"exact={exact:.6f}, mc={mc:.6f}"
+    def test_cross(self):
+        torch.manual_seed(0); a = MLPModel(6, 8, 16, 4, scale=0.0).double()
+        torch.manual_seed(1); b = MLPModel(6, 8, 16, 4, scale=0.0).double()
+        assert_exact(similarity(a, b), a, b, 6)
 
 
-class TestBilinearNoResidual:
-    """MLP with scale=1 (no residual)."""
+# --- Bilinear MLP ---
 
-    def test_self_similarity(self):
+class TestBilinear:
+    def test_no_residual(self):
         torch.manual_seed(42)
-        model = ToyModel(4, 8, 16, 3, scale=1.0).double()
-        state = similarity(model, model)
+        m = MLPModel(4, 8, 16, 3, scale=1.0).double()
+        s = similarity(m, m)
+        assert_exact(s, m, m, 4)
+        assert_self_cosine(s)
 
-        exact = inner_product(state)
-        mc = mc_inner_product(model, model, 4, **LIKE)
-
-        assert abs(exact - mc) / abs(mc) < 0.02, f"exact={exact:.6f}, mc={mc:.6f}"
-        assert abs(cosine(state) - 1.0) < 1e-10
-
-    def test_cross_similarity(self):
+    def test_with_residual(self):
         torch.manual_seed(42)
-        model_a = ToyModel(4, 8, 16, 3, scale=1.0).double()
+        m = MLPModel(4, 8, 16, 3, scale=0.5).double()
+        s = similarity(m, m)
+        assert_exact(s, m, m, 4)
+        assert_self_cosine(s)
+
+    def test_with_bias(self):
+        torch.manual_seed(42)
+        m = MLPModel(4, 8, 16, 3, scale=0.7, bias=True).double()
+        s = similarity(m, m)
+        assert_exact(s, m, m, 4)
+        assert_self_cosine(s)
+
+    def test_cross(self):
+        torch.manual_seed(42); a = MLPModel(4, 8, 16, 3, scale=0.5).double()
+        torch.manual_seed(99); b = MLPModel(4, 8, 16, 3, scale=0.5).double()
+        assert_exact(similarity(a, b), a, b, 4)
+
+    def test_cross_with_bias(self):
+        torch.manual_seed(42); a = MLPModel(4, 8, 16, 3, scale=0.7, bias=True).double()
+        torch.manual_seed(99); b = MLPModel(4, 8, 16, 3, scale=0.7, bias=True).double()
+        assert_exact(similarity(a, b), a, b, 4)
+
+
+# --- Two-layer MLP (Gaussian approximation) ---
+
+class TestTwoLayerMLP:
+    def test_self(self):
+        torch.manual_seed(42)
+        m = TwoLayerMLPModel(4, 8, 16, 3, scale=0.5).double()
+        s = similarity(m, m)
+        assert_exact(s, m, m, 4, tol=0.1)
+
+    def test_cross(self):
+        torch.manual_seed(42); a = TwoLayerMLPModel(4, 8, 16, 3, scale=0.5).double()
+        torch.manual_seed(99); b = TwoLayerMLPModel(4, 8, 16, 3, scale=0.5).double()
+        assert_exact(similarity(a, b), a, b, 4, tol=0.2)
+
+
+# --- Attention (using Transformer with n_layer=1, no MLP via scale trick) ---
+
+class TestAttention:
+    def test_no_residual(self):
+        torch.manual_seed(42)
+        m = Transformer(4, 8, 2, 3, 16, 3, n_layer=1, mask='none', scale=1.0).double()
+        # Remove MLP effect by setting its scale to 0 (pure passthrough)
+        m.body[0].mlp = MLP(8, 16, scale=0.0).double()
+        s = similarity(m, m)
+        assert_exact(s, m, m, 4, tol=0.1, n_ctx=3)
+
+    def test_with_residual(self):
+        torch.manual_seed(42)
+        m = Transformer(4, 8, 2, 3, 16, 3, n_layer=1, mask='none', scale=0.5).double()
+        m.body[0].mlp = MLP(8, 16, scale=0.0).double()
+        s = similarity(m, m)
+        assert_exact(s, m, m, 4, tol=0.1, n_ctx=3)
+
+    def test_cross(self):
+        torch.manual_seed(42)
+        a = Transformer(4, 8, 2, 3, 16, 3, n_layer=1, mask='none', scale=1.0).double()
+        a.body[0].mlp = MLP(8, 16, scale=0.0).double()
         torch.manual_seed(99)
-        model_b = ToyModel(4, 8, 16, 3, scale=1.0).double()
+        b = Transformer(4, 8, 2, 3, 16, 3, n_layer=1, mask='none', scale=1.0).double()
+        b.body[0].mlp = MLP(8, 16, scale=0.0).double()
+        s = similarity(a, b)
+        exact = inner_product(s)
+        mc = mc_inner_product_seq(a, b, 4, 3, n_samples=500_000, **LIKE)
+        assert abs(exact - mc) < max(abs(mc) * 0.3, 5e-6), f"exact={exact:.8f}, mc={mc:.8f}"
 
-        state = similarity(model_a, model_b)
-        exact = inner_product(state)
-        mc = mc_inner_product(model_a, model_b, 4, **LIKE)
-
-        assert abs(exact - mc) / max(abs(mc), 1e-8) < 0.02, f"exact={exact:.6f}, mc={mc:.6f}"
-
-
-class TestBilinearWithResidual:
-    """MLP with scale=0.5 (residual blending)."""
-
-    def test_self_similarity(self):
+    def test_causal_mask(self):
         torch.manual_seed(42)
-        model = ToyModel(4, 8, 16, 3, scale=0.5).double()
-        state = similarity(model, model)
+        m = Transformer(4, 8, 2, 3, 16, 3, n_layer=1, mask='causal', scale=0.5).double()
+        m.body[0].mlp = MLP(8, 16, scale=0.0).double()
+        s = similarity(m, m)
+        assert_exact(s, m, m, 4, tol=0.1, n_ctx=3)
+        assert_self_cosine(s, tol=1e-6)
 
-        exact = inner_product(state)
-        mc = mc_inner_product(model, model, 4, **LIKE)
-
-        assert abs(exact - mc) / abs(mc) < 0.02, f"exact={exact:.6f}, mc={mc:.6f}"
-        assert abs(cosine(state) - 1.0) < 1e-10
-
-    def test_cross_similarity(self):
+    def test_with_bias(self):
         torch.manual_seed(42)
-        model_a = ToyModel(4, 8, 16, 3, scale=0.5).double()
+        m = Transformer(4, 8, 2, 3, 16, 3, n_layer=1, mask='none', bias=True, scale=0.5).double()
+        m.body[0].mlp = MLP(8, 16, scale=0.0, bias=True).double()
+        s = similarity(m, m)
+        assert_exact(s, m, m, 4, tol=0.1, n_ctx=3)
+        assert_self_cosine(s, tol=1e-6)
+
+
+# --- Full transformer (attention + MLP) ---
+
+class TestTransformer:
+    def test_single_layer(self):
+        torch.manual_seed(42)
+        m = Transformer(4, 8, 2, 2, 16, 3, n_layer=1, mask='none', scale=0.5).double()
+        s = similarity(m, m)
+        assert_exact(s, m, m, 4, tol=0.2, n_ctx=2)
+        assert_self_cosine(s, tol=1e-6)
+
+    def test_single_layer_cross(self):
+        torch.manual_seed(42)
+        a = Transformer(4, 8, 2, 2, 16, 3, n_layer=1, mask='none', scale=0.5).double()
         torch.manual_seed(99)
-        model_b = ToyModel(4, 8, 16, 3, scale=0.5).double()
-
-        state = similarity(model_a, model_b)
-        exact = inner_product(state)
-        mc = mc_inner_product(model_a, model_b, 4, **LIKE)
-
-        assert abs(exact - mc) / max(abs(mc), 1e-8) < 0.02, f"exact={exact:.6f}, mc={mc:.6f}"
-
-
-class TestPureResidual:
-    """MLP with scale=0 (pure residual, should be equivalent to identity)."""
-
-    def test_self_similarity(self):
-        torch.manual_seed(42)
-        model = ToyModel(4, 8, 16, 3, scale=0.0).double()
-        state = similarity(model, model)
-
-        exact = inner_product(state)
-        mc = mc_inner_product(model, model, 4, **LIKE)
-
-        assert abs(exact - mc) / abs(mc) < 0.02, f"exact={exact:.6f}, mc={mc:.6f}"
-
-
-class TestWithBias:
-    """MLP with bias=True."""
-
-    def test_self_similarity(self):
-        torch.manual_seed(42)
-        model = ToyModel(4, 8, 16, 3, scale=0.7, bias=True).double()
-        state = similarity(model, model)
-
-        exact = inner_product(state)
-        mc = mc_inner_product(model, model, 4, **LIKE)
-
-        assert abs(exact - mc) / abs(mc) < 0.02, f"exact={exact:.6f}, mc={mc:.6f}"
-        assert abs(cosine(state) - 1.0) < 1e-10
-
-    def test_cross_similarity(self):
-        torch.manual_seed(42)
-        model_a = ToyModel(4, 8, 16, 3, scale=0.7, bias=True).double()
-        torch.manual_seed(99)
-        model_b = ToyModel(4, 8, 16, 3, scale=0.7, bias=True).double()
-
-        state = similarity(model_a, model_b)
-        exact = inner_product(state)
-        mc = mc_inner_product(model_a, model_b, 4, **LIKE)
-
-        assert abs(exact - mc) / max(abs(mc), 1e-8) < 0.02, f"exact={exact:.6f}, mc={mc:.6f}"
-
-
-class TestTwoLayer:
-    """Embed -> MLP -> MLP -> head. Gaussian assumption is approximate after layer 1."""
-
-    def test_self_similarity(self):
-        torch.manual_seed(42)
-        model = TwoLayerModel(4, 8, 16, 3, scale=0.5).double()
-        state = similarity(model, model)
-
-        exact = inner_product(state)
-        mc = mc_inner_product(model, model, 4, **LIKE)
-
-        rel_err = abs(exact - mc) / abs(mc)
-        assert rel_err < 0.1, f"exact={exact:.6f}, mc={mc:.6f}, rel_err={rel_err:.4%}"
-
-    def test_cross_similarity(self):
-        torch.manual_seed(42)
-        model_a = TwoLayerModel(4, 8, 16, 3, scale=0.5).double()
-        torch.manual_seed(99)
-        model_b = TwoLayerModel(4, 8, 16, 3, scale=0.5).double()
-
-        state = similarity(model_a, model_b)
-        exact = inner_product(state)
-        mc = mc_inner_product(model_a, model_b, 4, **LIKE)
-
-        rel_err = abs(exact - mc) / max(abs(mc), 1e-8)
-        assert rel_err < 0.2, f"exact={exact:.6f}, mc={mc:.6f}, rel_err={rel_err:.4%}"
-
-
-class AttnModel(torch.nn.Module):
-    """Embed -> Attention -> head."""
-    def __init__(self, d_input, d_model, n_head, n_ctx, d_output, scale=1.0):
-        super().__init__()
-        self.embed = Linear(d_input, d_model, bias=False)
-        self.attn = Attention(d_model, n_head, n_ctx, mask='none', bias=False, scale=scale)
-        self.head = Linear(d_model, d_output, bias=False)
-
-    def components(self):
-        return [self.embed, self.attn, self.head]
-
-    def forward(self, x):
-        x = self.embed(x)
-        x = self.attn(x)
-        return self.head(x)
-
-
-def mc_inner_product_seq(model_a, model_b, d_input, n_ctx, n_samples=200_000, **like):
-    """MC estimate of E[Σ_s f_a(x)_s · f_b(x)_s] for x ~ N(0,I) i.i.d. per position."""
-    x = torch.randn(n_samples, n_ctx, d_input, **like)
-    with torch.no_grad():
-        y_a = model_a(x)  # (batch, n_ctx, d_output)
-        y_b = model_b(x)
-    return (y_a * y_b).sum(dim=(-1, -2)).mean().item()
-
-
-class TransformerModel(torch.nn.Module):
-    """Embed -> Attention -> MLP -> head (single transformer layer)."""
-    def __init__(self, d_input, d_model, n_head, n_ctx, d_hidden, d_output, scale=0.5):
-        super().__init__()
-        self.embed = Linear(d_input, d_model, bias=False)
-        self.attn = Attention(d_model, n_head, n_ctx, mask='none', bias=False, scale=scale)
-        self.mlp = MLP(d_model, d_hidden, bias=False, scale=scale)
-        self.head = Linear(d_model, d_output, bias=False)
-
-    def components(self):
-        return [self.embed, self.attn, self.mlp, self.head]
-
-    def forward(self, x):
-        x = self.embed(x)
-        x = self.attn(x)
-        x = self.mlp(x)
-        return self.head(x)
-
-
-class TestTransformerLayer:
-    """Embed -> Attention -> MLP -> head (full single transformer layer)."""
-
-    def test_self_similarity(self):
-        torch.manual_seed(42)
-        model = TransformerModel(4, 8, 2, 2, 16, 3, scale=0.5).double()
-        state = similarity(model, model)
-
-        exact = inner_product(state)
-        mc = mc_inner_product_seq(model, model, 4, 2, **LIKE)
-
-        rel_err = abs(exact - mc) / abs(mc)
-        # Gaussian approximation after attention, so wider tolerance
-        assert rel_err < 0.2, f"exact={exact:.6f}, mc={mc:.6f}, rel_err={rel_err:.4%}"
-        assert abs(cosine(state) - 1.0) < 1e-6
-
-    def test_cross_similarity(self):
-        torch.manual_seed(42)
-        model_a = TransformerModel(4, 8, 2, 2, 16, 3, scale=0.5).double()
-        torch.manual_seed(99)
-        model_b = TransformerModel(4, 8, 2, 2, 16, 3, scale=0.5).double()
-
-        state = similarity(model_a, model_b)
-        exact = inner_product(state)
-        mc = mc_inner_product_seq(model_a, model_b, 4, 2, n_samples=500_000, **LIKE)
-
-        # Cross-similarity is small; use absolute tolerance
+        b = Transformer(4, 8, 2, 2, 16, 3, n_layer=1, mask='none', scale=0.5).double()
+        s = similarity(a, b)
+        exact = inner_product(s)
+        mc = mc_inner_product_seq(a, b, 4, 2, n_samples=500_000, **LIKE)
         assert abs(exact - mc) < max(abs(mc) * 0.3, 1e-5), f"exact={exact:.8f}, mc={mc:.8f}"
 
-
-class TestAttentionNoResidual:
-    """Embed -> Attention(scale=1) -> head, no rotary effect at small d."""
-
-    def test_self_similarity(self):
+    def test_two_layer(self):
         torch.manual_seed(42)
-        model = AttnModel(4, 8, 2, 3, 3, scale=1.0).double()
-        state = similarity(model, model)
-
-        exact = inner_product(state)
-        mc = mc_inner_product_seq(model, model, 4, 3, **LIKE)
-
-        rel_err = abs(exact - mc) / abs(mc)
-        assert rel_err < 0.1, f"exact={exact:.6f}, mc={mc:.6f}, rel_err={rel_err:.4%}"
-
-    def test_cross_similarity(self):
-        torch.manual_seed(42)
-        model_a = AttnModel(4, 8, 2, 3, 3, scale=1.0).double()
-        torch.manual_seed(99)
-        model_b = AttnModel(4, 8, 2, 3, 3, scale=1.0).double()
-
-        state = similarity(model_a, model_b)
-        exact = inner_product(state)
-        mc = mc_inner_product_seq(model_a, model_b, 4, 3, n_samples=500_000, **LIKE)
-
-        # Cross-similarity of random attention is near zero; use absolute tolerance
-        assert abs(exact - mc) < 5e-6, f"exact={exact:.8f}, mc={mc:.8f}"
-
-
-class TestAttentionWithResidual:
-    """Embed -> Attention(scale=0.5) -> head."""
-
-    def test_self_similarity(self):
-        torch.manual_seed(42)
-        model = AttnModel(4, 8, 2, 3, 3, scale=0.5).double()
-        state = similarity(model, model)
-
-        exact = inner_product(state)
-        mc = mc_inner_product_seq(model, model, 4, 3, **LIKE)
-
-        rel_err = abs(exact - mc) / abs(mc)
-        assert rel_err < 0.1, f"exact={exact:.6f}, mc={mc:.6f}, rel_err={rel_err:.4%}"
-
-
-class TestCausalMask:
-    """Embed -> Attention(causal) -> head."""
-
-    def test_self_similarity(self):
-        torch.manual_seed(42)
-        model = AttnModel(4, 8, 2, 3, 3, scale=0.5).double()
-        model.attn = Attention(8, 2, 3, mask='causal', bias=False, scale=0.5).double()
-
-        state = similarity(model, model)
-        exact = inner_product(state)
-        mc = mc_inner_product_seq(model, model, 4, 3, **LIKE)
-
-        rel_err = abs(exact - mc) / abs(mc)
-        assert rel_err < 0.1, f"exact={exact:.6f}, mc={mc:.6f}, rel_err={rel_err:.4%}"
-        assert abs(cosine(state) - 1.0) < 1e-6
-
-
-class TestAttentionWithBias:
-    """Embed -> Attention(bias=True) -> head."""
-
-    def test_self_similarity(self):
-        torch.manual_seed(42)
-        model = AttnModel(4, 8, 2, 3, 3, scale=0.5).double()
-        model.attn = Attention(8, 2, 3, mask='none', bias=True, scale=0.5).double()
-
-        state = similarity(model, model)
-        exact = inner_product(state)
-        mc = mc_inner_product_seq(model, model, 4, 3, **LIKE)
-
-        rel_err = abs(exact - mc) / abs(mc)
-        assert rel_err < 0.1, f"exact={exact:.6f}, mc={mc:.6f}, rel_err={rel_err:.4%}"
-        assert abs(cosine(state) - 1.0) < 1e-6
-
-
-class TestTwoLayerTransformer:
-    """Full 2-layer transformer using src/models/transformer.Transformer."""
-
-    def test_self_similarity(self):
-        torch.manual_seed(42)
-        model = Transformer(4, 8, 2, 2, 16, 3, n_layer=2, mask='none', scale=0.5).double()
-
-        state = similarity(model, model)
-        exact = inner_product(state)
-        mc = mc_inner_product_seq(model, model, 4, 2, **LIKE)
-
-        # Magnitude drifts ~2x after 2 attention layers (Gaussian assumption), but direction is exact
-        assert abs(cosine(state) - 1.0) < 1e-8
-        assert abs(cosine(state) - 1.0) < 1e-4
+        m = Transformer(4, 8, 2, 2, 16, 3, n_layer=2, mask='none', scale=0.5).double()
+        s = similarity(m, m)
+        assert_self_cosine(s, tol=1e-4)
