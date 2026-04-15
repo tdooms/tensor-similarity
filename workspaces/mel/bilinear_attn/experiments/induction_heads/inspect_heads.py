@@ -1,0 +1,396 @@
+#!/usr/bin/env python3
+"""Inspect attention heads using PyTorch hooks on repeated sequences.
+
+Architecture-agnostic version that works with:
+- BilinearAttention or QuadraticAttention
+- Any number of layers
+- With or without bias
+- Variable-length repeated sequences (to prevent RoPE shortcuts)
+
+Based on Anthropic's "In-context Learning and Induction Heads" paper:
+https://transformer-circuits.pub/2022/in-context-learning-and-induction-heads/
+"""
+
+import sys
+from pathlib import Path
+import torch
+import yaml
+import matplotlib.pyplot as plt
+import numpy as np
+from typing import Dict, List, Tuple, Optional
+import argparse
+
+# Add project root
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+from models import AttentionLM
+from models.attention_kernels.bilinear import BilinearAttention, QuadraticAttention
+
+
+class AttentionCapture:
+    """Capture attention patterns from attention layers using hooks."""
+    
+    def __init__(self, model: AttentionLM, attn_type: str):
+        self.model = model
+        self.attn_type = attn_type  # 'bilinear' or 'quadratic'
+        self.patterns = {}  # {(layer_idx, head_idx, circuit): pattern}
+        self.hooks = []
+        
+    def register_hooks(self):
+        """Register forward hooks on all attention layers."""
+        for layer_idx, layer in enumerate(self.model.layers):
+            if isinstance(layer, (BilinearAttention, QuadraticAttention)):
+                hook = layer.register_forward_hook(
+                    self._make_hook(layer_idx)
+                )
+                self.hooks.append(hook)
+    
+    def _make_hook(self, layer_idx: int):
+        """Create a hook function for a specific layer."""
+        def hook(module, input, output):
+            # Use return_debug to get all intermediate values
+            x = input[0]
+            _, debug = module.forward(x, return_debug=True)
+            
+            if isinstance(module, BilinearAttention):
+                # BilinearAttention: q1k1, q2k2, combined
+                scores1 = debug['scores1']  # (batch, n_head, n_ctx, n_ctx)
+                scores2 = debug['scores2']
+                pattern = debug['pattern']  # combined with mask
+                
+                for head_idx in range(module.n_head):
+                    pattern1_h = scores1[:, head_idx, :, :]
+                    pattern2_h = scores2[:, head_idx, :, :]
+                    pattern_combined_h = pattern[:, head_idx, :, :]
+                    
+                    self.patterns[(layer_idx, head_idx, 'q1k1')] = pattern1_h.detach().cpu()
+                    self.patterns[(layer_idx, head_idx, 'q2k2')] = pattern2_h.detach().cpu()
+                    self.patterns[(layer_idx, head_idx, 'combined')] = pattern_combined_h.detach().cpu()
+            
+            elif isinstance(module, QuadraticAttention):
+                # QuadraticAttention: single scores, pattern
+                scores = debug['scores']  # (batch, n_head, n_ctx, n_ctx)
+                pattern = debug['pattern']  # squared and masked
+                
+                for head_idx in range(module.n_head):
+                    scores_h = scores[:, head_idx, :, :]
+                    pattern_h = pattern[:, head_idx, :, :]
+                    
+                    self.patterns[(layer_idx, head_idx, 'scores')] = scores_h.detach().cpu()
+                    self.patterns[(layer_idx, head_idx, 'combined')] = pattern_h.detach().cpu()
+        
+        return hook
+    
+    def remove_hooks(self):
+        """Remove all registered hooks."""
+        for hook in self.hooks:
+            hook.remove()
+        self.hooks = []
+    
+    def get_pattern(self, layer_idx: int, head_idx: int, circuit: str = 'combined') -> torch.Tensor:
+        """Get attention pattern for a specific head and circuit."""
+        return self.patterns.get((layer_idx, head_idx, circuit))
+
+
+def generate_fixed_length_sequences(vocab_size: int, n_ctx: int, n_samples: int = 16) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Generate fixed-length repeated sequences for inspection.
+    
+    For inspection, use simple [seq][seq] format with fixed length n_ctx//2.
+    This makes it easier to visualize and analyze attention patterns.
+    
+    Args:
+        vocab_size: Size of vocabulary
+        n_ctx: Context length
+        n_samples: Number of sequences to generate
+    
+    Returns:
+        tokens: (n_samples, n_ctx) sequences of form [seq][seq]
+        repeat_masks: (n_samples, n_ctx) bool masks for second half (excluding first token)
+    """
+    seq_len = n_ctx // 2
+    tokens = torch.zeros((n_samples, n_ctx), dtype=torch.long)
+    repeat_masks = torch.zeros((n_samples, n_ctx), dtype=torch.bool)
+    
+    for i in range(n_samples):
+        # Generate random subsequence
+        subseq = torch.randint(0, vocab_size, (seq_len,))
+        # Repeat it: [subseq][subseq]
+        tokens[i, :seq_len] = subseq
+        tokens[i, seq_len:2*seq_len] = subseq
+        
+        # Mark second half for evaluation (excluding first token of repeat)
+        repeat_masks[i, seq_len+1:2*seq_len] = True
+    
+    return tokens, repeat_masks
+
+
+def compute_prefix_matching_score(pattern: torch.Tensor, repeat_masks: torch.Tensor, 
+                                 tokens: torch.Tensor) -> float:
+    """Compute prefix matching score for fixed-length [seq][seq] sequences.
+    
+    For each position in second half, measure attention to matching position in first half.
+    """
+    batch, n_ctx, _ = pattern.shape
+    seq_len = n_ctx // 2
+    score = 0.0
+    count = 0
+    
+    for b in range(batch):
+        # For each position in second half, check attention to matching position in first half
+        for q in range(seq_len, n_ctx):
+            k = q - seq_len  # Matching position in first half
+            score += pattern[b, q, k].item()
+            count += 1
+    
+    return score / count if count > 0 else 0.0
+
+
+def compute_induction_score(pattern: torch.Tensor, repeat_masks: torch.Tensor,
+                           tokens: torch.Tensor) -> float:
+    """Compute induction score: attention to token AFTER previous occurrence.
+    
+    For fixed [seq][seq] format, this is attention to position k+1 where k is the
+    matching position in the first half.
+    """
+    batch, n_ctx, _ = pattern.shape
+    seq_len = n_ctx // 2
+    score = 0.0
+    count = 0
+    
+    for b in range(batch):
+        # For each position in second half (except last)
+        for q in range(seq_len, n_ctx - 1):
+            k_match = q - seq_len  # Matching position in first half
+            k_induct = k_match + 1  # Position after match
+            
+            if k_induct < seq_len:
+                score += pattern[b, q, k_induct].item()
+                count += 1
+    
+    return score / count if count > 0 else 0.0
+
+
+def compute_copying_score(pattern: torch.Tensor) -> float:
+    """Compute copying score: attention to previous token."""
+    batch, n_ctx, _ = pattern.shape
+    score = 0.0
+    count = 0
+    
+    for q in range(1, n_ctx):
+        score += pattern[:, q, q - 1].mean().item()
+        count += 1
+    
+    return score / count if count > 0 else 0.0
+
+
+def analyze_all_heads(patterns: Dict, repeat_masks: torch.Tensor, tokens: torch.Tensor) -> Dict:
+    """Compute all metrics for all heads."""
+    results = {}
+    
+    for (layer_idx, head_idx, circuit), pattern in patterns.items():
+        if circuit != 'combined':
+            continue
+        
+        key = (layer_idx, head_idx)
+        
+        results[key] = {
+            'prefix_matching': compute_prefix_matching_score(pattern, repeat_masks, tokens),
+            'induction': compute_induction_score(pattern, repeat_masks, tokens),
+            'copying': compute_copying_score(pattern),
+        }
+    
+    return results
+
+
+def visualize_attention_heads(patterns: Dict, n_layers: int, n_heads: int,
+                              save_path: Path = None, step: Optional[int] = None):
+    """Visualize attention patterns for all heads."""
+    fig, axes = plt.subplots(n_layers, n_heads, figsize=(6 * n_heads, 6 * n_layers))
+    if n_layers == 1 and n_heads == 1:
+        axes = np.array([[axes]])
+    elif n_layers == 1:
+        axes = axes.reshape(1, -1)
+    elif n_heads == 1:
+        axes = axes.reshape(-1, 1)
+    
+    for layer_idx in range(n_layers):
+        for head_idx in range(n_heads):
+            pattern = patterns.get((layer_idx, head_idx, 'combined'))
+            
+            if pattern is None:
+                continue
+            
+            # Average over batch
+            pattern_avg = pattern.mean(dim=0).numpy()
+            
+            ax = axes[layer_idx, head_idx]
+            im = ax.imshow(pattern_avg, cmap='viridis', aspect='auto', interpolation='nearest')
+            ax.set_title(f'Layer {layer_idx}, Head {head_idx}', fontsize=12, fontweight='bold')
+            ax.set_xlabel('Key Position')
+            ax.set_ylabel('Query Position')
+            
+            plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+            ax.grid(False)
+    
+    title = 'Attention Patterns'
+    if step is not None:
+        title += f' - Step {step}'
+    fig.suptitle(title, fontsize=16, y=0.995)
+    
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        print(f"Saved visualization to {save_path}")
+    
+    plt.close()
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Inspect attention heads on repeated sequences')
+    parser.add_argument('--checkpoint_dir', type=str, required=True,
+                       help='Directory containing checkpoints (will auto-detect config)')
+    parser.add_argument('--step', type=int, default=None,
+                       help='Checkpoint step to load (default: use final.pt)')
+    parser.add_argument('--n_samples', type=int, default=32,
+                       help='Number of sequences to generate')
+    parser.add_argument('--output_dir', type=str, default='attention_visualizations',
+                       help='Directory to save visualizations')
+    
+    args = parser.parse_args()
+    
+    # Find checkpoint directory and config
+    checkpoint_dir = Path(__file__).parent / args.checkpoint_dir
+    
+    # Look for config.yaml in checkpoint_dir or parent
+    config_path = checkpoint_dir.parent / "config.yaml"
+    if not config_path.exists():
+        config_path = checkpoint_dir / "config.yaml"
+    
+    if not config_path.exists():
+        print(f"Error: Could not find config.yaml in {checkpoint_dir} or {checkpoint_dir.parent}")
+        return
+    
+    with open(config_path) as f:
+        cfg = yaml.safe_load(f)
+    
+    print("=" * 70)
+    print("ATTENTION HEAD INSPECTION (Architecture-Agnostic)")
+    print("=" * 70)
+    print(f"\nConfig: {config_path}")
+    print(f"\nModel architecture:")
+    print(f"  Layers: {cfg['model']['n_layers']}")
+    print(f"  Heads per layer: {cfg['model']['n_head']}")
+    print(f"  Total heads: {cfg['model']['n_layers'] * cfg['model']['n_head']}")
+    print(f"  Context length: {cfg['model']['n_ctx']}")
+    print(f"  Attention type: {cfg['model']['attn_type']}")
+    
+    if cfg['model']['attn_type'] == 'bilinear':
+        print(f"  Circuits per head: 2 (Q1-K1, Q2-K2)")
+        print(f"  Total circuits: {cfg['model']['n_layers'] * cfg['model']['n_head'] * 2}")
+    else:
+        print(f"  Circuits per head: 1 (Q-K)")
+    
+    # Load checkpoint
+    if args.step is not None:
+        checkpoint_path = checkpoint_dir / f"step_{args.step}.pt"
+        step_label = args.step
+    else:
+        checkpoint_path = checkpoint_dir.parent / "final.pt"
+        step_label = "final"
+    
+    if not checkpoint_path.exists():
+        print(f"\nError: Checkpoint not found at {checkpoint_path}")
+        print(f"Available checkpoints:")
+        for ckpt in sorted(checkpoint_dir.glob("*.pt")):
+            print(f"  {ckpt.name}")
+        return
+    
+    print(f"\nLoading checkpoint: {checkpoint_path}")
+    
+    # Create model
+    model = AttentionLM.from_config(cfg)
+    checkpoint = torch.load(checkpoint_path, map_location='cpu')
+    model.load_state_dict(checkpoint['model_state_dict'])
+    model.eval()
+    
+    print(f"Model loaded successfully")
+    
+    # Generate fixed-length repeated sequences for inspection
+    n_ctx = cfg['model']['n_ctx']
+    seq_len = n_ctx // 2
+    print(f"\nGenerating {args.n_samples} fixed-length repeated sequences...")
+    print(f"  Format: [seq][seq] with seq_len={seq_len}")
+    
+    tokens, repeat_masks = generate_fixed_length_sequences(
+        vocab_size=cfg['model']['vocab_size'],
+        n_ctx=n_ctx,
+        n_samples=args.n_samples,
+    )
+    
+    print(f"\nExample sequences:")
+    for i in range(min(3, args.n_samples)):
+        print(f"  Sample {i}:")
+        print(f"    First half:  {tokens[i, :seq_len].tolist()}")
+        print(f"    Second half: {tokens[i, seq_len:].tolist()}")
+    
+    # Capture attention patterns
+    print(f"\nCapturing attention patterns...")
+    capture = AttentionCapture(model, cfg['model']['attn_type'])
+    capture.register_hooks()
+    
+    with torch.no_grad():
+        _ = model(tokens)
+    
+    capture.remove_hooks()
+    
+    n_heads = cfg['model']['n_layers'] * cfg['model']['n_head']
+    print(f"Captured patterns for {n_heads} heads")
+    
+    # Compute metrics
+    print(f"\n{'=' * 70}")
+    print("INDUCTION HEAD METRICS")
+    print("=" * 70)
+    print(f"\nMetrics (from Anthropic paper):")
+    print("  - Prefix matching: Attention to matching position in first half")
+    print("  - Induction: Attention to token AFTER matching position")
+    print("  - Copying: Attention to immediately previous token")
+    print()
+    
+    metrics = analyze_all_heads(capture.patterns, repeat_masks, tokens)
+    
+    print(f"{'Layer':<8} {'Head':<6} {'Prefix':<10} {'Induction':<12} {'Copying':<10}")
+    print("-" * 70)
+    for (layer_idx, head_idx), scores in sorted(metrics.items()):
+        print(f"{layer_idx:<8} {head_idx:<6} {scores['prefix_matching']:>8.4f}   "
+              f"{scores['induction']:>10.4f}   {scores['copying']:>8.4f}")
+    
+    # Identify strongest induction head
+    if metrics:
+        best_head = max(metrics.items(), key=lambda x: x[1]['induction'])
+        print(f"\nStrongest induction head: Layer {best_head[0][0]}, Head {best_head[0][1]}")
+        print(f"  Induction score: {best_head[1]['induction']:.4f}")
+    
+    # Create output directory
+    output_dir = Path(__file__).parent / args.output_dir
+    output_dir.mkdir(exist_ok=True)
+    
+    # Visualize all heads
+    print(f"\nVisualizing attention patterns...")
+    save_path = output_dir / f"attention_heads_{step_label}.png"
+    visualize_attention_heads(
+        capture.patterns,
+        n_layers=cfg['model']['n_layers'],
+        n_heads=cfg['model']['n_head'],
+        save_path=save_path,
+        step=args.step,
+    )
+    
+    print(f"\n{'=' * 70}")
+    print("DONE")
+    print(f"Visualizations saved to: {output_dir}")
+    print("=" * 70)
+
+
+if __name__ == "__main__":
+    main()

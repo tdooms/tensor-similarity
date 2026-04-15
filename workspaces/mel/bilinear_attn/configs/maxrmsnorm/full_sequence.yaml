@@ -1,0 +1,42 @@
+name: maxrmsnorm_full_sequence
+seed: 42
+
+model:
+  vocab_size: 4096
+  n_ctx: 512
+  d_model: 256
+  n_head: 8
+  n_layers: 2
+  attn_type: bilinear
+  attn_scale: 0.35
+  rope_base: 10000
+  norm_type: maxrmsnorm
+  norm_places: [pre_layer, pre_unembed]
+  use_rmsnorm_qk: false
+  use_bias_qk: true
+
+init:
+  std_embed: 0.02
+  std_qkv: 0.02
+  std_o: 0.01
+  init_type: normal
+
+train:
+  batch_size: 64
+  lr: 3.0e-4
+  muon_lr: 0.02
+  use_muon: true
+  betas: [0.9, 0.95]
+  weight_decay: 0.1
+  max_steps: 2500
+  warmup_steps: 100
+  lr_decay_frac: 0.1
+  grad_clip: 1.0
+  dtype: bfloat16
+  debug: false
+  eval_every: 100
+  checkpoint_every: 500
+
+loss:
+  type: next_token_ce
+  label_smoothing: 0.0

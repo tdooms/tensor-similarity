@@ -3,6 +3,7 @@
 .venv2/
 env/
 venv/
+!data/
 
 uv.lock
 *.egg-info/
@@ -18,7 +19,6 @@ __pycache__/
 .pytest_cache/
 
 # Training outputs / experiment artifacts
-runs/
 checkpoints/
 logs/
 *.ckpt
@@ -29,6 +29,7 @@ wandb/
 *.pth
 *.npy
 *.npz
+*.png
 
 # IDE settings
 .idea/
@@ -55,3 +56,14 @@ simple_stories_train/
 *.md
 !README.md
 !models/README.md
+
+# ignore everything in runs
+/runs/**
+
+# allow ONLY this run
+/experiments/induction_heads/runs/**
+!/experiments/induction_heads/runs/mini_induction_checkpoints_muon_2026-04-09_141409/
+!/experiments/induction_heads/runs/mini_induction_checkpoints_muon_2026-04-09_141409/**
+
+!/experiments/induction_heads/runs/mini_induction_checkpoints_adam_2026-04-13_212815/
+!/experiments/induction_heads/runs/mini_induction_checkpoints_adam_2026-04-13_212815/**

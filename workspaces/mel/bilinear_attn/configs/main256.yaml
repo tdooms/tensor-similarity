@@ -1,4 +1,4 @@
-name: main256_muon
+name: main256_maxrmsnorm
 seed: 42
 
 model:
@@ -19,6 +19,8 @@ init:
   std_embed: 0.02
   std_qkv: 0.02
   std_o: 0.01
+  init_type: normal
+
 
 train:
   batch_size: 64
@@ -27,13 +29,14 @@ train:
   use_muon: true
   betas: [0.9, 0.95]
   weight_decay: 0.1
-  max_steps: 100
-  warmup_steps: 10
+  max_steps: 10000
+  warmup_steps: 100
   lr_decay_frac: 0.1
   grad_clip: 1.0
   dtype: bfloat16
   debug: true
   eval_every: 100
+  checkpoint_every: 100
 
 loss:
   type: next_token_ce

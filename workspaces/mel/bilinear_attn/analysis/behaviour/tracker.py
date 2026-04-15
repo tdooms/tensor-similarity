@@ -587,7 +587,7 @@ class BehaviourTracker:
             A BehaviourTracker ready for ``fit()`` and checkpoint evaluation
         """
         from models import AttentionLM
-        from data import create_dataloaders
+        from data.cached import create_dataloaders
         
         run_dir = Path(run_dir)
         device = device or ("cuda" if torch.cuda.is_available() else "cpu")

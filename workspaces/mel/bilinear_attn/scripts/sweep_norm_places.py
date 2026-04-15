@@ -15,7 +15,7 @@ import copy
 import yaml
 import torch
 from models import AttentionLM
-from data import create_dataloaders
+from data.cached import create_dataloaders
 from train.trainer import Trainer
 
 

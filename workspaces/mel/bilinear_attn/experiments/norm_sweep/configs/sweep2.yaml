@@ -1,0 +1,27 @@
+program: experiments/norm_sweep/run.py
+method: grid
+metric:
+  name: val_loss
+  goal: minimize
+
+parameters:
+  norm-type:
+    values:
+      - tok190
+      - tok190_clamp
+      - seq_max_mean_batch
+      - seq_max_median_batch
+      - seq_power_mean
+      - seq_mean_batch
+      - seq_power_mean_batch
+  
+  dataset:
+    values:
+      - induction
+
+command:
+  - ${env}
+  - python
+  - ${program}
+  - --wandb
+  - ${args}
