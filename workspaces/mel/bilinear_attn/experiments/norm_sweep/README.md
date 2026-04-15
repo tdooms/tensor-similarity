@@ -128,6 +128,9 @@ From the `bilinear_attn` directory:
 # Basic usage (auto-selects induction.yaml)
 python -m experiments.norm_sweep.run --norm-type seq_max
 
+# Varied induction data (variable-gap dataset)
+python -m experiments.norm_sweep.run --norm-type seq_max --dataset varied_induction
+
 # Stories dataset (auto-selects stories.yaml)
 python -m experiments.norm_sweep.run --norm-type tok1 --dataset stories
 
@@ -156,7 +159,7 @@ wandb agent melwina-albuquerque-flame-university/bilinear-induction-heads/sweep_
 
 - `norms.py` — All 10 normalization `nn.Module` classes + registry
 - `model.py` — `NormSweepLM` model wrapper (dispatches `norm_type` through registry)
-- `run.py` — Unified train + eval + swap script with wandb support
+- `run.py` — Unified train + eval + swap script with wandb support. When `--dataset varied_induction` is used it logs repeat-ICL metrics (via `compute_repeat_icl_score`) and saves `metrics_plot.png` alongside `metrics.jsonl`.
 - `configs/induction.yaml` — Config for induction dataset (auto-selected with `--dataset induction`)
 - `configs/stories.yaml` — Config for stories dataset (auto-selected with `--dataset stories`)
 - `configs/sweep.yaml` — Wandb sweep config (grid search over all norms × datasets)

@@ -20,11 +20,11 @@ parameters:
   
   dataset:
     values:
-      - induction
+      - varied_induction
 
 command:
   - ${env}
-  - python
+  - .venv\Scripts\python.exe
   - ${program}
   - --wandb
   - ${args}

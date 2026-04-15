@@ -28,6 +28,7 @@ Usage (from the bilinear_attn directory):
 
 import argparse
 import json
+import math
 from datetime import datetime
 from pathlib import Path
 
@@ -73,6 +74,11 @@ BATCH_STAT_CLASSES = (
 )
 from train.optim import create_optimizer, create_scheduler, Optimizers
 from experiments.induction_heads.data import create_repeated_token_dataloaders
+from experiments.induction_heads.run import (
+    compute_repeated_accuracy as compute_varied_repeat_accuracy,
+    evaluate_induction as evaluate_varied_induction,
+)
+from experiments.tn_sim_induction.score_metrics import compute_repeat_icl_score
 from data.cached import create_dataloaders as create_stories_dataloaders
 
 
@@ -86,7 +92,7 @@ _DTYPE_MAP = {
 
 
 @torch.no_grad()
-def compute_repeated_accuracy(logits, input_ids, seq_len):
+def compute_half_repeated_accuracy(logits, input_ids, seq_len):
     """Accuracy on the repeated (second-half) positions (induction dataset)."""
     pred_logits = logits[:, seq_len - 1 : 2 * seq_len - 1, :]
     targets = input_ids[:, seq_len : 2 * seq_len]
@@ -95,7 +101,7 @@ def compute_repeated_accuracy(logits, input_ids, seq_len):
 
 
 @torch.no_grad()
-def evaluate_induction(model, dataloader, seq_len, device, max_batches=None):
+def evaluate_half_induction(model, dataloader, seq_len, device, max_batches=None):
     """Evaluate loss + repeated-half accuracy (induction dataset)."""
     model.eval()
     total_loss, total_acc, n = 0.0, 0.0, 0
@@ -111,9 +117,36 @@ def evaluate_induction(model, dataloader, seq_len, device, max_batches=None):
             pred_logits.view(B * T, V), targets.view(B * T)
         )
         total_loss += loss.item()
-        total_acc += compute_repeated_accuracy(logits, input_ids, seq_len)
+        total_acc += compute_half_repeated_accuracy(logits, input_ids, seq_len)
         n += 1
     return total_loss / max(1, n), total_acc / max(1, n)
+
+
+def _repeat_mask_cross_entropy(
+    logits: torch.Tensor,
+    input_ids: torch.Tensor,
+    repeat_masks: torch.Tensor,
+    label_smoothing: float = 0.0,
+):
+    """Cross-entropy over repeated positions indicated by repeat_masks."""
+    eval_mask = repeat_masks.clone()
+    eval_mask[:, 0] = False
+
+    shifted_logits = logits[:, :-1, :]
+    shifted_targets = input_ids[:, 1:]
+    shifted_mask = eval_mask[:, 1:]
+
+    if not shifted_mask.any():
+        return torch.tensor(0.0, device=logits.device, requires_grad=True)
+
+    flat_logits = shifted_logits[shifted_mask]
+    flat_targets = shifted_targets[shifted_mask]
+    return torch.nn.functional.cross_entropy(
+        flat_logits,
+        flat_targets,
+        label_smoothing=label_smoothing,
+        reduction="mean",
+    )
 
 
 @torch.no_grad()
@@ -135,6 +168,63 @@ def evaluate_stories(model, dataloader, device, max_batches=None):
         total_loss += loss.item()
         n += 1
     return total_loss / max(1, n)
+
+
+def _plot_val_and_icl(metrics_path: Path, output_path: Path):
+    if not metrics_path.exists():
+        return
+
+    steps = []
+    val_losses = []
+    icl_values = []
+
+    with open(metrics_path) as handle:
+        for line in handle:
+            line = line.strip()
+            if not line:
+                continue
+            record = json.loads(line)
+            if "val_loss" in record:
+                steps.append(record.get("step"))
+                val_losses.append(record["val_loss"])
+                icl_values.append(record.get("repeat_icl"))
+
+    if not steps:
+        return
+
+    has_icl = any(v is not None and math.isfinite(v) for v in icl_values)
+
+    try:
+        import matplotlib.pyplot as plt
+    except ImportError:
+        print("Matplotlib not available; skipping metric plot")
+        return
+
+    fig_rows = 2 if has_icl else 1
+    fig, axes = plt.subplots(fig_rows, 1, figsize=(8, 4 * fig_rows), sharex=True)
+    if fig_rows == 1:
+        axes = [axes]
+
+    axes[0].plot(steps, val_losses, marker="o", linewidth=1.5)
+    axes[0].set_ylabel("Val CE Loss")
+    axes[0].set_title("Validation loss during training")
+    axes[0].grid(True, alpha=0.3)
+
+    if has_icl:
+        icl_steps = [s for s, v in zip(steps, icl_values) if v is not None and math.isfinite(v)]
+        icl_series = [v for v in icl_values if v is not None and math.isfinite(v)]
+        axes[1].plot(icl_steps, icl_series, color="tab:red", marker="o", linestyle="--")
+        axes[1].set_ylabel("Repeat ICL")
+        axes[1].grid(True, alpha=0.3)
+        axes[1].set_xlabel("Training step")
+        axes[1].axhline(0.0, color="gray", linestyle=":", alpha=0.4)
+    else:
+        axes[0].set_xlabel("Training step")
+
+    fig.tight_layout()
+    fig.savefig(output_path, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Saved metric plot to {output_path}")
 
 
 def swap_norms(model: NormSweepLM, new_norm_type: str, norm_kwargs: dict | None = None) -> int:
@@ -181,8 +271,8 @@ def main():
                         help="Norm type to use (overrides config)")
     parser.add_argument("--device", type=str, default=None)
     parser.add_argument("--dataset", type=str, default="induction",
-                        choices=["induction", "stories"],
-                        help="Dataset: 'induction' (repeated-token) or 'stories' (SimpleStories)")
+                        choices=["induction", "varied_induction", "stories"],
+                        help="Dataset: 'induction' (half-repeat), 'varied_induction' (variable-gap), or 'stories' (SimpleStories)")
     parser.add_argument("--seq-len", type=int, default=None,
                         help="Half-sequence length for induction (default: n_ctx // 2)")
     parser.add_argument("--n-train", type=int, default=50_000)
@@ -196,7 +286,7 @@ def main():
     # ── config ────────────────────────────────────────────────────────────
     # Auto-select config based on dataset if not provided
     if args.config is None:
-        args.config = f"experiments/norm_sweep/configs/{args.dataset}.yaml"
+        args.config = f"experiments/norm_sweep/configs/induction.yaml"
     
     with open(args.config) as f:
         cfg = yaml.safe_load(f)
@@ -228,21 +318,38 @@ def main():
     norm_type = model_cfg.get("norm_type", "rmsnorm")
 
     # ── data ──────────────────────────────────────────────────────────────
+    dataset_mode = args.dataset
+    seq_len = None
+
     if args.dataset == "induction":
+        dataset_mode = "half_induction"
         seq_len = args.seq_len or model_cfg["n_ctx"] // 2
         full_seq_len = 2 * seq_len
         model_cfg["n_ctx"] = full_seq_len
         print(f"Dataset: induction (half={seq_len}, full={full_seq_len})")
         train_dl, val_dl = create_repeated_token_dataloaders(
             vocab_size=model_cfg["vocab_size"],
-            seq_len=seq_len,
+            n_ctx=full_seq_len,
+            batch_size=train_cfg.get("batch_size", 64),
+            n_train=args.n_train,
+            n_val=args.n_val,
+            seed=cfg.get("seed", 42),
+        )
+    elif args.dataset == "varied_induction":
+        dataset_mode = "varied_induction"
+        n_ctx = args.seq_len * 2 if args.seq_len is not None else model_cfg["n_ctx"]
+        model_cfg["n_ctx"] = n_ctx
+        print(f"Dataset: varied induction (n_ctx={n_ctx})")
+        train_dl, val_dl = create_repeated_token_dataloaders(
+            vocab_size=model_cfg["vocab_size"],
+            n_ctx=n_ctx,
             batch_size=train_cfg.get("batch_size", 64),
             n_train=args.n_train,
             n_val=args.n_val,
             seed=cfg.get("seed", 42),
         )
     else:
-        seq_len = None
+        dataset_mode = "stories"
         print(f"Dataset: stories (n_ctx={model_cfg['n_ctx']})")
         train_dl, val_dl = create_stories_dataloaders(
             n_ctx=model_cfg["n_ctx"],
@@ -331,10 +438,13 @@ def main():
             batch = next(data_iter)
 
         input_ids = batch["input_ids"].to(device)
+        repeat_masks = batch.get("repeat_mask")
+        if repeat_masks is not None:
+            repeat_masks = repeat_masks.to(device)
         optimizer.zero_grad()
 
         # ── forward + loss ────────────────────────────────────────────────
-        if args.dataset == "induction":
+        if dataset_mode == "half_induction":
             if use_amp:
                 with torch.amp.autocast("cuda", dtype=pt_dtype):
                     logits = model(input_ids)
@@ -352,6 +462,24 @@ def main():
                 B, T, V = pred_logits.shape
                 loss = torch.nn.functional.cross_entropy(
                     pred_logits.view(B * T, V), targets.view(B * T),
+                    label_smoothing=label_smoothing,
+                )
+        elif dataset_mode == "varied_induction":
+            if use_amp:
+                with torch.amp.autocast("cuda", dtype=pt_dtype):
+                    logits = model(input_ids)
+                    loss = _repeat_mask_cross_entropy(
+                        logits,
+                        input_ids,
+                        repeat_masks,
+                        label_smoothing=label_smoothing,
+                    )
+            else:
+                logits = model(input_ids)
+                loss = _repeat_mask_cross_entropy(
+                    logits,
+                    input_ids,
+                    repeat_masks,
                     label_smoothing=label_smoothing,
                 )
         else:  # stories
@@ -389,8 +517,10 @@ def main():
 
         # ── logging ───────────────────────────────────────────────────────
         train_acc = None
-        if args.dataset == "induction":
-            train_acc = compute_repeated_accuracy(logits, input_ids, seq_len)
+        if dataset_mode == "half_induction":
+            train_acc = compute_half_repeated_accuracy(logits, input_ids, seq_len)
+        elif dataset_mode == "varied_induction" and repeat_masks is not None:
+            train_acc = compute_varied_repeat_accuracy(logits, input_ids, repeat_masks)
 
         if step % 10 == 0:
             row = {
@@ -413,13 +543,23 @@ def main():
 
         # ── eval ──────────────────────────────────────────────────────────
         if step % eval_every == 0:
-            if args.dataset == "induction":
-                val_loss, val_acc = evaluate_induction(model, val_dl, seq_len, device, max_batches=20)
-                row = {"step": step, "val_loss": val_loss, "val_acc": val_acc}
+            row = {"step": step}
+            if dataset_mode == "half_induction":
+                val_loss, val_acc = evaluate_half_induction(model, val_dl, seq_len, device, max_batches=20)
+                row.update({"val_loss": val_loss, "val_acc": val_acc})
                 print(f"\n[step {step}]  val_loss={val_loss:.4f}  val_acc={val_acc:.3f}")
+            elif dataset_mode == "varied_induction":
+                val_loss, val_acc = evaluate_varied_induction(model, val_dl, device, max_batches=20)
+                row.update({"val_loss": val_loss, "val_acc": val_acc})
+                icl_metrics = compute_repeat_icl_score(model, val_dl, device=device, max_batches=20)
+                row.update(icl_metrics)
+                icl_msg = "  ".join(
+                    f"{k}={v:.4f}" for k, v in icl_metrics.items() if isinstance(v, (int, float)) and math.isfinite(v)
+                )
+                print(f"\n[step {step}]  val_loss={val_loss:.4f}  val_acc={val_acc:.3f}  {icl_msg}")
             else:
                 val_loss = evaluate_stories(model, val_dl, device, max_batches=20)
-                row = {"step": step, "val_loss": val_loss}
+                row["val_loss"] = val_loss
                 print(f"\n[step {step}]  val_loss={val_loss:.4f}")
             with open(metrics_file, "a") as f:
                 f.write(json.dumps(row) + "\n")
@@ -439,9 +579,13 @@ def main():
     # ══════════════════════════════════════════════════════════════════════
     print(f"\n{'='*60}")
     print(f"Final eval with {norm_type}")
-    if args.dataset == "induction":
-        orig_loss, orig_acc = evaluate_induction(model, val_dl, seq_len, device)
+    if dataset_mode == "half_induction":
+        orig_loss, orig_acc = evaluate_half_induction(model, val_dl, seq_len, device)
         print(f"  val_loss={orig_loss:.4f}  val_acc={orig_acc:.3f}")
+    elif dataset_mode == "varied_induction":
+        orig_loss, orig_acc = evaluate_varied_induction(model, val_dl, device)
+        icl_metrics = compute_repeat_icl_score(model, val_dl, device=device)
+        print(f"  val_loss={orig_loss:.4f}  val_acc={orig_acc:.3f}  repeat_icl={icl_metrics['repeat_icl']:.4f}")
     else:
         orig_loss = evaluate_stories(model, val_dl, device)
         orig_acc = None
@@ -464,8 +608,11 @@ def main():
         for m in model.modules():
             if isinstance(m, target_classes) and hasattr(m, "use_running_stats"):
                 m.use_running_stats = False
-        if args.dataset == "induction":
-            batch_loss, batch_acc = evaluate_induction(model, val_dl, seq_len, device)
+        if dataset_mode == "half_induction":
+            batch_loss, batch_acc = evaluate_half_induction(model, val_dl, seq_len, device)
+            print(f"  Eval-as-train (batch stats):     val_loss={batch_loss:.4f}  val_acc={batch_acc:.3f}")
+        elif dataset_mode == "varied_induction":
+            batch_loss, batch_acc = evaluate_varied_induction(model, val_dl, device)
             print(f"  Eval-as-train (batch stats):     val_loss={batch_loss:.4f}  val_acc={batch_acc:.3f}")
         else:
             batch_loss = evaluate_stories(model, val_dl, device)
@@ -476,8 +623,11 @@ def main():
         for m in model.modules():
             if isinstance(m, target_classes) and hasattr(m, "use_running_stats"):
                 m.use_running_stats = True
-        if args.dataset == "induction":
-            run_loss, run_acc = evaluate_induction(model, val_dl, seq_len, device)
+        if dataset_mode == "half_induction":
+            run_loss, run_acc = evaluate_half_induction(model, val_dl, seq_len, device)
+            print(f"  Eval-as-inference (running stats): val_loss={run_loss:.4f}  val_acc={run_acc:.3f}")
+        elif dataset_mode == "varied_induction":
+            run_loss, run_acc = evaluate_varied_induction(model, val_dl, device)
             print(f"  Eval-as-inference (running stats): val_loss={run_loss:.4f}  val_acc={run_acc:.3f}")
         else:
             run_loss = evaluate_stories(model, val_dl, device)
@@ -486,6 +636,18 @@ def main():
 
         delta = run_loss - batch_loss
         print(f"  Δ loss (running - batch): {delta:+.4f}")
+
+        if args.swap:
+            if dataset_mode == "half_induction":
+                swap_loss, swap_acc = evaluate_half_induction(model, val_dl, seq_len, device)
+                print(f"  Swap eval ({args.swap}): val_loss={swap_loss:.4f}  val_acc={swap_acc:.3f}")
+            elif dataset_mode == "varied_induction":
+                swap_loss, swap_acc = evaluate_varied_induction(model, val_dl, device)
+                print(f"  Swap eval ({args.swap}): val_loss={swap_loss:.4f}  val_acc={swap_acc:.3f}")
+            else:
+                swap_loss = evaluate_stories(model, val_dl, device)
+                swap_acc = None
+                print(f"  Swap eval ({args.swap}): val_loss={swap_loss:.4f}")
 
         summary_dual = {
             f"{norm_type}_batch_val_loss": batch_loss,
@@ -512,8 +674,11 @@ def main():
         model = model.to(device)
         print(f"  Swapped {n_swapped} norm modules")
 
-        if args.dataset == "induction":
-            swap_loss, swap_acc = evaluate_induction(model, val_dl, seq_len, device)
+        if dataset_mode == "half_induction":
+            swap_loss, swap_acc = evaluate_half_induction(model, val_dl, seq_len, device)
+            print(f"  {swap_type:25s} val_loss={swap_loss:.4f}  val_acc={swap_acc:.3f}")
+        elif dataset_mode == "varied_induction":
+            swap_loss, swap_acc = evaluate_varied_induction(model, val_dl, device)
             print(f"  {swap_type:25s} val_loss={swap_loss:.4f}  val_acc={swap_acc:.3f}")
         else:
             swap_loss = evaluate_stories(model, val_dl, device)
@@ -553,6 +718,10 @@ def main():
     # ── cleanup ───────────────────────────────────────────────────────────
     if wandb_run is not None:
         wandb_run.finish()
+
+    if dataset_mode == "varied_induction":
+        plot_path = run_dir / "metrics_plot.png"
+        _plot_val_and_icl(metrics_file, plot_path)
 
     print(f"\nRun saved to {run_dir}")
 
