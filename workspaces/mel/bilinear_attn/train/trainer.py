@@ -1,4 +1,6 @@
 import json
+import math
+import os
 import yaml
 import torch
 from datetime import datetime
@@ -20,6 +22,30 @@ _DTYPE_MAP = {
     "float16": (torch.float16, True),
     "bfloat16": (torch.bfloat16, False),
 }
+
+
+def _build_log_linear_checkpoint_steps(max_steps: int, checkpoint_count: int, alpha: float) -> list[int]:
+    if max_steps < 0:
+        raise ValueError(f"max_steps must be >= 0, got {max_steps}")
+    if checkpoint_count <= 0:
+        raise ValueError(f"checkpoint_count must be > 0, got {checkpoint_count}")
+    if not (0.0 <= alpha <= 1.0):
+        raise ValueError(f"checkpoint_log_linear_alpha must be in [0, 1], got {alpha}")
+
+    steps: list[int] = []
+    denom = max(1, checkpoint_count - 1)
+    for i in range(checkpoint_count):
+        u = i / denom
+        log_u = math.log1p((math.e - 1.0) * u)
+        mix_u = alpha * log_u + (1.0 - alpha) * u
+        steps.append(int(round(mix_u * max_steps)))
+
+    steps = sorted(set(steps))
+    if 0 not in steps:
+        steps.insert(0, 0)
+    if max_steps not in steps:
+        steps.append(max_steps)
+    return steps
 
 
 class Trainer:
@@ -45,8 +71,8 @@ class Trainer:
         train_cfg = self.cfg.get("train", {})
         loss_cfg = self.cfg.get("loss", {})
         
-        self.max_steps = train_cfg.get("max_steps", 1000)
-        self.warmup_steps = train_cfg.get("warmup_steps", 100)
+        self.max_steps = int(train_cfg.get("max_steps", 1000))
+        self.warmup_steps = int(train_cfg.get("warmup_steps", 100))
         self.grad_clip = train_cfg.get("grad_clip", 1.0)
         self.loss_type = loss_cfg.get("type", "next_token_ce")
         self.label_smoothing = loss_cfg.get("label_smoothing", 0.0)
@@ -100,6 +126,40 @@ class Trainer:
         
         self.step = 0
         self.metrics_file = self.run_dir / "metrics.jsonl"
+
+        self.checkpoint_mode = str(train_cfg.get("checkpoint_schedule", "interval"))
+        self.checkpoint_count = int(train_cfg.get("checkpoint_count", 1000))
+        self.checkpoint_log_linear_alpha = float(train_cfg.get("checkpoint_log_linear_alpha", 0.5))
+        self.checkpoint_steps: set[int] = set()
+        if self.checkpoint_mode == "log_linear":
+            self.checkpoint_steps = set(
+                _build_log_linear_checkpoint_steps(
+                    max_steps=self.max_steps,
+                    checkpoint_count=self.checkpoint_count,
+                    alpha=self.checkpoint_log_linear_alpha,
+                )
+            )
+
+        self.hf_upload_checkpoints = bool(train_cfg.get("hf_upload_checkpoints", False))
+        self.hf_upload_every_n_checkpoints = int(train_cfg.get("hf_upload_every_n_checkpoints", 100))
+        self.hf_checkpoint_repo_id = train_cfg.get("hf_checkpoint_repo_id") or os.getenv("HF_CHECKPOINT_REPO_ID")
+        self.hf_checkpoint_repo_type = str(train_cfg.get("hf_checkpoint_repo_type", "dataset"))
+        self.hf_checkpoint_repo_private = bool(train_cfg.get("hf_checkpoint_repo_private", True))
+        self._hf_api = None
+        self._saved_checkpoint_count = 0
+        if self.hf_upload_checkpoints:
+            if self.hf_upload_every_n_checkpoints <= 0:
+                raise ValueError("hf_upload_every_n_checkpoints must be > 0 when hf_upload_checkpoints=True")
+            if not self.hf_checkpoint_repo_id:
+                raise ValueError("hf_checkpoint_repo_id (or HF_CHECKPOINT_REPO_ID) is required when hf_upload_checkpoints=True")
+            from huggingface_hub import HfApi
+            self._hf_api = HfApi()
+            self._hf_api.create_repo(
+                repo_id=self.hf_checkpoint_repo_id,
+                repo_type=self.hf_checkpoint_repo_type,
+                private=self.hf_checkpoint_repo_private,
+                exist_ok=True,
+            )
         
         # ---- debug logging ----
         self.debug = train_cfg.get("debug", False)
@@ -159,11 +219,36 @@ class Trainer:
             "optimizer_state_dict": self.optimizer.state_dict(),
             "scheduler_state_dict": self.scheduler.state_dict(),
         }, path)
+        self._saved_checkpoint_count += 1
+        if (
+            self.hf_upload_checkpoints
+            and self._saved_checkpoint_count % self.hf_upload_every_n_checkpoints == 0
+        ):
+            self._upload_checkpoint_to_hf(path)
+
+    def _upload_checkpoint_to_hf(self, path: Path) -> None:
+        try:
+            self._hf_api.upload_file(
+                path_or_fileobj=str(path),
+                path_in_repo=f"checkpoints/{path.name}",
+                repo_id=self.hf_checkpoint_repo_id,
+                repo_type=self.hf_checkpoint_repo_type,
+                commit_message=f"Upload {path.stem} (checkpoint #{self._saved_checkpoint_count}, step {self.step})",
+            )
+            print(
+                f"Uploaded checkpoint #{self._saved_checkpoint_count} "
+                f"to hf://{self.hf_checkpoint_repo_type}/{self.hf_checkpoint_repo_id}/checkpoints/{path.name}"
+            )
+        except Exception as e:
+            print(f"Warning: failed to upload checkpoint to Hugging Face: {e}")
     
     def train(self, eval_every: int = 100, save_every: int = 1000):
         """Run training loop."""
         self.model.train()
         data_iter = iter(self.train_dataloader)
+
+        if self.checkpoint_mode == "log_linear" and 0 in self.checkpoint_steps:
+            self.save_checkpoint("step_0")
         
         pbar = tqdm(total=self.max_steps, desc="Training")
         
@@ -231,7 +316,10 @@ class Trainer:
                     self.log_metrics({"val_loss": val_loss})
                     self.model.train()
                 
-                if self.step % save_every == 0:
+                if self.checkpoint_mode == "log_linear":
+                    if self.step in self.checkpoint_steps:
+                        self.save_checkpoint()
+                elif self.step % save_every == 0:
                     self.save_checkpoint()
                 
                 # Log behaviour metrics if tracker is enabled
@@ -255,7 +343,8 @@ class Trainer:
                 raise
         
         pbar.close()
-        self.save_checkpoint("final")
+        if self.checkpoint_mode != "log_linear":
+            self.save_checkpoint("final")
         self._generate_plots()
     
     def _compute_debug_metrics(self, preclip_norm: float = 0.0) -> dict:

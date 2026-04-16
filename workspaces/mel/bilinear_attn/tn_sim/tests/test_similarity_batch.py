@@ -5,7 +5,7 @@ import pytest
 
 from models import AttentionLM
 from tn_sim import cosine_similarity, cosine_similarity_batch, compute_tn_similarity_batch
-from tn_sim.test_similarity import make_tn_compatible_config, DTYPE
+from tn_sim.tests.test_similarity import make_tn_compatible_config, DTYPE
 from models.components import AttentionLMComponent
 from src.components.similarity import similarity as src_similarity
 
