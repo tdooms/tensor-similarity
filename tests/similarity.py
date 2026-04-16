@@ -220,3 +220,17 @@ class TestTransformer:
         m = Transformer(4, 8, 2, 2, 16, 3, n_layer=2, mask='none', scale=0.5).double()
         s = similarity(m, m)
         assert_self_cosine(s, tol=1e-4)
+
+
+# --- Scale (regression) ---
+
+@pytest.mark.slow
+class TestScale:
+    def test_two_layer_d128_ctx4_big_input(self):
+        # Melwina's case. Without @torch.no_grad on _run, the autograd graph
+        # retains every intermediate across all 266 dedup'd attn act×act
+        # configs and OOMs at >10 GB peak; with it, ~15 GB cold and stable.
+        torch.manual_seed(42)
+        m = Transformer(4096, 128, 8, 4, 128, 4096, n_layer=2,
+                        mask='none', scale=0.5).double()
+        assert_self_cosine(similarity(m, m), tol=1e-4)
