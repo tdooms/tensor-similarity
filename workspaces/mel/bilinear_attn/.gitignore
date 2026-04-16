@@ -31,6 +31,9 @@ wandb/
 *.npz
 *.png
 
+# Tokenizer outputs (local artifacts)
+/tokenizers/
+
 # IDE settings
 .idea/
 .vscode/
@@ -57,13 +60,4 @@ simple_stories_train/
 !README.md
 !models/README.md
 
-# ignore everything in runs
-/runs/**
-
-# allow ONLY this run
-/experiments/induction_heads/runs/**
-!/experiments/induction_heads/runs/mini_induction_checkpoints_muon_2026-04-09_141409/
-!/experiments/induction_heads/runs/mini_induction_checkpoints_muon_2026-04-09_141409/**
-
-!/experiments/induction_heads/runs/mini_induction_checkpoints_adam_2026-04-13_212815/
-!/experiments/induction_heads/runs/mini_induction_checkpoints_adam_2026-04-13_212815/**
+**/runs/**

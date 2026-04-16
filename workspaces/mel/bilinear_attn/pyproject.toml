@@ -10,7 +10,7 @@ dependencies = [
     "huggingface-hub>=0.23",
     "matplotlib>=3.8",
     "numpy>=1.26",
-    "pytest>=8.0",
+    "psutil>=5.9",
     "pyyaml>=6.0",
     "tokenizers>=0.19",
     "tqdm>=4.66",
@@ -19,6 +19,11 @@ dependencies = [
     "wandb>=0.24.2",
     "quimb>=1.13.0",
     "torch>=2.11.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
 ]
 
 [build-system]
