@@ -57,6 +57,52 @@ class CausalMaxRMSNorm(nn.Module):
         return x * scale
 
 
+class Tok0Batch(nn.Module):
+    """Normalize by RMS of token t=0 averaged across the batch.
+
+    Supports dual eval modes:
+        - use_running_stats=False: use batch stats at eval (eval-as-train)
+        - use_running_stats=True: use running stats at eval (eval-as-inference)
+    """
+
+    def __init__(
+        self,
+        normalized_shape: int,
+        eps: float = 1e-6,
+        momentum: float = 0.1,
+        use_running_stats: bool = True,
+    ) -> None:
+        super().__init__()
+        self.normalized_shape = normalized_shape
+        self.eps = eps
+        self.momentum = momentum
+        self.use_running_stats = use_running_stats
+
+        self.register_buffer("running_mean_energy", torch.ones(1))
+        self.register_buffer("num_batches_tracked", torch.tensor(0, dtype=torch.long))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        assert x.shape[-1] == self.normalized_shape, (
+            f"expected last dim {self.normalized_shape}, got {x.shape[-1]}"
+        )
+        energy_t0 = x[:, 0, :].pow(2).mean(dim=-1)  # (B,)
+        m_batch = energy_t0.mean()  # scalar
+
+        if self.training:
+            scale = (m_batch + self.eps).rsqrt()
+            self.num_batches_tracked += 1
+            self.running_mean_energy.mul_(1 - self.momentum).add_(
+                m_batch.detach() * self.momentum
+            )
+        else:
+            if self.use_running_stats and self.num_batches_tracked > 0:
+                scale = (self.running_mean_energy + self.eps).rsqrt()
+            else:
+                scale = (m_batch + self.eps).rsqrt()
+
+        return x * scale
+
+
 ATTN_REGISTRY = {
     "bilinear": BilinearAttention,
     "quadratic": QuadraticAttention,
@@ -64,7 +110,14 @@ ATTN_REGISTRY = {
 }
 
 
-NORM_TYPES = ("none", "rmsnorm", "layernorm", "maxrmsnorm", "causal_maxrmsnorm")
+NORM_TYPES = (
+    "none",
+    "rmsnorm",
+    "layernorm",
+    "maxrmsnorm",
+    "causal_maxrmsnorm",
+    "tok0_batch",
+)
 VALID_NORM_PLACES = ("post_embed", "pre_layer", "pre_unembed")
 
 
@@ -83,6 +136,7 @@ class AttentionLM(nn.Module):
         'rmsnorm'    – RMSNorm (default)
         'layernorm'  – LayerNorm
         'maxrmsnorm' – scale by the largest per-token RMS in the sequence
+        'tok0_batch' – scale by mean token-0 energy over the batch
     
     norm_places controls where normalisation is applied (list):
         []                          – no normalization anywhere
@@ -111,6 +165,7 @@ class AttentionLM(nn.Module):
         norm_places: list[str] | None = None,
         init_type: str = "normal",
         init_gain: float = 1.0,
+        norm_kwargs: dict | None = None,
     ) -> None:
         super().__init__()
         if norm_places is None:
@@ -126,6 +181,7 @@ class AttentionLM(nn.Module):
         self.attn_type = attn_type
         self.norm_type = norm_type
         self.norm_places = norm_places
+        self.norm_kwargs = norm_kwargs or {}
         self.init_type = init_type
         
         attn_cls = ATTN_REGISTRY[attn_type]
@@ -139,6 +195,8 @@ class AttentionLM(nn.Module):
                 return MaxRMSNorm(d_model)
             elif norm_type == "causal_maxrmsnorm":
                 return CausalMaxRMSNorm(d_model)
+            elif norm_type == "tok0_batch":
+                return Tok0Batch(d_model, **self.norm_kwargs)
             else:
                 return nn.Identity()
         
@@ -324,6 +382,7 @@ class AttentionLM(nn.Module):
             attn_type=model_cfg.get("attn_type", "quadratic"),
             norm_type=model_cfg.get("norm_type", "rmsnorm"),
             norm_places=model_cfg.get("norm_places", []),
+            norm_kwargs=model_cfg.get("norm_kwargs", {}),
             init_type=init_cfg.get("init_type", "normal"),
             init_gain=init_cfg.get("init_gain", 1.0),
         )
