@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Training entrypoint for Quadratic Attention LM."""
 import argparse
+import os
 import random
+from pathlib import Path
 
 import numpy as np
 import yaml
@@ -10,6 +12,10 @@ from models import AttentionLM
 from data.cached import create_dataloaders as create_cached_simplestories_dataloaders
 from data.pile import create_pile_dataloaders
 from train.trainer import Trainer
+from train.hf_utils import publish_run_to_hf
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 def main():
@@ -23,6 +29,11 @@ def main():
     parser.add_argument("--no-ablation", action="store_true", help="Disable position-ablated loss tracking")
     parser.add_argument("--behaviour-cache-dir", type=str, default="cache/behaviour", help="Directory for cached bigram/ngram distributions")
     parser.add_argument("--wandb", action="store_true", help="Enable Weights & Biases logging")
+    parser.add_argument("--push-to-hub", action="store_true", help="Push the completed run to the Hugging Face Hub (overrides config)")
+    parser.add_argument("--hf-repo-id", type=str, help="Override the target Hugging Face repo id for uploads")
+    parser.add_argument("--hf-repo-type", type=str, choices=["model", "dataset"], help="Override the Hugging Face repo type")
+    parser.add_argument("--hf-branch", type=str, help="Branch to push to (defaults to main)")
+    parser.add_argument("--hf-commit-message", type=str, help="Custom commit message for the upload")
     args = parser.parse_args()
     
     with open(args.config) as f:
@@ -121,8 +132,15 @@ def main():
     wandb_run = None
     if args.wandb:
         import wandb
+
+        wandb_entity = os.environ.get("WANDB_ENTITY")
+        if not wandb_entity:
+            raise RuntimeError(
+                "WANDB_ENTITY environment variable must be set when using --wandb"
+            )
+
         wandb_run = wandb.init(
-            entity="melwina-albuquerque-flame-university",
+            entity=wandb_entity,
             project="bilinear-attn",
             config=cfg,
         )
@@ -142,6 +160,15 @@ def main():
         eval_every=train_cfg.get("eval_every", 500),
         save_every=train_cfg.get("save_every", train_cfg.get("checkpoint_every", 1000)),
     )
+
+    hub_cfg = _resolve_hf_publish_config(cfg, args)
+    if hub_cfg is not None:
+        publish_run_to_hf(
+            run_dir=trainer.run_dir,
+            cfg=cfg,
+            project_root=PROJECT_ROOT,
+            **hub_cfg,
+        )
     
     # Save behaviour metrics and generate plots if tracking was enabled
     if behaviour_tracker is not None:
@@ -159,6 +186,58 @@ def main():
         wandb_run.finish()
     
     print(f"Training complete. Run dir: {trainer.run_dir}")
+
+
+def _resolve_hf_publish_config(cfg: dict, args: argparse.Namespace) -> dict | None:
+    train_cfg = cfg.get("train", {})
+    data_cfg = cfg.get("data", {})
+    push_flag = bool(train_cfg.get("hf_push_final_model", False) or getattr(args, "push_to_hub", False))
+    if not push_flag:
+        return None
+
+    repo_id = (
+        getattr(args, "hf_repo_id", None)
+        or train_cfg.get("hf_model_repo_id")
+        or train_cfg.get("hf_checkpoint_repo_id")
+        or os.getenv("HF_MODEL_REPO_ID")
+        or os.getenv("HF_CHECKPOINT_REPO_ID")
+    )
+    if not repo_id:
+        raise ValueError("push-to-hub is enabled but no Hugging Face repo id was provided")
+
+    repo_type = (
+        getattr(args, "hf_repo_type", None)
+        or train_cfg.get("hf_model_repo_type")
+        or train_cfg.get("hf_checkpoint_repo_type")
+        or "model"
+    )
+    private = train_cfg.get("hf_model_repo_private")
+    if private is None:
+        private = train_cfg.get("hf_checkpoint_repo_private", True)
+
+    tags = train_cfg.get("hf_tags") or cfg.get("hf_tags")
+    summary = cfg.get("summary") or train_cfg.get("hf_model_summary")
+    include_model_code = bool(train_cfg.get("hf_include_model_code", True))
+
+    branch = getattr(args, "hf_branch", None) or train_cfg.get("hf_model_repo_branch")
+    commit_message = (
+        getattr(args, "hf_commit_message", None)
+        or train_cfg.get("hf_commit_message")
+        or f"Upload run {cfg.get('name', 'run')}"
+    )
+
+    return {
+        "repo_id": repo_id,
+        "repo_type": repo_type,
+        "private": bool(private),
+        "branch": branch,
+        "tags": tags,
+        "summary": summary,
+        "include_model_code": include_model_code,
+        "tokenizer_repo": data_cfg.get("tokenizer_hf_repo_id"),
+        "dataset_repo": data_cfg.get("repo"),
+        "commit_message": commit_message,
+    }
 
 
 if __name__ == "__main__":

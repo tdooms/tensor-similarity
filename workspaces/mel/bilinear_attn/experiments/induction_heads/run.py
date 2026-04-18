@@ -8,6 +8,7 @@ Usage (from the bilinear_attn directory):
 import argparse
 import json
 import math
+import os
 from datetime import datetime
 from pathlib import Path
 
@@ -216,8 +217,15 @@ def main():
     wandb_run = None
     if args.wandb:
         import wandb
+
+        wandb_entity = os.environ.get("WANDB_ENTITY")
+        if not wandb_entity:
+            raise RuntimeError(
+                "WANDB_ENTITY environment variable must be set when using --wandb"
+            )
+
         wandb_run = wandb.init(
-            entity="melwina-albuquerque-flame-university",
+            entity=wandb_entity,
             project="bilinear-induction-heads",
             name=run_dir.name,
             config={**cfg, "n_params": n_params},

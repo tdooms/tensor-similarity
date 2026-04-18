@@ -8,10 +8,12 @@ This script runs all combinations of:
 Total: 24 runs with wandb logging
 """
 
-import subprocess
-import yaml
-from pathlib import Path
 import itertools
+import subprocess
+import sys
+from pathlib import Path
+
+import yaml
 
 # Grid parameters
 n_ctx_values = [8, 16]
@@ -62,17 +64,19 @@ for n_ctx, d_model, n_layers in itertools.product(n_ctx_values, d_model_values, 
     with open(temp_config_path, 'w') as f:
         yaml.dump(config, f)
     
-    # Run training with wandb
-    # Use PowerShell to activate venv and run command
     cmd = [
-        "powershell", "-Command",
-        f".venv\\Scripts\\Activate.ps1; python -m experiments.induction_heads.run --config {temp_config_path} --wandb"
+        sys.executable,
+        "-m",
+        "experiments.induction_heads.run",
+        "--config",
+        str(temp_config_path),
+        "--wandb",
     ]
-    
+
     print(f"  Running with wandb...")
-    
+
     try:
-        result = subprocess.run(cmd, check=True, capture_output=False, shell=False)
+        result = subprocess.run(cmd, check=True, capture_output=False)
         print(f"  ✓ Completed successfully")
     except subprocess.CalledProcessError as e:
         print(f"  ✗ Failed with exit code {e.returncode}")

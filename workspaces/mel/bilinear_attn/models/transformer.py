@@ -103,6 +103,54 @@ class Tok0Batch(nn.Module):
         return x * scale
 
 
+class Tok0(nn.Module):
+    """Normalize by RMS of token t=0 for each sequence independently."""
+
+    def __init__(self, normalized_shape: int, eps: float = 1e-6) -> None:
+        super().__init__()
+        self.normalized_shape = normalized_shape
+        self.eps = eps
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        assert x.shape[-1] == self.normalized_shape, (
+            f"expected last dim {self.normalized_shape}, got {x.shape[-1]}"
+        )
+        energy_t0 = x[:, 0, :].pow(2).mean(dim=-1, keepdim=True)  # (B, 1)
+        scale = (energy_t0.unsqueeze(1) + self.eps).rsqrt()  # (B, 1, 1)
+        return x * scale
+
+
+class BatchNorm(nn.Module):
+    """BatchNorm over model dimension using flattened (B*T, D) samples."""
+
+    def __init__(
+        self,
+        normalized_shape: int,
+        eps: float = 1e-5,
+        momentum: float = 0.1,
+        affine: bool = True,
+        track_running_stats: bool = True,
+    ) -> None:
+        super().__init__()
+        self.normalized_shape = normalized_shape
+        self.bn = nn.BatchNorm1d(
+            normalized_shape,
+            eps=eps,
+            momentum=momentum,
+            affine=affine,
+            track_running_stats=track_running_stats,
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        assert x.shape[-1] == self.normalized_shape, (
+            f"expected last dim {self.normalized_shape}, got {x.shape[-1]}"
+        )
+        b, t, d = x.shape
+        x_flat = x.reshape(b * t, d)
+        x_norm = self.bn(x_flat)
+        return x_norm.reshape(b, t, d)
+
+
 ATTN_REGISTRY = {
     "bilinear": BilinearAttention,
     "quadratic": QuadraticAttention,
@@ -116,7 +164,9 @@ NORM_TYPES = (
     "layernorm",
     "maxrmsnorm",
     "causal_maxrmsnorm",
+    "tok0",
     "tok0_batch",
+    "batchnorm",
 )
 VALID_NORM_PLACES = ("post_embed", "pre_layer", "pre_unembed")
 
@@ -136,7 +186,9 @@ class AttentionLM(nn.Module):
         'rmsnorm'    – RMSNorm (default)
         'layernorm'  – LayerNorm
         'maxrmsnorm' – scale by the largest per-token RMS in the sequence
+        'tok0'       – scale by token-0 energy per sample
         'tok0_batch' – scale by mean token-0 energy over the batch
+        'batchnorm'  – BatchNorm1d over flattened (B*T, D)
     
     norm_places controls where normalisation is applied (list):
         []                          – no normalization anywhere
@@ -195,8 +247,12 @@ class AttentionLM(nn.Module):
                 return MaxRMSNorm(d_model)
             elif norm_type == "causal_maxrmsnorm":
                 return CausalMaxRMSNorm(d_model)
+            elif norm_type == "tok0":
+                return Tok0(d_model, **self.norm_kwargs)
             elif norm_type == "tok0_batch":
                 return Tok0Batch(d_model, **self.norm_kwargs)
+            elif norm_type == "batchnorm":
+                return BatchNorm(d_model, **self.norm_kwargs)
             else:
                 return nn.Identity()
         

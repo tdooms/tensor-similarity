@@ -12,6 +12,7 @@ Usage:
 """
 import argparse
 import copy
+import os
 import yaml
 import torch
 from models import AttentionLM
@@ -44,8 +45,14 @@ def run_single(cfg: dict, norm_places: list[str], device: str):
     combo = _combo_name(norm_places)
     cfg["name"] = f"norm_{combo}"
 
+    wandb_entity = os.environ.get("WANDB_ENTITY")
+    if not wandb_entity:
+        raise RuntimeError(
+            "WANDB_ENTITY environment variable must be set when running wandb sweeps"
+        )
+
     wandb_run = wandb.init(
-        entity="melwina-albuquerque-flame-university",
+        entity=wandb_entity,
         project="bilinear-attn",
         group="sweep_norm_places",
         name=f"norm_{combo}",

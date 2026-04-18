@@ -15,6 +15,7 @@ from .losses import compute_loss
 from .optim import create_optimizer, create_scheduler, Optimizers, _is_muon_param
 from .eval import evaluate
 from .plotting import plot_loss, plot_debug, plot_weight_norms, plot_activation_norms
+from .hf_utils import CheckpointUploadConfig, HuggingFaceCheckpointUploader
 
 # Supported dtype strings → (torch dtype, whether to use GradScaler)
 _DTYPE_MAP = {
@@ -71,8 +72,8 @@ class Trainer:
         train_cfg = self.cfg.get("train", {})
         loss_cfg = self.cfg.get("loss", {})
         
-        self.max_steps = int(train_cfg.get("max_steps", 1000))
-        self.warmup_steps = int(train_cfg.get("warmup_steps", 100))
+        self.max_steps = int(float(train_cfg.get("max_steps", 1000)))
+        self.warmup_steps = int(float(train_cfg.get("warmup_steps", 100)))
         self.grad_clip = train_cfg.get("grad_clip", 1.0)
         self.loss_type = loss_cfg.get("type", "next_token_ce")
         self.label_smoothing = loss_cfg.get("label_smoothing", 0.0)
@@ -117,7 +118,8 @@ class Trainer:
             run_dir = f"runs/{timestamp}_{name}"
         self.run_dir = Path(run_dir)
         self.run_dir.mkdir(parents=True, exist_ok=True)
-        (self.run_dir / "checkpoints").mkdir(exist_ok=True)
+        self.checkpoints_dir = self.run_dir / "checkpoints"
+        self.checkpoints_dir.mkdir(exist_ok=True)
         (self.run_dir / "errors").mkdir(exist_ok=True)
         
         # Save config for reproducibility and post-hoc analysis
@@ -128,7 +130,10 @@ class Trainer:
         self.metrics_file = self.run_dir / "metrics.jsonl"
 
         self.checkpoint_mode = str(train_cfg.get("checkpoint_schedule", "interval"))
-        self.checkpoint_count = int(train_cfg.get("checkpoint_count", 1000))
+        self.checkpoint_count = int(float(train_cfg.get("checkpoint_count", 1000)))
+        digits_max_steps = len(str(max(1, int(self.max_steps))))
+        digits_checkpoint_count = len(str(max(1, self.checkpoint_count)))
+        self._checkpoint_name_width = max(4, digits_max_steps, digits_checkpoint_count)
         self.checkpoint_log_linear_alpha = float(train_cfg.get("checkpoint_log_linear_alpha", 0.5))
         self.checkpoint_steps: set[int] = set()
         if self.checkpoint_mode == "log_linear":
@@ -139,27 +144,31 @@ class Trainer:
                     alpha=self.checkpoint_log_linear_alpha,
                 )
             )
+        self._retcon_checkpoint_names()
 
         self.hf_upload_checkpoints = bool(train_cfg.get("hf_upload_checkpoints", False))
-        self.hf_upload_every_n_checkpoints = int(train_cfg.get("hf_upload_every_n_checkpoints", 100))
+        self.hf_upload_every_n_checkpoints = int(float(train_cfg.get("hf_upload_every_n_checkpoints", 100)))
         self.hf_checkpoint_repo_id = train_cfg.get("hf_checkpoint_repo_id") or os.getenv("HF_CHECKPOINT_REPO_ID")
         self.hf_checkpoint_repo_type = str(train_cfg.get("hf_checkpoint_repo_type", "dataset"))
         self.hf_checkpoint_repo_private = bool(train_cfg.get("hf_checkpoint_repo_private", True))
-        self._hf_api = None
-        self._saved_checkpoint_count = 0
+        self.hf_checkpoint_repo_path_prefix = train_cfg.get("hf_checkpoint_repo_path_prefix", "checkpoints")
+        self._hf_uploader: HuggingFaceCheckpointUploader | None = None
+        self._hf_uploaded_manifest = self.checkpoints_dir / ".hf_uploaded.txt"
+        self._uploaded_checkpoint_names: set[str] = set()
+        if self.hf_upload_checkpoints:
+            self._load_uploaded_checkpoint_manifest()
         if self.hf_upload_checkpoints:
             if self.hf_upload_every_n_checkpoints <= 0:
                 raise ValueError("hf_upload_every_n_checkpoints must be > 0 when hf_upload_checkpoints=True")
             if not self.hf_checkpoint_repo_id:
                 raise ValueError("hf_checkpoint_repo_id (or HF_CHECKPOINT_REPO_ID) is required when hf_upload_checkpoints=True")
-            from huggingface_hub import HfApi
-            self._hf_api = HfApi()
-            self._hf_api.create_repo(
+            cfg = CheckpointUploadConfig(
                 repo_id=self.hf_checkpoint_repo_id,
                 repo_type=self.hf_checkpoint_repo_type,
                 private=self.hf_checkpoint_repo_private,
-                exist_ok=True,
+                path_prefix=self.hf_checkpoint_repo_path_prefix,
             )
+            self._hf_uploader = HuggingFaceCheckpointUploader(cfg)
         
         # ---- debug logging ----
         self.debug = train_cfg.get("debug", False)
@@ -211,44 +220,122 @@ class Trainer:
     def save_checkpoint(self, name: str = None):
         """Save model checkpoint."""
         if name is None:
-            name = f"step_{self.step}"
-        path = self.run_dir / "checkpoints" / f"{name}.pt"
+            name = self._format_step_checkpoint_name(self.step)
+        path = self.checkpoints_dir / f"{name}.pt"
         torch.save({
             "step": self.step,
             "model_state_dict": self.model.state_dict(),
             "optimizer_state_dict": self.optimizer.state_dict(),
             "scheduler_state_dict": self.scheduler.state_dict(),
         }, path)
-        self._saved_checkpoint_count += 1
-        if (
-            self.hf_upload_checkpoints
-            and self._saved_checkpoint_count % self.hf_upload_every_n_checkpoints == 0
-        ):
-            self._upload_checkpoint_to_hf(path)
+        if self._hf_uploader is not None:
+            self._upload_pending_checkpoints()
 
-    def _upload_checkpoint_to_hf(self, path: Path) -> None:
+    def _upload_pending_checkpoints(self, force: bool = False) -> None:
+        """Upload buffered checkpoints to Hugging Face when enough new files exist."""
+        if self._hf_uploader is None:
+            return
+
+        pending_paths = self._pending_checkpoint_paths()
+        if not pending_paths:
+            return
+
+        batch_size = max(1, self.hf_upload_every_n_checkpoints)
+        if not force:
+            full_batches = len(pending_paths) // batch_size
+            if full_batches == 0:
+                return
+            pending_paths = pending_paths[: full_batches * batch_size]
+
+        for chunk in self._chunk_paths(pending_paths, batch_size):
+            if not chunk:
+                continue
+            message = self._format_checkpoint_commit_message(chunk)
+            self._hf_uploader.upload_batch(chunk, commit_message=message)
+            for checkpoint_path in chunk:
+                self._record_uploaded_checkpoint(checkpoint_path)
+
+    def _record_uploaded_checkpoint(self, checkpoint_path: Path) -> None:
+        name = checkpoint_path.name
+        if name in self._uploaded_checkpoint_names:
+            return
+        self._uploaded_checkpoint_names.add(name)
         try:
-            self._hf_api.upload_file(
-                path_or_fileobj=str(path),
-                path_in_repo=f"checkpoints/{path.name}",
-                repo_id=self.hf_checkpoint_repo_id,
-                repo_type=self.hf_checkpoint_repo_type,
-                commit_message=f"Upload {path.stem} (checkpoint #{self._saved_checkpoint_count}, step {self.step})",
-            )
-            print(
-                f"Uploaded checkpoint #{self._saved_checkpoint_count} "
-                f"to hf://{self.hf_checkpoint_repo_type}/{self.hf_checkpoint_repo_id}/checkpoints/{path.name}"
-            )
-        except Exception as e:
-            print(f"Warning: failed to upload checkpoint to Hugging Face: {e}")
-    
+            with open(self._hf_uploaded_manifest, "a") as f:
+                f.write(f"{name}\n")
+        except OSError as exc:
+            print(f"Warning: failed to log uploaded checkpoint {name}: {exc}")
+
+    def _load_uploaded_checkpoint_manifest(self) -> None:
+        if not self._hf_uploaded_manifest.exists():
+            return
+        try:
+            with open(self._hf_uploaded_manifest, "r") as f:
+                for line in f:
+                    checkpoint_name = line.strip()
+                    if checkpoint_name:
+                        self._uploaded_checkpoint_names.add(checkpoint_name)
+        except OSError as exc:
+            print(f"Warning: failed to load uploaded checkpoint manifest: {exc}")
+
+    @staticmethod
+    def _infer_step_from_name(checkpoint_path: Path) -> int:
+        stem = checkpoint_path.stem
+        if stem.startswith("step_"):
+            try:
+                return int(stem.split("_", 1)[1])
+            except ValueError:
+                return -1
+        if stem == "final":
+            return -1
+        return -1
+
+    def _pending_checkpoint_paths(self) -> list[Path]:
+        pending = [
+            p
+            for p in self.checkpoints_dir.glob("*.pt")
+            if p.is_file() and p.name not in self._uploaded_checkpoint_names
+        ]
+        pending.sort(key=self._checkpoint_sort_key)
+        return pending
+
+    def _checkpoint_sort_key(self, path: Path) -> tuple[float, float]:
+        step = self._infer_step_from_name(path)
+        sort_step = float(step) if step >= 0 else float("inf")
+        return (sort_step, path.stat().st_mtime)
+
+    @staticmethod
+    def _chunk_paths(paths: list[Path], chunk_size: int) -> list[list[Path]]:
+        if chunk_size <= 0:
+            return [paths]
+        return [paths[i : i + chunk_size] for i in range(0, len(paths), chunk_size)]
+
+    def _format_checkpoint_commit_message(self, paths: list[Path]) -> str:
+        if not paths:
+            return "Upload checkpoints"
+        steps = [self._infer_step_from_name(p) for p in paths if self._infer_step_from_name(p) >= 0]
+        count = len(paths)
+        if steps:
+            start, end = min(steps), max(steps)
+            if start == end:
+                return f"Upload checkpoint step {start}"
+            return f"Upload checkpoints steps {start}-{end} ({count} files)"
+        first, last = paths[0].stem, paths[-1].stem
+        if first == last:
+            return f"Upload checkpoint {first}"
+        return f"Upload checkpoints {first}..{last} ({count} files)"
+
     def train(self, eval_every: int = 100, save_every: int = 1000):
         """Run training loop."""
         self.model.train()
         data_iter = iter(self.train_dataloader)
-
-        if self.checkpoint_mode == "log_linear" and 0 in self.checkpoint_steps:
-            self.save_checkpoint("step_0")
+        self._ensure_step0_checkpoint()
+        
+        # Evaluate at step 0 before training starts
+        if self.val_dataloader is not None:
+            val_loss = evaluate(self.model, self.val_dataloader, self.device)
+            self.log_metrics({"val_loss": val_loss})
+            self.model.train()
         
         pbar = tqdm(total=self.max_steps, desc="Training")
         
@@ -346,7 +433,39 @@ class Trainer:
         if self.checkpoint_mode != "log_linear":
             self.save_checkpoint("final")
         self._generate_plots()
-    
+        self._upload_pending_checkpoints(force=True)
+
+    def _ensure_step0_checkpoint(self) -> None:
+        step0_name = self._format_step_checkpoint_name(0)
+        step0_path = self.checkpoints_dir / f"{step0_name}.pt"
+        if step0_path.exists():
+            return
+        original_step = self.step
+        self.step = 0
+        try:
+            self.save_checkpoint(step0_name)
+        finally:
+            self.step = original_step
+
+    def _format_step_checkpoint_name(self, step: int) -> str:
+        """Return zero-padded checkpoint name, e.g., step_0001."""
+        step_int = max(0, int(step))
+        return f"step_{str(step_int).zfill(self._checkpoint_name_width)}"
+
+    def _retcon_checkpoint_names(self) -> None:
+        """Rename any pre-existing checkpoints to match the current padding."""
+        for path in sorted(self.checkpoints_dir.glob("*.pt")):
+            step = self._infer_step_from_name(path)
+            if step < 0:
+                continue
+            expected = f"{self._format_step_checkpoint_name(step)}{path.suffix}"
+            if path.name == expected:
+                continue
+            target = path.with_name(expected)
+            if target.exists():
+                continue
+            path.rename(target)
+
     def _compute_debug_metrics(self, preclip_norm: float = 0.0) -> dict:
         """Compute debug metrics: per-group LRs, grad norms, param max-abs."""
         m = {}
