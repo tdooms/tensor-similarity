@@ -22,7 +22,7 @@ def evaluate(
     """
     model.eval()
     total_loss = 0.0
-    n_batches = 0
+    total_weight = 0
     
     for i, batch in enumerate(dataloader):
         if max_batches is not None and i >= max_batches:
@@ -32,7 +32,8 @@ def evaluate(
         logits = model(input_ids)
         loss = compute_loss(logits, input_ids)
         
-        total_loss += loss.item()
-        n_batches += 1
+        batch_size = batch["input_ids"].shape[0]
+        total_loss += loss.item() * batch_size
+        total_weight += batch_size
     
-    return total_loss / max(1, n_batches)
+    return total_loss / max(1, total_weight)

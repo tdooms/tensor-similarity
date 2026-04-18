@@ -294,5 +294,5 @@ def create_pile_dataloaders(
     val_ds = CachedTokenWindows(val_path, n_ctx=n_ctx, max_samples=max_val_samples)
 
     train_dl = DataLoader(train_ds, batch_size=batch_size, drop_last=True)
-    val_dl = DataLoader(val_ds, batch_size=batch_size, shuffle=False, drop_last=True)
+    val_dl = DataLoader(val_ds, batch_size=batch_size, shuffle=False, drop_last=False)
     return train_dl, val_dl
