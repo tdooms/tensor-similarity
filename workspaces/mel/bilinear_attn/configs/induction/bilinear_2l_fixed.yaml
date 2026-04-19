@@ -1,0 +1,42 @@
+name: induction_bilinear_2l_fixed
+seed: 42
+
+model:
+  vocab_size: 256      # Reduced from 4096 - more reasonable for small model
+  n_ctx: 64            # Increased from 32 - longer sequences
+  d_model: 128         # Increased from 32 - model needs capacity
+  n_head: 4
+  n_layers: 2
+  attn_type: bilinear
+  attn_scale: 0.2      # Reduced from 0.35 - more conservative
+  rope_base: 10000
+  norm_type: none      # TN-clean: no normalization
+  norm_places: []
+  use_rmsnorm_qk: false
+  use_bias_qk: true
+
+init:
+  std_embed: 0.02
+  std_qkv: 0.02
+  std_o: 0.01
+  # Removed init_type: mup - not implemented in code
+
+train:
+  batch_size: 64
+  lr: 3.0e-4
+  muon_lr: 0.02
+  use_muon: true
+  betas: [0.9, 0.95]
+  weight_decay: 0.1
+  max_steps: 2000      # Reduced for faster testing
+  warmup_steps: 100
+  lr_decay_frac: 0.1
+  grad_clip: 1.0
+  dtype: float32       # Changed from bfloat16 for better numerical precision
+  eval_every: 100
+  save_every: 100      # Fixed: was checkpoint_every (wrong parameter name)
+  # Removed debug: true - not used by code
+
+loss:
+  type: next_token_ce
+  label_smoothing: 0.0
