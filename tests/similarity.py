@@ -4,17 +4,17 @@ import torch
 from src.components.linear import Linear
 from src.components.mlp import MLP
 from src.components.attention import Attention
-from src.components.similarity import State, similarity
+from src.components.similarity import similarity
 from src.models.transformer import Transformer
 
 
-def inner_product(state):
-    return torch.einsum('ijij->', state.s_ab[:, 1:, :, 1:]).item()
+def inner_product(s):
+    return torch.einsum('ijij->', s[0, 1][:, 1:, :, 1:]).item()
 
 
-def cosine(state):
-    tr = lambda s: torch.einsum('ijij->', s[:, 1:, :, 1:])
-    return (tr(state.s_ab) / (tr(state.s_aa) * tr(state.s_bb)) ** 0.5).item()
+def cosine(s):
+    tr = lambda x: torch.einsum('ijij->', x[:, 1:, :, 1:])
+    return (tr(s[0, 1]) / (tr(s[0, 0]) * tr(s[1, 1])) ** 0.5).item()
 
 
 def mc_inner_product(model_a, model_b, d_input, n_samples=1_000_000, **like):

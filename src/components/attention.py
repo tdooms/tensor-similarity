@@ -122,8 +122,8 @@ class Attention(Component):
         rename = {'left:k': 'in:d1', 'right:k': 'in:d2', 'left:q': 'in:d3', 'right:q': 'in:d4'}
         return TensorNetwork([o, v, mask, left, right], check_collisions=False).reindex(rename)
 
-    def terms(self, n_ctx, **like):
-        d, d1 = self.d_model, self.d_model + 1
+    def terms(self, n_ctx):
+        d, d1, like = self.d_model, self.d_model + 1, self._like()
 
         # Term 1: residual — constant dim preserved, data dims scaled by (1-s)
         scale = torch.cat([torch.ones(1, **like), (1 - self.scale) * torch.ones(d, **like)])

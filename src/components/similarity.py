@@ -1,129 +1,141 @@
 """Exact Gaussian functional similarity via second-moment propagation.
 
-See SIMILARITY.md for the math and architecture notes.
+Three sentences:
+  (1) S = I_n ⊗ I_d, the Gaussian input covariance in padded representation.
+  (2) For each layer, S ← Σ_{t_l, t_r in term pairs} E[t_l · t_rᵀ | x ~ N(0, S)],
+      expanded via Isserlis' theorem (Wick matchings + μ-correction).
+  (3) Return S, shape `(2, 2, n, d+1, n, d+1)`. Index `s[i, j]` for the
+      cross-moment between model i and j (where 0=a, 1=b).
+
+One public function: `similarity(a, b)`. `gauge(m)` is a one-liner alias.
+See SIMILARITY.md for the full math.
 """
-from dataclasses import dataclass
-from functools import cache
+from functools import cache, partial
 from math import prod
 
 import torch
+from quimb.tensor import Tensor, TensorNetwork
 
 from src.components.utils import (
-    bridged_contract, capture_cuda_graph, direct_product, matchings, orbits, prefix,
+    bridged_contract, capture_cuda_graph, direct_product, matchings, orbits,
 )
 
+_OUT = ('m_l', 'm_r', 'a:out:s', 'a:out:d', 'b:out:s', 'b:out:d')
 _GRAPHS: dict = {}
-_OUT = ('a:out:s', 'a:out:d', 'b:out:s', 'b:out:d')
 
 
-@dataclass
-class State:
-    """Block second moments `s_xy = E[f_x f_y^T]` for model pair (a, b)."""
-    s_aa: torch.Tensor
-    s_ab: torch.Tensor
-    s_bb: torch.Tensor
+# ── Isserlis combinatorics ─────────────────────────────────────────────────
 
-    def __getitem__(self, ij):
-        return {(0, 0): self.s_aa, (0, 1): self.s_ab,
-                (1, 0): self.s_ab, (1, 1): self.s_bb}[ij]
+def _canon(matching, perm, legs):
+    """Canonical form of a matching under a leg-data permutation."""
+    p = dict(perm)
+    sub = lambda l: (l[0], p.get(l[1], l[1]))
+    return tuple(sorted(tuple(sorted((sub(legs[i]), sub(legs[j]))))
+                         for i, j in matching))
 
 
 @cache
 def _isserlis_plan(legs, syms, device, dtype):
-    """Weighted bridge configurations for E[Π legs] in padded representation.
-
-    A `config` is a tuple of pairings `(i, j)` over leg indices:
-      • `i != j` → S-bridge on legs (i, j)
-      • `i == j` → μ-bridge on leg i alone (S-slice at the constant-1 axes)
-
-    Wick matchings each appear once with weight = orbit size under `syms`.
-    One extra all-self-pair config appears with weight = −((2N−1)!!−1),
-    correcting the padded-rep overcounting of the all-μ term.
-    """
-    def canon(m, perm):
-        p = dict(perm)
-        sub = lambda l: (l[0], p.get(l[1], l[1]), l[2])
-        return tuple(sorted(tuple(sorted((sub(legs[i]), sub(legs[j])))) for i, j in m))
-    wick = orbits(matchings(tuple(range(len(legs)))), syms, canon)
+    """Deduped Wick matchings + the all-μ correction, with per-config weight."""
+    wick = orbits(matchings(tuple(range(len(legs)))), syms, partial(_canon, legs=legs))
     configs = tuple(m for m, _ in wick) + (tuple((i, i) for i in range(len(legs))),)
-    # (2N−1)!! − 1 corrects the padded-rep overcounting of the all-μ term.
     weights = tuple(w for _, w in wick) + (-(prod(range(1, len(legs), 2)) - 1),)
     return configs, torch.tensor(weights, device=device, dtype=dtype)
 
 
-def _join(tl, tr, ml, mr):
-    """Joint TN + tagged external legs + combined symmetry group."""
-    tl, tr = prefix(tl, 'a'), prefix(tr, 'b')
-    tag = lambda term, m: tuple((pos, dat, m) for dat, pos in sorted(term.legs.items()))
-    return tl.tn | tr.tn, tag(tl, ml) + tag(tr, mr), direct_product(tl.symmetries, tr.symmetries)
+# ── joint TN construction ──────────────────────────────────────────────────
+
+def _stack_side(pair, side, m_axis):
+    """Stack a pair of equivalent-structure terms along `m_axis`, prefix all
+    other indices with `side:`. Returns `(tn, legs, symmetries)`."""
+    ta, tb = pair
+    tensors = [Tensor(torch.stack([a.data, b.data]), inds=(m_axis, *a.inds), tags=a.tags)
+               for a, b in zip(ta.tn, tb.tn)]
+    non_m = {i for t in tensors for i in t.inds if i != m_axis}
+    tn = TensorNetwork(tensors).reindex({i: f'{side}:{i}' for i in non_m})
+    legs = tuple((f'{side}:{pos}', f'{side}:{dat}')
+                 for dat, pos in sorted(ta.legs.items()))
+    syms = tuple({f'{side}:{k}': f'{side}:{v}' for k, v in d.items()}
+                 for d in ta.symmetries)
+    return tn, legs, syms
 
 
-def _bridges_for(config, legs, s):
-    """(data, inds) list for one config: S-bridge if i != j, μ-bridge if i == j."""
-    def one(i, j):
+def _join(pair_l, pair_r):
+    """Joint TN, legs, and combined symmetry group from two paired terms."""
+    tn_l, legs_l, sl = _stack_side(pair_l, 'a', 'm_l')
+    tn_r, legs_r, sr = _stack_side(pair_r, 'b', 'm_r')
+    return tn_l | tn_r, legs_l + legs_r, direct_product(sl, sr)
+
+
+def _bridges(config, legs, s, diag, mu):
+    """Per-pair bridges for one Isserlis config:
+        self-pair (i==j) → μ on that leg's m-axis
+        same-side        → diagonal of S on that side's m-axis
+        cross-side       → full S on (m_l, m_r).
+    """
+    side = lambda leg: 'm_l' if leg[0].startswith('a:') else 'm_r'
+    out = []
+    for i, j in config:
         a, b = legs[i], legs[j]
-        if i == j: return s[a[2], a[2]][:, :, 0, 0], a[:2]
-        return s[a[2], b[2]], a[:2] + b[:2]
-    return [one(i, j) for i, j in config]
+        if i == j:                 out.append((mu,   (side(a), *a)))
+        elif side(a) == side(b):   out.append((diag, (side(a), *a, *b)))
+        else:                      out.append((s,    ('m_l', 'm_r', *a, *b)))
+    return out
 
 
-def _moment(tl, tr, ml, mr, s):
-    """E[term_l · term_r^T] as a single weighted sum over Wick + μ configs."""
-    tn, legs, syms = _join(tl, tr, ml, mr)
-    configs, weights = _isserlis_plan(legs, syms, s.s_aa.device, s.s_aa.dtype)
-    contribs = torch.stack([bridged_contract(tn, _bridges_for(c, legs, s), _OUT) for c in configs])
-    return torch.einsum('i,i...->...', weights, contribs)
+# ── the three-sentence algorithm ───────────────────────────────────────────
+
+def _moment(pair_l, pair_r, s, diag, mu):
+    """E[t_l · t_rᵀ | x ~ N(0, S)] via the Isserlis sum + μ correction."""
+    tn, legs, syms = _join(pair_l, pair_r)
+    configs, weights = _isserlis_plan(legs, syms, s.device, s.dtype)
+    contribs = torch.stack([bridged_contract(tn, _bridges(c, legs, s, diag, mu), _OUT)
+                            for c in configs])
+    return (Tensor(contribs, inds=('i', *_OUT))
+            & Tensor(weights, inds=('i',))).contract(output_inds=_OUT).data
 
 
 def _initial_state(model):
-    """S = I_n ⊗ I_d, the second moment of the padded Gaussian input."""
-    comps = model.components()
-    n = next((c.n_ctx for c in comps if hasattr(c, 'n_ctx')), 1)
-    d = comps[0].network().ind_size('in:d0')
+    """S = I_n ⊗ I_d broadcast over the `(m_l, m_r)` block axes. Returns `(S, n)`."""
     p = next(model.parameters())
-    s0 = torch.einsum('ij,kl->ikjl',
-                      torch.eye(n, device=p.device, dtype=p.dtype),
-                      torch.eye(d, device=p.device, dtype=p.dtype))
-    return State(s0, s0, s0)
-
-
-def _step(s, ta, tb):
-    """Propagate state through one layer pair via the 3 block moment sums."""
-    return State(
-        sum(_moment(x, y, 0, 0, s) for x in ta for y in ta),
-        sum(_moment(x, y, 0, 1, s) for x in ta for y in tb),
-        sum(_moment(x, y, 1, 1, s) for x in tb for y in tb),
-    )
+    n = getattr(model, 'n_ctx', 1)
+    d = model.components()[0].network().ind_size('in:d0')
+    kit = dict(device=p.device, dtype=p.dtype)
+    s = (Tensor(torch.eye(n, **kit),     inds=('a:out:s', 'b:out:s'))
+       & Tensor(torch.eye(d, **kit),     inds=('a:out:d', 'b:out:d'))
+       & Tensor(torch.ones(2, 2, **kit), inds=('m_l', 'm_r'))
+        ).contract(output_inds=_OUT).data
+    return s, n
 
 
 @torch.no_grad()
-def _run(model_a, model_b):
-    """The algorithm: S = I⊗I, then propagate through layers via term-pair moments."""
-    state = _initial_state(model_a)
-    for ca, cb in zip(model_a.components(), model_b.components()):
-        n = state.s_aa.shape[0]
-        device, dtype = state.s_aa.device, state.s_aa.dtype
-        ta = ca.terms(n, device=device, dtype=dtype)
-        tb = cb.terms(n, device=device, dtype=dtype)
-        state = _step(state, ta, tb)
-    return state
+def _run(a, b):
+    s, n = _initial_state(a)
+    for ca, cb in zip(a.components(), b.components()):
+        diag = torch.stack([s[0, 0], s[1, 1]])
+        mu = diag[:, :, :, 0, 0]
+        pairs = list(zip(ca.terms(n), cb.terms(n)))
+        s = sum(_moment(l, r, s, diag, mu) for l in pairs for r in pairs)
+    return s
 
 
-# --- CUDA-graph capture (JAX-like implicit cache) ---------------------------
+# ── public API ─────────────────────────────────────────────────────────────
 
-def similarity(model_a, model_b):
-    """Exact Gaussian functional similarity between two models.
-
-    On CUDA, captures a graph on first call per (architecture, device, dtype);
-    subsequent calls copy weights into static buffers and replay. CPU models
-    fall through to the direct path.
-    """
-    if not next(model_a.parameters()).is_cuda: return _run(model_a, model_b)
-    ps = (*model_a.parameters(), *model_b.parameters())
+def similarity(a, b):
+    """Exact Gaussian functional similarity, shape `(2, 2, n, d+1, n, d+1)`.
+    On CUDA, captures a graph on first call per `(arch, device, dtype)`."""
+    if not next(a.parameters()).is_cuda:
+        return _run(a, b)
+    ps = (*a.parameters(), *b.parameters())
     key = (tuple(p.shape for p in ps), ps[0].device, ps[0].dtype)
     if key not in _GRAPHS:
-        _GRAPHS[key] = capture_cuda_graph(lambda: _run(model_a, model_b), ps)
+        _GRAPHS[key] = capture_cuda_graph(lambda: _run(a, b), ps)
     bufs, out, graph = _GRAPHS[key]
     for src, dst in zip(ps, bufs): dst.copy_(src.data)
     graph.replay()
-    return State(out.s_aa.clone(), out.s_ab.clone(), out.s_bb.clone())
+    return out.clone()
+
+
+def gauge(model):
+    """Rank-4 `E[f(x) · f(x)ᵀ]` — canonical form for global SVD."""
+    return similarity(model, model)[0, 0]
