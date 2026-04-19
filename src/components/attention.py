@@ -138,13 +138,9 @@ class Attention(Component):
         active &= Tensor(embed, inds=('out:d', 'mid:d'))
 
         # Legs 0-2 (V, K1, K2) share 'in:s'; legs 3-4 (Q1, Q2) share 'out:s'.
-        # These indices are already present in the active TN (mask/rotary/V),
-        # so no delta tensors are needed — the bridges will reuse them.
+        # (q1·k1)(q2·k2) is invariant under the simultaneous swap
+        # (K1↔K2, Q1↔Q2) — positions (1↔2, 3↔4).
         legs = {'in:d0': 'in:s', 'in:d1': 'in:s', 'in:d2': 'in:s',
                 'in:d3': 'out:s', 'in:d4': 'out:s'}
-        # (q1·k1)(q2·k2) is invariant under the simultaneous swap
-        # (K1↔K2, Q1↔Q2), i.e. (in:d1↔in:d2, in:d3↔in:d4).
-        swap = {'in:d1': 'in:d2', 'in:d2': 'in:d1',
-                'in:d3': 'in:d4', 'in:d4': 'in:d3'}
         return [Term(identity, {'in:d0': 'out:s'}),
-                Term(active, legs, symmetries=(swap,))]
+                Term(active, legs, symmetries=((0, 2, 1, 4, 3),))]

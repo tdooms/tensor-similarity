@@ -7,8 +7,6 @@ import cotengra as ctg
 import torch
 from quimb.tensor import Tensor
 
-from src.components.base import Term
-
 
 _CACHE_DIR = Path.home() / '.cache' / 'tensor-mars' / 'ctg-paths'
 _CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -57,16 +55,6 @@ def orbits(items, group, canon):
     return list(seen.values())
 
 
-def prefix(term: Term, p: str) -> Term:
-    """Return `term` with every index name prefixed by `p:`."""
-    ren = lambda d: {f'{p}:{k}': f'{p}:{v}' for k, v in d.items()}
-    return Term(
-        tn=term.tn.reindex({i: f'{p}:{i}' for i in term.tn.ind_map}),
-        legs=ren(term.legs),
-        symmetries=tuple(ren(d) for d in term.symmetries),
-    )
-
-
 def capture_cuda_graph(fn, params):
     """Capture `fn()` as a CUDA graph with `params` rebound to static buffers.
 
@@ -94,13 +82,15 @@ def capture_cuda_graph(fn, params):
     return bufs, output, graph
 
 
-def direct_product(G, H):
-    """Identity-including direct product of two disjoint permutation groups.
+def direct_product(perms_l, nl, perms_r, nr):
+    """Direct product of two positional-permutation groups on disjoint ranges.
 
-    G, H are iterables of dict permutations on disjoint index sets. Returns
-    hashable sorted-item-tuple form of every element of ({id} ∪ G) × ({id} ∪ H).
+    `perms_l` act on `[0, nl)`; `perms_r` on `[0, nr)` but get padded to
+    `[nl, nl+nr)`. Identity is injected on each side, so the output contains
+    ({id} ∪ perms_l) × ({id} ∪ perms_r) as length-(nl+nr) permutations.
     """
-    freeze = lambda d: tuple(sorted(d.items()))
-    g = tuple(freeze(x) for x in G)
-    h = tuple(freeze(x) for x in H)
-    return ((), *g, *h, *(a + b for a in g for b in h))
+    id_l = tuple(range(nl))
+    id_r = tuple(nl + x for x in range(nr))
+    gl = (id_l, *perms_l)
+    gr = (id_r, *(tuple(nl + x for x in h) for h in perms_r))
+    return tuple(g + h for g in gl for h in gr)

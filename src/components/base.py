@@ -8,9 +8,9 @@ from abc import abstractmethod
 class Term(NamedTuple):
     """A TN term with sequence wires, leg-to-position map, and optional symmetries.
 
-    `symmetries` is a tuple of dict permutations on input-leg data names under
-    which the term value is invariant. Used by Isserlis to dedupe matchings —
-    each permutation maps leg-data names (e.g. 'in:d1') to leg-data names.
+    `legs` maps input-leg data names (e.g. 'in:d1') to sequence-position names
+    ('in:s' / 'out:s'). Legs are ordered by sorted-key; `symmetries` are
+    positional permutations on that order (tuples of length N, not dicts).
     """
     tn: TensorNetwork
     legs: dict
