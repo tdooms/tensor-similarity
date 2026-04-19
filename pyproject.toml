@@ -39,3 +39,8 @@ dev = [
     "pytest>=9.0.2",
 ]
 
+[tool.pytest.ini_options]
+markers = [
+    "slow: realistic-scale tests; not run by default. Use `pytest -m slow`.",
+]
+

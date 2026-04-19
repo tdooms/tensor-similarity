@@ -22,20 +22,23 @@ class Rotary(Component):
         self.cos_cached = nn.Buffer(torch.cat([self.cos, self.cos], dim=-1)[None, :, None, :], persistent=False)
         self.sin_cached = nn.Buffer(torch.cat([self.sin, self.sin], dim=-1)[None, :, None, :], persistent=False)
 
+        black = torch.tensor([[[[1, 0], [0, 1]], [[0, -1], [1, 0]]],
+                              [[[0, 1], [-1, 0]], [[1, 0], [0, 1]]]], dtype=torch.float32)
+        self.black = nn.Buffer(black, persistent=False)
+
     def forward(self, x):
         a, b = x.chunk(2, dim=-1)
         y = torch.cat((-b, a), dim=-1)
         return (x * self.cos_cached[:, :x.size(-3)]) + (y * self.sin_cached[:, :x.size(-3)])
     
     def network(self, mod, device, dtype):
-        data = [[[[1, 0], [0, 1]], [[0, -1], [1, 0]]], [[[0, 1], [-1, 0]], [[1, 0], [0, 1]]]]
         inds = (f'{mod}:iq', f'{mod}:ik', f'{mod}:2q', f'{mod}:2k')
-        black = Tensor(torch.tensor(data, device=device, dtype=dtype), inds=inds, tags=('#',))
-        
+        black = Tensor(self.black.to(dtype), inds=inds, tags=('#',))
+
         emb = torch.stack([self.cos, self.sin], dim=-1)
         q = Tensor(emb, inds=('out:s', f'{mod}:h', f'{mod}:iq'), tags=('E',))
         k = Tensor(emb, inds=('in:s', f'{mod}:h', f'{mod}:ik'), tags=('E',))
-        
+
         return black & q & k
 
 class Mask(Component):
