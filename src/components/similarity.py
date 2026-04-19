@@ -4,8 +4,9 @@
 Per component: Σ ← Σ_{l, r ∈ terms} E[l · rᵀ | x ~ N(·, Σ)] via Isserlis
 (deduped Wick matchings + μ-correction). For a ≠ b we jointly propagate
 the triple (Σ_aa, Σ_ab, Σ_bb); the Σ_ab update routes each bridge by leg
-side. Self-pairs (Wick singletons) slice Σ at (pos=0, dat=0) — the padded
-constant-1 reference — giving μ. See SIMILARITY.md for the math.
+position (left-term legs < right-term legs in the joined list). Self-pairs
+(Wick singletons) slice Σ at (pos=0, dat=0) — the padded constant-1 reference
+— giving μ. See SIMILARITY.md for the math.
 """
 from functools import cache, partial
 from math import prod
@@ -32,9 +33,6 @@ _PATHS: dict = {}     # cotengra exprs, keyed by (core_inds, bridge_inds)
 _GRAPHS: dict = {}    # CUDA-graph captures, keyed by (shapes, device, dtype)
 
 
-def _side(leg): return 'l' if leg[0].startswith('l:') else 'r'
-
-
 # ── Isserlis combinatorics ────────────────────────────────────────────────
 
 def _canon(matching, perm, legs):
@@ -44,7 +42,14 @@ def _canon(matching, perm, legs):
 
 @cache
 def _plan(legs, syms):
-    """Deduped Wick matchings + μ-correction config. Pure Python."""
+    """Deduped Wick matchings + μ-correction config. Pure Python.
+
+    The `-((n-1)!!-1)·μⁿ` correction cancels the all-singletons overcount from
+    the homogeneous identification Σ̂ = Σ + μμᵀ. For n ≥ 6, mixed partitions
+    (pairs + singletons) are also overcounted — fine under bias=False because
+    μ=0 on active-term legs kills every singleton-containing partition and the
+    formula is silent. Turning biases on would require explicit partial-matching
+    enumeration instead of this scalar fix-up."""
     wick = orbits(matchings(tuple(range(len(legs)))), syms, partial(_canon, legs=legs))
     configs = tuple(m for m, _ in wick) + (tuple((i, i) for i in range(len(legs))),)
     weights = tuple(w for _, w in wick) + (-(prod(range(1, len(legs), 2)) - 1),)
@@ -59,28 +64,18 @@ def _weights(weights_py, device, dtype):
 # ── joint TN E[t_l · t_rᵀ] ────────────────────────────────────────────────
 
 def _sided(term, side):
-    """Prefix every ind with `side:` (l = left half of t_l·t_rᵀ, r = right)."""
+    """Prefix every ind with `side:` (l/r mark the two halves of t_l·t_rᵀ)."""
     tn = term.tn.reindex({i: f'{side}:{i}' for i in term.tn.ind_map})
     legs = tuple((f'{side}:{p}', f'{side}:{d}') for d, p in sorted(term.legs.items()))
-    return tn, legs, term.symmetries
+    return tn, legs
 
 
 def _join(tl, tr):
-    a, la, sa = _sided(tl, 'l')
-    b, lb, sb = _sided(tr, 'r')
-    return a | b, la + lb, direct_product(sa, len(la), sb, len(lb))
-
-
-def _slots(aa, ab, bb):
-    """Four (side_L, side_R) → Σ slots; Σ_ba = Σ_ab with L/R axes swapped."""
-    return {('l', 'l'): aa, ('l', 'r'): ab,
-            ('r', 'l'): ab.permute(2, 3, 0, 1), ('r', 'r'): bb}
-
-
-def _bridge(slots, i, j):
-    """Σ + attach-inds for a Wick pair. Self-pair sliced at (0, 0) = μ."""
-    k = (_side(i), _side(j))
-    return (slots[k][..., 0, 0], i) if i == j else (slots[k], (*i, *j))
+    """Joint TN, legs, left-leg count n_l, and combined positional symmetries."""
+    a, la = _sided(tl, 'l')
+    b, lb = _sided(tr, 'r')
+    syms = direct_product(tl.symmetries, len(la), tr.symmetries, len(lb))
+    return a | b, la + lb, len(la), syms
 
 
 def _contract(core, bridges):
@@ -94,19 +89,22 @@ def _contract(core, bridges):
     return _PATHS[key](*(t.data for t in core), *(data for data, _ in bridges))
 
 
-def _moment(tl, tr, slots):
-    """E[t_l · t_rᵀ] via Isserlis + μ correction."""
-    tn, legs, syms = _join(tl, tr)
+def _moment(tl, tr, aa, ab, bb):
+    """E[t_l · t_rᵀ] via Isserlis + μ correction. Wick pair (i, j) with i ≤ j
+    routes to aa if j < n_l, bb if i ≥ n_l, else ab; self-pair slices to μ."""
+    tn, legs, n_l, syms = _join(tl, tr)
     configs, weights_py = _plan(legs, syms)
-    s = slots[('l', 'l')]
-    ws = _weights(weights_py, s.device, s.dtype)
-    return sum(w * _contract(tn, [_bridge(slots, legs[i], legs[j]) for i, j in c])
+    ws = _weights(weights_py, aa.device, aa.dtype)
+    def bridge(i, j):
+        σ = aa if j < n_l else bb if i >= n_l else ab
+        return (σ[..., 0, 0], legs[i]) if i == j else (σ, (*legs[i], *legs[j]))
+    return sum(w * _contract(tn, [bridge(i, j) for i, j in c])
                for c, w in zip(configs, ws))
 
 
-def _update(slots, ts_l, ts_r):
+def _update(aa, ab, bb, ts_l, ts_r):
     """Σ ← Σ_{l, r} E[l · rᵀ]."""
-    return sum(_moment(l, r, slots) for l in ts_l for r in ts_r)
+    return sum(_moment(l, r, aa, ab, bb) for l in ts_l for r in ts_r)
 
 
 # ── propagation ───────────────────────────────────────────────────────────
@@ -126,7 +124,7 @@ def _propagate_self(m):
     sigma = _initial(m)
     for c in m.components():
         ts = c.terms(m.n_ctx)
-        sigma = _update(_slots(sigma, sigma, sigma), ts, ts)
+        sigma = _update(sigma, sigma, sigma, ts, ts)
     return (sigma,) * 3
 
 
@@ -136,9 +134,9 @@ def _propagate_cross(a, b):
     bb = _initial(b)
     for ca, cb in zip(a.components(), b.components()):
         ta, tb = ca.terms(a.n_ctx), cb.terms(b.n_ctx)
-        aa, ab, bb = (_update(_slots(aa, aa, aa), ta, ta),
-                      _update(_slots(aa, ab, bb), ta, tb),
-                      _update(_slots(bb, bb, bb), tb, tb))
+        aa, ab, bb = (_update(aa, aa, aa, ta, ta),
+                      _update(aa, ab, bb, ta, tb),
+                      _update(bb, bb, bb, tb, tb))
     return aa, ab, bb
 
 
