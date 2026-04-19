@@ -30,10 +30,8 @@ _GRAPHS: dict = {}
 # ── Isserlis combinatorics ─────────────────────────────────────────────────
 
 def _canon(matching, perm, legs):
-    """Canonical form of a matching under a leg-data permutation."""
-    p = dict(perm)
-    sub = lambda l: (l[0], p.get(l[1], l[1]))
-    return tuple(sorted(tuple(sorted((sub(legs[i]), sub(legs[j]))))
+    """Canonical form of a matching under a positional permutation of legs."""
+    return tuple(sorted(tuple(sorted((legs[perm[i]], legs[perm[j]])))
                          for i, j in matching))
 
 
@@ -49,19 +47,19 @@ def _isserlis_plan(legs, syms, device, dtype):
 # ── joint TN + Σ bridges ───────────────────────────────────────────────────
 
 def _sided(term, side):
-    """Prefix term's inds with `side:`; rename `m` (if present) → `m_{side}`."""
+    """Prefix term's inds with `side:`; rename `m` (if present) → `m_{side}`.
+    Symmetries are positional — they pass through untouched."""
     ren = lambda n: f'm_{side}' if n == 'm' else f'{side}:{n}'
     tn = term.tn.reindex({i: ren(i) for i in term.tn.ind_map})
     legs = tuple((ren(pos), ren(dat)) for dat, pos in sorted(term.legs.items()))
-    syms = tuple({ren(k): ren(v) for k, v in d.items()} for d in term.symmetries)
-    return tn, legs, syms
+    return tn, legs, term.symmetries
 
 
 def _join(term_l, term_r):
     """Joint TN, legs, combined symmetries for E[t_l · t_rᵀ]."""
     tn_l, legs_l, sl = _sided(term_l, 'l')
     tn_r, legs_r, sr = _sided(term_r, 'r')
-    return tn_l | tn_r, legs_l + legs_r, direct_product(sl, sr)
+    return tn_l | tn_r, legs_l + legs_r, direct_product(sl, len(legs_l), sr, len(legs_r))
 
 
 def _bridge(sigma, leg_i, leg_j):
