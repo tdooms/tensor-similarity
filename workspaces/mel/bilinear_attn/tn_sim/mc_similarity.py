@@ -43,6 +43,65 @@ def _forward_from_embeddings(model, x: torch.Tensor) -> torch.Tensor:
 
 
 @torch.no_grad()
+def mc_similarity_gaussian_tokens(
+    model_A,
+    model_B,
+    device,
+    n_samples: int = 20000,
+    batch_size: int = 64,
+) -> float:
+    """MC cosine similarity matched to the TN algorithm's input distribution.
+
+    The exact TN similarity assumes the first component's input is Gaussian:
+    for AttentionLM that's a vector in ``R^{vocab_size + 1}`` with a leading
+    constant-1 axis and the remaining entries ``~ N(0, I)``. This function
+    samples at exactly that level and propagates through mel's actual forward
+    (residual-add), so it's a fair empirical baseline for ``cosine_similarity``.
+
+    In contrast, ``mc_similarity`` below samples Gaussians at the residual
+    stream (bypassing the embedding), which is a different function and
+    will not agree with the TN result for a non-trivial embedding.
+    """
+    model_A.eval(); model_B.eval()
+    dtype = next(model_A.parameters()).dtype
+    V, D = model_A.vocab_size, model_A.d_model
+    n_ctx = model_A.n_ctx
+
+    ip_AB = ip_AA = ip_BB = 0.0
+    total_count = 0
+    for start in range(0, n_samples, batch_size):
+        bs = min(batch_size, n_samples - start)
+        # z[..., 0] = 1 (constant axis); z[..., 1:] ~ N(0, I).
+        z = torch.empty(bs, n_ctx, V + 1, device=device, dtype=dtype).normal_()
+        z[..., 0] = 1.0
+
+        # Apply the padded embedding manually: mel's nn.Embedding has no bias,
+        # so only the z[..., 1:] slice contributes to the residual stream,
+        # via x = z[..., 1:] @ E (where E is model.embed.weight, shape (V, D)).
+        x_A = z[..., 1:] @ model_A.embed.weight
+        x_B = z[..., 1:] @ model_B.embed.weight
+
+        for layer in model_A.layers:
+            x_A = layer(x_A)
+        for layer in model_B.layers:
+            x_B = layer(x_B)
+
+        logits_A = model_A.unembed(x_A)
+        logits_B = model_B.unembed(x_B)
+
+        flat_A = logits_A.reshape(-1, logits_A.shape[-1])
+        flat_B = logits_B.reshape(-1, logits_B.shape[-1])
+        ip_AB += (flat_A * flat_B).sum().item()
+        ip_AA += (flat_A * flat_A).sum().item()
+        ip_BB += (flat_B * flat_B).sum().item()
+        total_count += flat_A.shape[0]
+
+    ip_AB /= total_count; ip_AA /= total_count; ip_BB /= total_count
+    denom = (abs(ip_AA) * abs(ip_BB)) ** 0.5
+    return 0.0 if denom < 1e-30 else ip_AB / denom
+
+
+@torch.no_grad()
 def mc_similarity(model_A, model_B, device, n_samples=2000, batch_size=64):
     """Compute MC cosine similarity using Gaussian residual-stream samples.
 

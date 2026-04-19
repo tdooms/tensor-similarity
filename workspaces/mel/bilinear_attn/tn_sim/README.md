@@ -1,7 +1,28 @@
-# TN Similarity for Bilinear Attention Models
+# `tn_sim` — TN similarity adapter for `AttentionLM`
 
-This module provides exact tensor network (TN) similarity computation for bilinear attention models using the main codebase's algorithm (`src/components/similarity.py`).
-It adds batching support for better memory efficiency. I shall add an accelerator for batching soon.
+This module is a **thin adapter** over the main codebase's exact Gaussian
+functional similarity (`src/components/similarity.py`). It does **not**
+reimplement the algorithm; it only wraps the mel `AttentionLM` so that the
+upstream `similarity()` can consume it through its `Model.components()`
+interface.
+
+## Layout
+
+```
+tn_sim/
+  similarity.py      # Wrappers: compute_tn_similarity / cosine_similarity / ...
+  mc_similarity.py   # Two MC baselines (see below)
+  benchmark.py       # Runnable time/memory benchmark
+  config/            # Minimal TN-compatible YAML
+  tests/             # pytest suite: self-sim, parity, MC, validation
+../models/components/ # Component/Model wrappers (embedding, attention, model)
+```
+
+Ground truth lives under `src/components/`. The adapter's `terms()` is a
+direct mirror of `src/components/attention.Attention.terms()`. mel's
+forward uses the same `lerp(x, o(z), scale)` residual convention, so
+wrapping mel and building the same architecture from `src.components`
+primitives are interchangeable.
 
 ## Usage
 
@@ -9,181 +30,87 @@ It adds batching support for better memory efficiency. I shall add an accelerato
 from models import AttentionLM
 from tn_sim import cosine_similarity
 
-# Create TN-compatible models (no normalization!)
-cfg = {
-    "model": {
-        "vocab_size": 32,
-        "n_ctx": 8,
-        "d_model": 16,
-        "n_head": 2,
-        "n_layers": 1,
-        "attn_type": "bilinear",  # or "quadratic"
-        "norm_type": "none",      # REQUIRED
-        "norm_places": [],        # REQUIRED
-        "use_rmsnorm_qk": False,  # REQUIRED
-    }
-}
+model_a = AttentionLM.from_config(cfg)
+model_b = AttentionLM.from_config(cfg)
 
-model_A = AttentionLM.from_config(cfg)
-model_B = AttentionLM.from_config(cfg)
-
-# Compute similarity
-sim = cosine_similarity(model_A, model_B, dtype=torch.float64)
-print(f"Similarity: {sim:.6f}")
+sim = cosine_similarity(model_a, model_b, dtype=torch.float64)
 ```
 
-## API
+API:
 
-- **`cosine_similarity(model_A, model_B)`** - Returns scalar similarity in [-1, 1]
-- **`compute_tn_similarity(model_A, model_B)`** - Returns full `State` object with second moments
-- **`inner_product(model_A, model_B)`** - Returns unnormalized inner product
-- **`self_similarity(model)`** - Convenience function (should return 1.0)
-- **`mc_similarity_gaussian(model_A, model_B, ...)`** - Monte Carlo baseline for validation
+- `cosine_similarity(a, b)` → scalar in `[-1, 1]`
+- `compute_tn_similarity(a, b)` → full `State(s_aa, s_ab, s_bb)`
+- `inner_product(a, b)` → unnormalised trace
+- `self_similarity(m)` → should be exactly `1.0`
+- `mc_similarity_gaussian_tokens(a, b, ...)` — **matched MC** (samples at the
+  TN algorithm's input distribution: Gaussian over padded vocab axis)
+- `mc_similarity(a, b, ...)` — **residual-stream MC** (samples Gaussians
+  *post-embed*; a different baseline that does not converge to the TN value
+  for non-trivial embeddings)
+- `random_sim(a, b, ...)` — uniform discrete token MC (yet another baseline)
 
-## Requirements
+## Model requirements
 
-### Model Configuration
+TN similarity is exact only for polynomial, Gaussian-friendly networks. The
+wrapper rejects incompatible configs:
 
-**CRITICAL:** Only models with the following configuration are supported:
+- `norm_type = "none"` and `norm_places = []`
+- `use_rmsnorm_qk = False`
+- `attn_type ∈ {"bilinear", "quadratic"}` (no softmax)
 
-```yaml
-model:
-  norm_type: none          # No normalization layers
-  norm_places: []          # No normalization anywhere
-  use_rmsnorm_qk: false    # No RMSNorm on Q/K
-  attn_type: bilinear      # or "quadratic" (NOT "softmax")
-```
-
-Any model with normalization will raise a `ValueError`.
-
-### Why These Restrictions?
-
-The main codebase's TN similarity assumes:
-1. **Gaussian inputs** - Exact computation via Isserlis theorem
-2. **Polynomial operations** - Normalization (RMSNorm, LayerNorm) is non-polynomial
-3. **No softmax** - Softmax is non-polynomial
-
-## Performance Characteristics
-
-### Benchmark Results (Minimal Config)
-
-Tested on: `n_ctx=4, d_model=8, n_layers=2, n_head=2`
-
-| Metric | Value |
-|--------|-------|
-| **Time** | 47 seconds |
-| **Memory** | 2.2 GB |
-| **Self-similarity** | 1.0 (exact) |
-
-### Scaling
-
-The main codebase's algorithm has **exponential complexity** in the number of layers due to term decomposition:
-
-- **1 layer:** ~2 terms (residual + active)
-- **2 layers:** ~4 terms (2² combinations)
-- **3 layers:** ~8 terms (2³ combinations)
-- **N layers:** ~2^N terms
-
-Each attention layer also has **945 Wick matchings** to compute.
-
-### Practical Limits
-
-Based on testing:
-
-| Model Size | Time | Memory | Practical? |
-|------------|------|--------|------------|
-| n_ctx=4, d_model=8, 1 layer | ~10s | ~2 GB | ✅ Yes |
-| n_ctx=4, d_model=8, 2 layers | ~47s | ~8 GB | ⚠️ Marginal |
-| n_ctx=8, d_model=16, 2 layers | ~5-10 min | ~30 GB | ❌ No |
-| n_ctx=16, d_model=32, 2 layers | Hours | >100 GB | ❌ No |
-
-**Recommendation:** Only use for very small models (n_ctx ≤ 4, d_model ≤ 8, n_layers ≤ 2).
-
-## Comparison: Old vs New Implementation
-
-| Aspect | Old (Custom) | New (Main Codebase) |
-|--------|--------------|---------------------|
-| **Speed** | ~1-2 seconds | ~47 seconds (23-47× slower) |
-| **Memory** | ~500 MB | ~8 GB (16× more) |
-| **Accuracy** | Approximate (ignores residual cross-terms) | Exact (all terms) |
-| **Normalization** | Supported (approximate) | Not supported |
-| **Residual handling** | Ignored cross-terms | Full term decomposition |
-| **Method** | Gram chaining with precomputed RoPE | Full TN contraction with Wick matchings |
-
-## Validation
-
-Run the test suite:
+## Tests
 
 ```bash
-# Activate venv first!
-.venv\Scripts\Activate.ps1
-
-# Quick validation
-python -c "from tn_sim.test_similarity import run_quick_validation; run_quick_validation()"
-
-# Full test suite (requires pytest)
-pytest tn_sim/test_similarity.py -v
-
-# Minimal benchmark
-python debug_minimal.py
+pytest tn_sim/tests -v
 ```
 
-### Expected Results
+25 tests, all passing on CPU/float64:
 
-- **Self-similarity:** Exactly 1.0 (within 1e-6)
-- **MC comparison:** TN and MC should agree within ~30% for small models
-- **Symmetry:** `sim(A, B) == sim(B, A)`
+- **Self-similarity** (1/2 layer, bilinear/quadratic, bias on/off) → `1.0` within `1e-6`.
+- **Symmetry** `sim(A,B) == sim(B,A)` within `1e-10`.
+- **Adapter-vs-src parity** (`test_components_parity.py`): wrapping mel and
+  building an equivalent model out of `src.components` primitives yields
+  element-wise identical `(s_aa, s_ab, s_bb)` (atol `1e-10`). The reference
+  uses a tiny `_ResAddAttention` subclass so it matches mel's residual
+  convention.
+- **Forward parity**: contracting the adapter TN with an explicit input
+  reproduces `mel.forward(x)` exactly.
+- **MC parity** (using `mc_similarity_gaussian_tokens`, the matched
+  baseline): TN and MC agree within `~10%` at `n=20k` samples.
+- **Config validation**: rejects rmsnorm, `use_rmsnorm_qk`, softmax, and
+  architecture mismatch.
 
-## Files
+## Benchmark
 
-### Core Implementation
-- `models/components/` - Component-compatible wrappers
-  - `embedding.py` - Embedding as Linear component
-  - `attention.py` - BilinearAttention as Component
-  - `model.py` - AttentionLM as Model
-- `tn_sim/similarity.py` - Main API endpoint
-- `tn_sim/mc_similarity.py` - Monte Carlo baseline (kept for validation)
+```bash
+python -m tn_sim.benchmark                     # CPU, float64
+python -m tn_sim.benchmark --device cuda --dtype float32
+```
 
-### Testing & Validation
-- `tn_sim/test_similarity.py` - Comprehensive test suite
-- `tn_sim/compare.py` - Compare TN vs MC across checkpoints
-- `debug_minimal.py` - Minimal benchmark with memory/time tracking
+Measured on CPU / float64 (with a fresh ctg-path cache the first row is
+cold; subsequent rows reuse cached expression plans where topology
+overlaps):
 
-### Configuration
-- `tn_sim/config_minimal_tn.yaml` - Minimal TN-compatible config
+| config                                | cold (s) | warm (s) | peak RSS |
+| ------------------------------------- | -------- | -------- | -------- |
+| `tiny-1L`  V=8, ctx=4, D=8, 1 layer   |    ~20   |    ~1.3  |   25 MB  |
+| `tiny-2L`  V=8, ctx=4, D=8, 2 layers  |    ~2.7  |    ~2.8  |  <1 MB*  |
+| `small-1L` V=16, ctx=8, D=16, 1 layer |    ~4.2  |    ~4.0  |  170 MB  |
 
-## Migration Notes
+Notes on the numbers:
 
-### What Was Deleted
-- `tn_sim/tn_similarity.py` (19 KB) - Custom Gram chaining implementation
-- `tn_sim/tn_similarity_quimb.py` (12 KB) - Alternative quimb implementation
-- `tn_sim/test_tn_similarity.py` (31 KB) - Tests for custom implementation
-- `tn_sim/train.py` (8 KB) - Training script for validation
-- `tn_sim/config_tiny.yaml` - Old config (had normalization)
-- `tn_sim/runs/` - Old validation runs
+- **Cold** is dominated by cotengra path-search; results are cached in
+  `~/.cache/tensor-mars/ctg-paths/` and amortise across calls.
+- **Warm** is the steady-state pair-call time. For heatmap workloads over
+  many checkpoints this is what matters.
+- **Peak RSS** is a psutil start-vs-end delta, so the 2-layer tiny row
+  reads low because previous runs already allocated the quimb/torch pools
+  and the delta captures only incremental growth. For absolute memory,
+  prefer CUDA (`torch.cuda.max_memory_allocated`).
+- Complexity grows quickly with `n_layers` (term decomposition is `2^L`)
+  and `n_ctx` (sequence indices appear throughout the contractions). The
+  adapter targets **small** models; for anything beyond `d_model=32,
+  n_ctx=16, L=2` use `mc_similarity_gaussian_tokens` instead.
 
-### What Was Kept
-- `tn_sim/mc_similarity.py` - Still needed for validation
-- `tn_sim/compare.py` - Updated to use new endpoint
-
-### What Was Added
-- `models/components/` - Component-compatible layers (3 files)
-- `tn_sim/similarity.py` - New API endpoint
-- `tn_sim/test_similarity.py` - New test suite
-- `tn_sim/config_minimal_tn.yaml` - Minimal TN-compatible config
-- This README
-
-## Future Work
-
-Potential optimizations (not implemented):
-1. **Sparse contractions** - Skip zero terms
-2. **Batch processing** - Compute multiple pairs in parallel
-3. **GPU acceleration** - Move contractions to GPU
-4. **Approximate methods** - Truncate low-magnitude terms
-5. **Custom RoPE handling** - Precompute RoPE matrices (like old implementation)
-
-However, these would require significant changes to the main codebase's algorithm.
-
-## Contact
-
-For issues or questions about this migration, see the main codebase documentation at `src/components/SIMILARITY.md`.
+No batched-pairs API at this level. If you need one, add it upstream in
+`src/components/similarity.py` rather than re-doing Isserlis here.

@@ -29,9 +29,9 @@ from tn_sim.similarity import (
     cosine_similarity,
     inner_product,
     self_similarity,
-    _validate_model_compatibility,
+    _check_architectures_match,
 )
-from tn_sim.mc_similarity import mc_similarity
+from tn_sim.mc_similarity import mc_similarity, mc_similarity_gaussian_tokens
 
 
 # Use float64 for numerical stability in tests
@@ -160,50 +160,44 @@ class TestMCComparison:
     """Compare TN similarity against Monte Carlo baseline."""
     
     def test_vs_mc_1layer(self):
-        """TN similarity should approximate MC similarity for 1-layer model."""
+        """TN similarity should approximate MC similarity for 1-layer model.
+
+        The MC baseline MUST sample at the TN algorithm's input level
+        (Gaussian over the padded vocab axis) to match what TN computes;
+        sampling at the residual stream (``mc_similarity``) is a different
+        distribution and does not converge to the TN value.
+        """
         torch.manual_seed(42)
-        cfg = make_tn_compatible_config(n_layers=1)  # Uses defaults: d_model=8, n_ctx=3
+        cfg = make_tn_compatible_config(n_layers=1)
         model_A = AttentionLM.from_config(cfg).to(dtype=DTYPE)
-        
+
         torch.manual_seed(99)
         model_B = AttentionLM.from_config(cfg).to(dtype=DTYPE)
-        
-        # TN similarity
+
         tn_sim = cosine_similarity(model_A, model_B, device=DEVICE, dtype=DTYPE)
-        
-        # MC similarity (use float32 for MC as it's faster)
-        model_A_f32 = model_A.float()
-        model_B_f32 = model_B.float()
-        mc_sim = mc_similarity(
-            model_A_f32, model_B_f32,
-            device=DEVICE,
-            n_samples=10000,
+
+        mc_sim = mc_similarity_gaussian_tokens(
+            model_A, model_B, device=DEVICE, n_samples=20000,
         )
-        
-        # Check they're in the same ballpark
+
         diff = abs(tn_sim - mc_sim)
         rel_diff = diff / max(abs(mc_sim), 1e-8)
-        
         assert diff < MC_ABS_TOL or rel_diff < MC_REL_TOL, (
             f"TN sim ({tn_sim:.4f}) differs from MC sim ({mc_sim:.4f}) "
             f"by {diff:.4f} (rel: {rel_diff:.2%})"
         )
-    
+
     def test_self_similarity_vs_mc(self):
-        """Self-similarity should be ~1.0 for both TN and MC."""
+        """Self-similarity should be ~1.0 for both TN and the TN-matched MC."""
         torch.manual_seed(42)
         cfg = make_tn_compatible_config(n_layers=1)
         model = AttentionLM.from_config(cfg).to(dtype=DTYPE)
-        
+
         tn_sim = self_similarity(model, device=DEVICE, dtype=DTYPE)
-        
-        model_f32 = model.float()
-        mc_sim = mc_similarity(
-            model_f32, model_f32,
-            device=DEVICE,
-            n_samples=5000,
+        mc_sim = mc_similarity_gaussian_tokens(
+            model, model, device=DEVICE, n_samples=5000,
         )
-        
+
         assert abs(tn_sim - 1.0) < SELF_SIM_TOL, f"TN self-sim should be 1.0, got {tn_sim}"
         assert abs(mc_sim - 1.0) < 0.05, f"MC self-sim should be ~1.0, got {mc_sim}"
 
@@ -311,19 +305,23 @@ class TestComponentWeightLoading:
 class TestComponentInterface:
     """Test that Component interface is correctly implemented."""
     
-    def test_components_list(self):
-        """components() should return correct list of components."""
-        cfg = make_tn_compatible_config(n_layers=2)
+    @pytest.mark.parametrize("attn_type,expected_cls_name", [
+        ("bilinear", "BilinearAttentionComponent"),
+        ("quadratic", "QuadraticAttentionComponent"),
+    ])
+    def test_components_list(self, attn_type, expected_cls_name):
+        """components() should return [embed, *layers, unembed] with the
+        attention class matching attn_type."""
+        cfg = make_tn_compatible_config(n_layers=2, attn_type=attn_type)
         model = AttentionLM.from_config(cfg)
         comp = AttentionLMComponent.from_trained_model(model)
-        
+
         components = comp.components()
-        
-        # Should be: embed + 2 layers + unembed = 4 components
+
         assert len(components) == 4, f"Expected 4 components, got {len(components)}"
         assert isinstance(components[0], EmbeddingComponent)
-        assert isinstance(components[1], BilinearAttentionComponent)
-        assert isinstance(components[2], BilinearAttentionComponent)
+        assert type(components[1]).__name__ == expected_cls_name
+        assert type(components[2]).__name__ == expected_cls_name
         assert isinstance(components[3], UnembeddingComponent)
     
     def test_attention_network_indices(self):

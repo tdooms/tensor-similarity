@@ -9,7 +9,7 @@ import torch
 from torch import nn
 from quimb.tensor import Tensor, TensorNetwork
 
-from src.components.base import Component, Term, spider
+from src.components.base import Component
 
 
 class EmbeddingComponent(Component):
@@ -53,17 +53,9 @@ class EmbeddingComponent(Component):
         w[1:, 1:] = self.weight.T  # E^T: (d_model, vocab_size)
         
         return TensorNetwork([Tensor(w, inds=('out:d', 'in:d0'), tags=('E',))])
-    
-    def terms(self, n_ctx, **like):
-        """Returns list of Terms for Isserlis computation.
-        
-        Embedding has a single term (no residual decomposition needed).
-        Spider tensor ties input position to output position.
-        """
-        tn = self.network()
-        tn &= Tensor(spider(1, n_ctx, **like), inds=('in:s0', 'out:s'))
-        return [Term(tn, {'in:d0': 'in:s0'})]
-    
+
+    # terms() inherits from Component: single leg 'in:d0' tied to 'out:s'.
+
     @classmethod
     def from_embedding(cls, embedding: nn.Embedding) -> "EmbeddingComponent":
         """Create from a trained nn.Embedding layer.
@@ -109,13 +101,9 @@ class UnembeddingComponent(Component):
         w[1:, 1:] = self.weight  # W: (vocab_size, d_model)
         
         return TensorNetwork([Tensor(w, inds=('out:d', 'in:d0'), tags=('U',))])
-    
-    def terms(self, n_ctx, **like):
-        """Returns list of Terms for Isserlis computation."""
-        tn = self.network()
-        tn &= Tensor(spider(1, n_ctx, **like), inds=('in:s0', 'out:s'))
-        return [Term(tn, {'in:d0': 'in:s0'})]
-    
+
+    # terms() inherits from Component: single leg 'in:d0' tied to 'out:s'.
+
     @classmethod
     def from_linear(cls, linear: nn.Linear) -> "UnembeddingComponent":
         """Create from a trained nn.Linear layer.

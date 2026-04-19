@@ -37,8 +37,14 @@ from models.components.model import AttentionLMComponent, _validate_model_for_tn
 
 
 def _as_component(model):
+    # Already something the src similarity routine understands: either our
+    # wrapper or any ``src.models.base.Model``-style object exposing
+    # ``.components()``. Pass through unchanged.
     if isinstance(model, AttentionLMComponent):
         return model
+    if hasattr(model, "components") and callable(model.components):
+        return model
+    # Otherwise assume it's a mel ``AttentionLM`` and wrap it.
     _validate_model_for_tn_similarity(model)
     return AttentionLMComponent.from_trained_model(model)
 
@@ -64,9 +70,9 @@ def compute_tn_similarity(
         
     Returns:
         State object containing:
-            - S_aa: Second moment E[f_A(x) f_A(x)^T]
-            - S_bb: Second moment E[f_B(x) f_B(x)^T]
-            - S_ab: Cross moment E[f_A(x) f_B(x)^T]
+            - s_aa: Second moment E[f_A(x) f_A(x)^T]
+            - s_bb: Second moment E[f_B(x) f_B(x)^T]
+            - s_ab: Cross moment E[f_A(x) f_B(x)^T]
         
     Raises:
         ValueError: If models have incompatible configurations for TN similarity
@@ -75,8 +81,8 @@ def compute_tn_similarity(
     comp_A = _as_component(model_A)
     comp_B = _as_component(model_B)
 
-    # Check model compatibility
-    _validate_model_compatibility(comp_A, comp_B)
+    # Check cross-model architecture compatibility
+    _check_architectures_match(comp_A, comp_B)
     
     # Determine device and dtype
     if device is None:
@@ -166,54 +172,43 @@ def self_similarity(
 
 
 def _cosine_from_state(state: State) -> float:
-    """Extract cosine similarity from State object.
-    
-    Computes: tr(S_ab) / sqrt(tr(S_aa) * tr(S_bb))
-    
-    Only uses the non-constant dimensions (excludes bias/constant row/col).
+    """Cosine similarity from a State: tr(s_ab) / sqrt(tr(s_aa) * tr(s_bb)).
+
+    Trace excludes the constant/bias row and column.
     """
-    def trace(S):
-        # S has shape (n_ctx, d+1, n_ctx, d+1)
-        # We want tr(S[:, 1:, :, 1:]) = sum over diagonal positions
-        return torch.einsum('ijij->', S[:, 1:, :, 1:])
-    
-    tr_aa = trace(state.S_aa)
-    tr_bb = trace(state.S_bb)
-    tr_ab = trace(state.S_ab)
-    
+    def trace(s):
+        # s has shape (n_ctx, d+1, n_ctx, d+1); exclude the constant axis.
+        return torch.einsum('ijij->', s[:, 1:, :, 1:])
+
+    tr_aa = trace(state.s_aa)
+    tr_bb = trace(state.s_bb)
+    tr_ab = trace(state.s_ab)
+
     denom = (tr_aa * tr_bb).sqrt()
     if denom < 1e-30:
         return 0.0
-    
     return (tr_ab / denom).item()
 
 
 def _inner_product_from_state(state: State) -> float:
-    """Extract inner product from State object."""
-    return torch.einsum('ijij->', state.S_ab[:, 1:, :, 1:]).item()
+    """Unnormalised inner product tr(s_ab), excluding the constant axis."""
+    return torch.einsum('ijij->', state.s_ab[:, 1:, :, 1:]).item()
 
 
-def _validate_model_compatibility(model_A, model_B):
-    """Validate that two models are compatible for similarity computation.
-    
-    Models must have the same architecture (vocab_size, n_ctx, d_model, etc.)
-    to compute meaningful similarity.
+def _check_architectures_match(model_A, model_B):
+    """Ensure two models have matching architectures for a meaningful similarity.
+
+    Distinct from ``_validate_model_for_tn_similarity`` (which checks that a
+    single model's config is compatible with the TN algorithm at all).
     """
     errors = []
-    
-    attrs = ['vocab_size', 'n_ctx', 'd_model', 'n_head', 'n_layers', 'attn_type']
-    for attr in attrs:
+    for attr in ('vocab_size', 'n_ctx', 'd_model', 'n_head', 'n_layers', 'attn_type'):
         val_A = getattr(model_A, attr, None)
         val_B = getattr(model_B, attr, None)
         if val_A != val_B:
             errors.append(f"{attr}: {val_A} != {val_B}")
-    
     if errors:
         raise ValueError(
             "Models have incompatible architectures:\n" +
             "\n".join(f"  - {e}" for e in errors)
         )
-
-
-# Convenience alias for backward compatibility
-compute_tn_similarity_exact = compute_tn_similarity

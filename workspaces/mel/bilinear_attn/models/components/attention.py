@@ -12,7 +12,7 @@ import torch
 from torch import nn
 from quimb.tensor import Tensor, TensorNetwork
 
-from src.components.base import Component, Term, spider
+from src.components.base import Component, Term
 from src.components.compose import pad
 from src.components.attention import Rotary, Mask
 
@@ -155,42 +155,40 @@ class BilinearAttentionComponent(Component):
         ).reindex(rename)
     
     def terms(self, n_ctx, **like):
-        """Returns list of Terms for Isserlis computation.
-        
-        Decomposes the attention layer into two terms:
-        1. Residual: Identity scaled by (1 - scale)
-        2. Active: Full attention TN with spider tensors for position tracking
-        
-        This follows the main codebase's Attention.terms() method exactly.
+        """Returns list of Terms for second-moment propagation.
+
+        Mirrors the main codebase's ``Attention.terms()``: legs share ``in:s``
+        (V, K1, K2) and ``out:s`` (Q1, Q2) implicitly via the TN itself, so no
+        spider/delta tensors are needed. The bilinear term carries the
+        (K1↔K2, Q1↔Q2) swap symmetry that Isserlis uses to dedupe matchings.
         """
         d, d1 = self.d_model, self.d_model + 1
-        
-        # Term 1: residual — constant dim preserved, data dims scaled by (1-s)
-        scale = torch.cat([
-            torch.ones(1, **like),
-            (1 - self.scale) * torch.ones(d, **like)
-        ])
-        identity = TensorNetwork([
-            Tensor(torch.diag(scale), inds=('out:d', 'in:d0')),
-            Tensor(spider(1, n_ctx, **like), inds=('in:s0', 'out:s')),
-        ])
-        
-        # Term 2: active attention, embedded from d → d+1 output via [0; I] tensor
+
+        # Term 1: residual. mel's forward is ``lerp(x, o(z), scale)``, i.e.
+        # ``(1 - scale) * x + scale * o(z)``, so the identity term is scaled
+        # by ``(1 - scale)`` on data dims. The constant-1 axis is always
+        # preserved unchanged.
+        scale = torch.cat([torch.ones(1, **like), (1 - self.scale) * torch.ones(d, **like)])
+        identity = TensorNetwork([Tensor(torch.diag(scale), inds=('out:d', 'in:d0'))])
+
+        # Term 2: active attention, embedded from d → d+1 via [0; I].
         active = self.network().reindex({'out:d': 'mid:d'})
         embed = torch.zeros(d1, d, **like)
         embed[1:] = torch.eye(d, **like)
         active &= Tensor(embed, inds=('out:d', 'mid:d'))
-        
-        # Give each input leg a unique position index, tied to the TN's internal
-        # positions (in:s for K/V, out:s for Q) via delta/spider tensors.
-        # V, K1, K2 share the same input position (in:s)
-        active &= Tensor(spider(3, n_ctx, **like), inds=('in:s0', 'in:s1', 'in:s2', 'in:s'))
-        # Q1, Q2 share the output position (out:s)
-        active &= Tensor(spider(2, n_ctx, **like), inds=('in:s3', 'in:s4', 'out:s'))
-        
-        legs = {f'in:d{i}': f'in:s{i}' for i in range(5)}
-        return [Term(identity, {'in:d0': 'in:s0'}), Term(active, legs)]
-    
+
+        # Legs 0-2 (V, K1, K2) share 'in:s'; legs 3-4 (Q1, Q2) share 'out:s'.
+        # Those indices are already present in the active TN via mask/rotary/V,
+        # so bridges reuse them—no delta tensors required.
+        legs = {'in:d0': 'in:s', 'in:d1': 'in:s', 'in:d2': 'in:s',
+                'in:d3': 'out:s', 'in:d4': 'out:s'}
+        # (q1·k1)(q2·k2) is invariant under the simultaneous swap
+        # (K1↔K2, Q1↔Q2), i.e. (in:d1↔in:d2, in:d3↔in:d4).
+        swap = {'in:d1': 'in:d2', 'in:d2': 'in:d1',
+                'in:d3': 'in:d4', 'in:d4': 'in:d3'}
+        return [Term(identity, {'in:d0': 'out:s'}),
+                Term(active, legs, symmetries=(swap,))]
+
     @classmethod
     def from_bilinear_attention(cls, layer, rope_base: int = 10000) -> "BilinearAttentionComponent":
         """Create from a trained BilinearAttention layer.
@@ -340,28 +338,28 @@ class QuadraticAttentionComponent(Component):
         ).reindex(rename)
     
     def terms(self, n_ctx, **like):
-        """Returns list of Terms for Isserlis computation."""
+        """Returns list of Terms for second-moment propagation.
+
+        Quadratic attention shares Q and K weights across the two score
+        factors, so the swap symmetry (K1↔K2, Q1↔Q2) still holds and we use
+        the same schema as the bilinear case.
+        """
         d, d1 = self.d_model, self.d_model + 1
-        
-        scale = torch.cat([
-            torch.ones(1, **like),
-            (1 - self.scale) * torch.ones(d, **like)
-        ])
-        identity = TensorNetwork([
-            Tensor(torch.diag(scale), inds=('out:d', 'in:d0')),
-            Tensor(spider(1, n_ctx, **like), inds=('in:s0', 'out:s')),
-        ])
-        
+
+        scale = torch.cat([torch.ones(1, **like), (1 - self.scale) * torch.ones(d, **like)])
+        identity = TensorNetwork([Tensor(torch.diag(scale), inds=('out:d', 'in:d0'))])
+
         active = self.network().reindex({'out:d': 'mid:d'})
         embed = torch.zeros(d1, d, **like)
         embed[1:] = torch.eye(d, **like)
         active &= Tensor(embed, inds=('out:d', 'mid:d'))
-        
-        active &= Tensor(spider(3, n_ctx, **like), inds=('in:s0', 'in:s1', 'in:s2', 'in:s'))
-        active &= Tensor(spider(2, n_ctx, **like), inds=('in:s3', 'in:s4', 'out:s'))
-        
-        legs = {f'in:d{i}': f'in:s{i}' for i in range(5)}
-        return [Term(identity, {'in:d0': 'in:s0'}), Term(active, legs)]
+
+        legs = {'in:d0': 'in:s', 'in:d1': 'in:s', 'in:d2': 'in:s',
+                'in:d3': 'out:s', 'in:d4': 'out:s'}
+        swap = {'in:d1': 'in:d2', 'in:d2': 'in:d1',
+                'in:d3': 'in:d4', 'in:d4': 'in:d3'}
+        return [Term(identity, {'in:d0': 'out:s'}),
+                Term(active, legs, symmetries=(swap,))]
     
     @classmethod
     def from_quadratic_attention(cls, layer, rope_base: int = 10000) -> "QuadraticAttentionComponent":

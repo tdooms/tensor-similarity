@@ -12,7 +12,7 @@ class BilinearAttention(nn.Module):
         scores2 = q2 @ k2.T
         pattern = (scores1 * scores2) / d_head^2 * causal_mask
         z = pattern @ v
-        out = x + scale * Wo(z)
+        out = lerp(x, Wo(z), scale)
     
     """
     
@@ -88,7 +88,7 @@ class BilinearAttention(nn.Module):
         )
         
         z_merge = rearrange(z, "b seq n_head d_head -> b seq (n_head d_head)")
-        out = x + self.scale * self.o(z_merge)
+        out = torch.lerp(x, self.o(z_merge), self.scale)
         
         if return_debug:
             debug = {
@@ -113,7 +113,7 @@ class QuadraticAttention(nn.Module):
         scores = q @ k.T
         pattern = (scores / d_head)^2 * causal_mask
         z = pattern @ v
-        out = x + scale * Wo(z)
+        out = lerp(x, Wo(z), scale)
     """
     
     def __init__(
@@ -178,7 +178,7 @@ class QuadraticAttention(nn.Module):
         )
         
         z_merge = rearrange(z, "b seq n_head d_head -> b seq (n_head d_head)")
-        out = x + self.scale * self.o(z_merge)
+        out = torch.lerp(x, self.o(z_merge), self.scale)
         
         if return_debug:
             debug = {

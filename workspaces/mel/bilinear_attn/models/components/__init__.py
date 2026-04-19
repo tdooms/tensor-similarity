@@ -9,12 +9,23 @@ Key classes:
 - AttentionLMComponent: Full model implementing Model.components() interface
 """
 
-from .embedding import EmbeddingComponent
-from .attention import BilinearAttentionComponent
+# --- bridge to tensor-mars main codebase (see tn_sim/__init__.py) ------------
+import sys as _sys
+from pathlib import Path as _Path
+
+_REPO_ROOT = _Path(__file__).resolve().parents[5]
+if (_REPO_ROOT / "src" / "components").is_dir() and str(_REPO_ROOT) not in _sys.path:
+    _sys.path.insert(0, str(_REPO_ROOT))
+# -----------------------------------------------------------------------------
+
+from .embedding import EmbeddingComponent, UnembeddingComponent
+from .attention import BilinearAttentionComponent, QuadraticAttentionComponent
 from .model import AttentionLMComponent
 
 __all__ = [
     "EmbeddingComponent",
+    "UnembeddingComponent",
     "BilinearAttentionComponent",
+    "QuadraticAttentionComponent",
     "AttentionLMComponent",
 ]

@@ -377,6 +377,6 @@ class Attention(Component):
             "... n_head seq_q seq_k, ... seq_k n_head d_head -> ... seq_q n_head d_head",
         )
         z = rearrange(z, "... seq n_head d_head -> ... seq (n_head d_head)")
-        return x + self.o(z) * self.scale
+        return torch.lerp(x, self.o(z), self.scale)
 ```
 ```

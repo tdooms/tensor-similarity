@@ -12,7 +12,7 @@ class SoftmaxAttention(nn.Module):
         scores = q @ k.T / sqrt(d_head)
         pattern = softmax(scores + causal_mask)
         z = pattern @ v
-        out = x + scale * Wo(z)
+        out = lerp(x, Wo(z), scale)
     """
     
     def __init__(
@@ -69,7 +69,7 @@ class SoftmaxAttention(nn.Module):
         )
         
         z_merge = rearrange(z, "b seq n_head d_head -> b seq (n_head d_head)")
-        out = x + self.scale * self.o(z_merge)
+        out = torch.lerp(x, self.o(z_merge), self.scale)
         
         if return_debug:
             debug = {
