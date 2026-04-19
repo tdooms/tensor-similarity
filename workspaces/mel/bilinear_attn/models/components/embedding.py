@@ -46,12 +46,9 @@ class EmbeddingComponent(Component):
         
         This preserves the constant dimension through the embedding.
         """
-        # Create padded weight matrix: (d_model+1, vocab_size+1)
-        # First row/col is identity for constant dimension
-        w = torch.zeros(self.d_model + 1, self.vocab_size + 1, **self._like())
-        w[0, 0] = 1.0  # Preserve constant
-        w[1:, 1:] = self.weight.T  # E^T: (d_model, vocab_size)
-        
+        # Pure on-device construction (avoids CPU->CUDA scalar copies
+        # that break CUDA graph capture): block-diag [[1], E^T].
+        w = torch.block_diag(torch.eye(1, **self._like()), self.weight.T)
         return TensorNetwork([Tensor(w, inds=('out:d', 'in:d0'), tags=('E',))])
 
     # terms() inherits from Component: single leg 'in:d0' tied to 'out:s'.
@@ -95,11 +92,9 @@ class UnembeddingComponent(Component):
         The unembedding is represented as a (vocab_size+1, d_model+1) matrix
         with the bias/constant dimension prepended.
         """
-        # Create padded weight matrix: (vocab_size+1, d_model+1)
-        w = torch.zeros(self.vocab_size + 1, self.d_model + 1, **self._like())
-        w[0, 0] = 1.0  # Preserve constant
-        w[1:, 1:] = self.weight  # W: (vocab_size, d_model)
-        
+        # Pure on-device construction (avoids CPU->CUDA scalar copies
+        # that break CUDA graph capture): block-diag [[1], W].
+        w = torch.block_diag(torch.eye(1, **self._like()), self.weight)
         return TensorNetwork([Tensor(w, inds=('out:d', 'in:d0'), tags=('U',))])
 
     # terms() inherits from Component: single leg 'in:d0' tied to 'out:s'.

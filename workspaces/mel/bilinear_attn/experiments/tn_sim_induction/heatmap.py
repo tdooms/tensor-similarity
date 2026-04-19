@@ -13,7 +13,9 @@ Supports:
 - Incremental caching: load existing matrix and fill in missing entries
 - Checkpoint filtering: select checkpoints at specified intervals
 
-Uses MC (Monte Carlo) similarity by default, sampling Gaussian residual-stream inputs.
+Uses MC (Monte Carlo) similarity by default: Gaussian inputs over the vocab
+axis propagated through the full model, algorithm-matched to the main
+codebase's ``tests/similarity.py::mc_inner_product_seq``.
 Random similarity samples discrete-uniform token sequences over the vocab.
 TN similarity is available but requires massive memory (~8GB+ for small models).
 
@@ -33,7 +35,7 @@ from tqdm import tqdm
 from models import AttentionLM
 from models.components import AttentionLMComponent
 from tn_sim import cosine_similarity as tn_cosine_similarity
-from tn_sim.mc_similarity import mc_similarity, random_sim
+from tn_sim.mc_similarity import mc_similarity_gaussian_tokens, random_sim
 
 
 def parse_step_from_filename(filename: str) -> int:
@@ -219,7 +221,7 @@ def compute_pairwise_similarity(
 
         try:
             if method == "mc":
-                sim = mc_similarity(model_i, model_j, device=device, n_samples=mc_samples)
+                sim = mc_similarity_gaussian_tokens(model_i, model_j, device=device, n_samples=mc_samples)
             elif method == "random":
                 sim = random_sim(model_i, model_j, device=device, n_samples=mc_samples)
             elif method == "tn":

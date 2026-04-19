@@ -181,6 +181,38 @@ class AttentionLMComponent(Model):
         return component
 
 
+class AttentionLMMCWrapper(nn.Module):
+    """Adapt mel's AttentionLM to main's MC convention.
+
+    Main's ``mc_inner_product_seq`` feeds Gaussian ``x`` of shape
+    ``(N, n_ctx, d_input)`` directly into ``model(x)``, where ``d_input``
+    is the first Linear's input width. mel's first layer is ``nn.Embedding``,
+    so here we expose the functionally-equivalent ``model(x) = U(layers(x @ E))``
+    with post-embed / per-layer / final norms applied the same way as
+    ``AttentionLM.forward``.
+    """
+
+    def __init__(self, model) -> None:
+        super().__init__()
+        self.m = model
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        m = self.m
+        h = x @ m.embed.weight
+        if getattr(m, "embed_norm", None) is not None:
+            h = m.embed_norm(h)
+        if getattr(m, "layer_norms", None) is not None:
+            for norm, layer in zip(m.layer_norms, m.layers):
+                h_n = norm(h)
+                h = h + (layer(h_n) - h_n)
+        else:
+            for layer in m.layers:
+                h = layer(h)
+        if getattr(m, "final_norm", None) is not None:
+            h = m.final_norm(h)
+        return m.unembed(h)
+
+
 def _validate_model_for_tn_similarity(model, *, ignore_norms: bool = False):
     """Validate that a model is compatible with TN similarity computation.
     

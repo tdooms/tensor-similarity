@@ -20,7 +20,7 @@ if (_REPO_ROOT / "src" / "components").is_dir() and str(_REPO_ROOT) not in _sys.
 
 from .embedding import EmbeddingComponent, UnembeddingComponent
 from .attention import BilinearAttentionComponent, QuadraticAttentionComponent
-from .model import AttentionLMComponent
+from .model import AttentionLMComponent, AttentionLMMCWrapper
 
 __all__ = [
     "EmbeddingComponent",
@@ -28,4 +28,5 @@ __all__ = [
     "BilinearAttentionComponent",
     "QuadraticAttentionComponent",
     "AttentionLMComponent",
+    "AttentionLMMCWrapper",
 ]

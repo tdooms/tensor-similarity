@@ -42,12 +42,23 @@ API:
 - `compute_tn_similarity(a, b)` → full `State(s_aa, s_ab, s_bb)`
 - `inner_product(a, b)` → unnormalised trace
 - `self_similarity(m)` → should be exactly `1.0`
-- `mc_similarity_gaussian_tokens(a, b, ...)` — **matched MC** (samples at the
-  TN algorithm's input distribution: Gaussian over padded vocab axis)
+- `mc_similarity_gaussian_tokens(a, b, ...)` — **matched MC**. Thin wrapper
+  around `src.components.mc.mc_cosine_seq`: samples `x ~ N(0, I_{V})` over
+  the vocab axis and passes the mel model through `AttentionLMMCWrapper`
+  so `model(x) = U(layers(x @ E))`. Algorithm-identical to main's
+  `tests/similarity.py::mc_inner_product_seq` (same primitive is the
+  source of truth).
 - `mc_similarity(a, b, ...)` — **residual-stream MC** (samples Gaussians
-  *post-embed*; a different baseline that does not converge to the TN value
-  for non-trivial embeddings)
-- `random_sim(a, b, ...)` — uniform discrete token MC (yet another baseline)
+  *post-embed*; a different baseline that does not converge to the above
+  or to the TN value for non-trivial embeddings).
+- `random_sim(a, b, ...)` — uniform discrete token MC (yet another baseline).
+
+All three run fp64 by default, accumulate on-device in tensors (no silent
+fp32 overflow), and return `nan` with a `RuntimeWarning` when the cosine
+denominator underflows. On degree-4-per-layer attention stacks with
+trained weights the Gaussian-MC variance is very heavy-tailed (the
+estimator is a moment of a polynomial of degree `4^n_layers`); prefer
+`cosine_similarity` (TN) when numbers look unstable.
 
 ## Model requirements
 
@@ -110,7 +121,8 @@ Notes on the numbers:
 - Complexity grows quickly with `n_layers` (term decomposition is `2^L`)
   and `n_ctx` (sequence indices appear throughout the contractions). The
   adapter targets **small** models; for anything beyond `d_model=32,
-  n_ctx=16, L=2` use `mc_similarity_gaussian_tokens` instead.
+  n_ctx=16, L=2` use `mc_similarity_gaussian_tokens` as a noisy
+  substitute (same input distribution, much higher variance).
 
 No batched-pairs API at this level. If you need one, add it upstream in
 `src/components/similarity.py` rather than re-doing Isserlis here.

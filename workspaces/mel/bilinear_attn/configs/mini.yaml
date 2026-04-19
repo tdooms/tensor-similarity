@@ -16,7 +16,7 @@ model:
   norm_places: []
   norm_type: none
   rope_base: 1000
-  use_bias_qk: false
+  use_bias_qk: true
   use_rmsnorm_qk: false
   vocab_size: 8
 name: mini_induction_checkpoints
