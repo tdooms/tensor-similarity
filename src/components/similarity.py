@@ -8,7 +8,6 @@ side. Self-pairs (Wick singletons) slice Σ at (pos=0, dat=0) — the padded
 constant-1 reference — giving μ. See SIMILARITY.md for the math.
 """
 from functools import cache, partial
-from itertools import combinations
 from math import prod
 from pathlib import Path
 
@@ -133,7 +132,8 @@ def _propagate_self(m):
 
 def _propagate_cross(a, b):
     """Joint (Σ_aa, Σ_ab, Σ_bb) through aligned components; 3 updates per layer."""
-    aa = ab = _initial(a); bb = _initial(b)
+    aa = ab = _initial(a)
+    bb = _initial(b)
     for ca, cb in zip(a.components(), b.components()):
         ta, tb = ca.terms(a.n_ctx), cb.terms(b.n_ctx)
         aa, ab, bb = (_update(_slots(aa, aa, aa), ta, ta),
@@ -162,15 +162,7 @@ def _graphed(fn, *models):
 @torch.no_grad()
 def similarity(a, b):
     """2×2 block `[[⟨a,a⟩, ⟨a,b⟩], [⟨a,b⟩ᵀ, ⟨b,b⟩]]`, shape (2, 2, n, d+1, n, d+1)."""
-    run = (lambda: _propagate_self(a)) if a is b else (lambda: _propagate_cross(a, b))
-    aa, ab, bb = _graphed(run, *((a,) if a is b else (a, b)))
-    ba = ab.permute(2, 3, 0, 1)
+    aa, ab, bb = (_graphed(lambda: _propagate_self(a), a) if a is b
+                  else _graphed(lambda: _propagate_cross(a, b), a, b))
+    ba = ab.permute(2, 3, 0, 1)   # Σ_ba = E[b · aᵀ] = Σ_ab with L/R axes swapped
     return torch.stack([torch.stack([aa, ab]), torch.stack([ba, bb])])
-
-
-@torch.no_grad()
-def precompile(*models):
-    """Cold path: populate cotengra paths, compiled exprs, and CUDA graphs for
-    `similarity(m, m)` and `similarity(a, b)` over `models`. Idempotent."""
-    for m in models: similarity(m, m)
-    for a, b in combinations(models, 2): similarity(a, b)
