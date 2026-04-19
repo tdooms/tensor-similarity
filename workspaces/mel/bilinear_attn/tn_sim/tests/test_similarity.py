@@ -247,6 +247,27 @@ class TestModelValidation:
         with pytest.raises(ValueError, match="incompatible"):
             cosine_similarity(model_A, model_B)
 
+    def test_ignore_norms_accepts_normed_model(self):
+        """``from_trained_model(model, ignore_norms=True)`` must accept a
+        model trained with norms and yield a component whose
+        self-similarity is exactly 1 (norms dropped, linear subnet only)."""
+        cfg = make_tn_compatible_config()
+        cfg["model"]["norm_type"] = "rmsnorm"
+        cfg["model"]["norm_places"] = ["pre_unembed", "pre_layer"]
+        cfg["model"]["use_rmsnorm_qk"] = True
+        model = AttentionLM.from_config(cfg).to(dtype=DTYPE)
+
+        # Strict mode still rejects.
+        with pytest.raises(ValueError):
+            AttentionLMComponent.from_trained_model(model)
+
+        # Permissive mode strips norms and produces a usable component.
+        comp = AttentionLMComponent.from_trained_model(
+            model, ignore_norms=True,
+        ).to(dtype=DTYPE)
+        sim = cosine_similarity(comp, comp, device=DEVICE, dtype=DTYPE)
+        assert abs(float(sim) - 1.0) < SELF_SIM_TOL, f"self-sim = {float(sim)!r}"
+
 
 class TestComponentWeightLoading:
     """Test that weights are correctly loaded into Component wrappers."""

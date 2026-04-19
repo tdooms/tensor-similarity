@@ -88,7 +88,11 @@ class BilinearAttention(nn.Module):
         )
         
         z_merge = rearrange(z, "b seq n_head d_head -> b seq (n_head d_head)")
-        out = torch.lerp(x, self.o(z_merge), self.scale)
+        # Equivalent to torch.lerp(x, self.o(z_merge), self.scale), but torch.lerp
+        # requires matching dtypes for input/end, which breaks under AMP autocast
+        # (Linear outputs bf16 while residual x stays fp32). Plain arithmetic uses
+        # autocast's widest-type promotion and is dtype-safe.
+        out = x + self.scale * (self.o(z_merge) - x)
         
         if return_debug:
             debug = {
@@ -178,7 +182,8 @@ class QuadraticAttention(nn.Module):
         )
         
         z_merge = rearrange(z, "b seq n_head d_head -> b seq (n_head d_head)")
-        out = torch.lerp(x, self.o(z_merge), self.scale)
+        # See BilinearAttention: avoid torch.lerp under AMP autocast (dtype mismatch).
+        out = x + self.scale * (self.o(z_merge) - x)
         
         if return_debug:
             debug = {

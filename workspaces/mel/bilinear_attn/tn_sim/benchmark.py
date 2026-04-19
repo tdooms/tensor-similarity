@@ -18,6 +18,14 @@ call for a given (route, shape) — dominated by cotengra path search.
 Warm is the steady-state cost once the expression cache and per-shape
 CUDA-graph cache are populated.
 
+To eliminate ordering bias (earlier cases warming caches used by later
+ones — the cotengra path cache at ``~/.cache/tensor-mars/ctg-paths``, the
+cuDNN/cuBLAS workspace, the Python import cache, …), every (case, route)
+row is measured in a **fresh subprocess** with ``HOME``/``USERPROFILE``
+redirected to a per-row ``TemporaryDirectory``. That guarantees the
+cotengra cache is empty for each cold measurement, so cold numbers
+between rows are comparable.
+
 Usage:
     python -m tn_sim.benchmark                     # CPU, float64
     python -m tn_sim.benchmark --device cuda --dtype float32
@@ -25,8 +33,13 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import gc
+import json
 import os
+import subprocess
+import sys
+import tempfile
 import time
 from dataclasses import dataclass
 
@@ -156,7 +169,68 @@ def _fmt_mem(n_bytes: float) -> str:
     return f"{n_bytes:6.2f} TB"
 
 
-def run(device: str, dtype: torch.dtype) -> None:
+_RESULT_TAG = "__BENCH_RESULT__"
+
+
+def _worker(case: Case, route: str, device: str, dtype_name: str) -> None:
+    """Run a single (case, route) and emit a one-line JSON result on stdout.
+
+    Runs in a child process whose ``HOME``/``USERPROFILE`` point at a fresh
+    temp dir, so ``Path.home()/.cache/tensor-mars/ctg-paths`` starts empty
+    and the cold measurement reflects a genuine cotengra path search.
+    """
+    dtype = getattr(torch, dtype_name)
+    a, b = _build_pair(case, route, device=device, dtype=dtype)
+    call = lambda: cosine_similarity(a, b, device=device, dtype=dtype)
+    cold_t, cold_mem, cold_val = _measure(call, device)
+    warm_t, warm_mem, warm_val = _measure(call, device)
+    # Equivalence sanity within the child: cold and warm sim must match.
+    assert abs(cold_val - warm_val) < 1e-10, (
+        f"cold/warm sim disagree in worker: {cold_val!r} vs {warm_val!r}"
+    )
+    print(_RESULT_TAG + json.dumps({
+        "cold_t": cold_t, "cold_mem": cold_mem,
+        "warm_t": warm_t, "warm_mem": warm_mem,
+        "sim": warm_val,
+    }), flush=True)
+
+
+def _run_one_in_subprocess(
+    case: Case, route: str, device: str, dtype_name: str,
+) -> dict:
+    payload = json.dumps({
+        "case": dataclasses.asdict(case),
+        "route": route,
+        "device": device,
+        "dtype": dtype_name,
+    })
+    with tempfile.TemporaryDirectory(prefix="tn-bench-home-") as tmp_home:
+        env = os.environ.copy()
+        # Make ``Path.home()`` resolve to an empty directory in the child so
+        # the cotengra on-disk cache is guaranteed cold per row.
+        env["HOME"] = tmp_home
+        env["USERPROFILE"] = tmp_home
+        env["XDG_CACHE_HOME"] = os.path.join(tmp_home, ".cache")
+        proc = subprocess.run(
+            [sys.executable, "-m", "tn_sim.benchmark",
+             "--_worker", "--payload", payload],
+            capture_output=True, text=True, env=env, check=False,
+        )
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"worker failed for {case.label}/{route} (exit {proc.returncode})\n"
+            f"STDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
+        )
+    for line in proc.stdout.splitlines():
+        if line.startswith(_RESULT_TAG):
+            return json.loads(line[len(_RESULT_TAG):])
+    raise RuntimeError(
+        f"worker for {case.label}/{route} produced no result line\n"
+        f"STDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
+    )
+
+
+def run(device: str, dtype_name: str) -> None:
     header = (
         f"{'case':<10} | {'route':<8} | {'cold (s)':>9} | {'warm (s)':>9} "
         f"| {'peak mem':>10} | {'sim':>12}"
@@ -165,17 +239,13 @@ def run(device: str, dtype: torch.dtype) -> None:
     print("-" * len(header))
 
     for case in CASES:
-        # Snapshot results from each route to verify they agree numerically.
         sims_per_route: dict[str, float] = {}
         for route in ("wrapper", "direct"):
-            a, b = _build_pair(case, route, device=device, dtype=dtype)
-            call = lambda: cosine_similarity(a, b, device=device, dtype=dtype)
-            cold_t, cold_mem, cold_val = _measure(call, device)
-            warm_t, warm_mem, warm_val = _measure(call, device)
-            sims_per_route[route] = warm_val
+            r = _run_one_in_subprocess(case, route, device, dtype_name)
+            sims_per_route[route] = r["sim"]
             print(
-                f"{case.label:<10} | {route:<8} | {cold_t:9.2f} | {warm_t:9.2f} "
-                f"| {_fmt_mem(max(cold_mem, warm_mem)):>10} | {warm_val:12.6f}"
+                f"{case.label:<10} | {route:<8} | {r['cold_t']:9.2f} | {r['warm_t']:9.2f} "
+                f"| {_fmt_mem(max(r['cold_mem'], r['warm_mem'])):>10} | {r['sim']:12.6f}"
             )
         # Equivalence check: wrapper and direct routes should give the same value.
         diff = abs(sims_per_route["wrapper"] - sims_per_route["direct"])
@@ -190,8 +260,22 @@ def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--device", default="cpu", choices=("cpu", "cuda"))
     p.add_argument("--dtype", default="float64", choices=("float32", "float64"))
+    # Internal worker mode — not intended for direct user invocation.
+    p.add_argument("--_worker", action="store_true", help=argparse.SUPPRESS)
+    p.add_argument("--payload", default=None, help=argparse.SUPPRESS)
     args = p.parse_args()
-    run(args.device, getattr(torch, args.dtype))
+
+    if args._worker:
+        payload = json.loads(args.payload)
+        _worker(
+            case=Case(**payload["case"]),
+            route=payload["route"],
+            device=payload["device"],
+            dtype_name=payload["dtype"],
+        )
+        return
+
+    run(args.device, args.dtype)
 
 
 if __name__ == "__main__":

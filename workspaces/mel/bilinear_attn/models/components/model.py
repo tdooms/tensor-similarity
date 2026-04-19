@@ -100,12 +100,26 @@ class AttentionLMComponent(Model):
         )
     
     @classmethod
-    def from_trained_model(cls, model, rope_base: int = None) -> "AttentionLMComponent":
+    def from_trained_model(
+        cls,
+        model,
+        rope_base: int = None,
+        *,
+        ignore_norms: bool = False,
+    ) -> "AttentionLMComponent":
         """Create from a trained AttentionLM model.
         
         Args:
             model: Trained AttentionLM from mel workspace
             rope_base: RoPE base frequency (default: use model's value if available)
+            ignore_norms: If True, skip validation of norm-related fields
+                (``norm_type``, ``norm_places``, ``embed_norm``, ``final_norm``,
+                ``layer_norms``, ``use_rmsnorm_qk``) and do not copy any norm
+                state into the component. Intended for the "trained-with-norm,
+                measure-ignoring-norm" workflow: the resulting component
+                behaves as if every norm were the identity. The caller is
+                responsible for understanding that the TN-similarity value
+                reflects the linear sub-network only.
             
         Returns:
             AttentionLMComponent with weights copied from the model
@@ -114,7 +128,7 @@ class AttentionLMComponent(Model):
             ValueError: If model has unsupported configuration for TN similarity
         """
         # Validate model configuration
-        _validate_model_for_tn_similarity(model)
+        _validate_model_for_tn_similarity(model, ignore_norms=ignore_norms)
         
         # Get rope_base from model if not provided
         if rope_base is None:
@@ -167,45 +181,51 @@ class AttentionLMComponent(Model):
         return component
 
 
-def _validate_model_for_tn_similarity(model):
+def _validate_model_for_tn_similarity(model, *, ignore_norms: bool = False):
     """Validate that a model is compatible with TN similarity computation.
     
     Args:
         model: AttentionLM model to validate
+        ignore_norms: If True, skip all norm-related checks (``norm_type``,
+            ``norm_places``, ``embed_norm``, ``final_norm``, ``layer_norms``,
+            ``use_rmsnorm_qk``). The model's norm modules will be treated as
+            identities by the caller. Non-norm checks (e.g. ``attn_type``)
+            still run.
         
     Raises:
         ValueError: If model has unsupported configuration
     """
     errors = []
     
-    # Check normalization
-    if hasattr(model, 'norm_type') and model.norm_type != 'none':
-        errors.append(
-            f"norm_type must be 'none' for TN similarity, got {model.norm_type!r}"
-        )
-    
-    if hasattr(model, 'norm_places') and model.norm_places:
-        errors.append(
-            f"norm_places must be empty for TN similarity, got {model.norm_places}"
-        )
-    
-    # Check for embed_norm
-    if hasattr(model, 'embed_norm') and model.embed_norm is not None:
-        errors.append(
-            "embed_norm must be None for TN similarity"
-        )
-    
-    # Check for final_norm (must be Identity)
-    if hasattr(model, 'final_norm') and not isinstance(model.final_norm, nn.Identity):
-        errors.append(
-            f"final_norm must be Identity for TN similarity, got {type(model.final_norm).__name__}"
-        )
-    
-    # Check for layer_norms
-    if hasattr(model, 'layer_norms') and model.layer_norms is not None:
-        errors.append(
-            "layer_norms must be None for TN similarity"
-        )
+    if not ignore_norms:
+        # Check normalization
+        if hasattr(model, 'norm_type') and model.norm_type != 'none':
+            errors.append(
+                f"norm_type must be 'none' for TN similarity, got {model.norm_type!r}"
+            )
+        
+        if hasattr(model, 'norm_places') and model.norm_places:
+            errors.append(
+                f"norm_places must be empty for TN similarity, got {model.norm_places}"
+            )
+        
+        # Check for embed_norm
+        if hasattr(model, 'embed_norm') and model.embed_norm is not None:
+            errors.append(
+                "embed_norm must be None for TN similarity"
+            )
+        
+        # Check for final_norm (must be Identity)
+        if hasattr(model, 'final_norm') and not isinstance(model.final_norm, nn.Identity):
+            errors.append(
+                f"final_norm must be Identity for TN similarity, got {type(model.final_norm).__name__}"
+            )
+        
+        # Check for layer_norms
+        if hasattr(model, 'layer_norms') and model.layer_norms is not None:
+            errors.append(
+                "layer_norms must be None for TN similarity"
+            )
     
     # Check attention type
     if hasattr(model, 'attn_type') and model.attn_type not in ('bilinear', 'quadratic'):
@@ -214,11 +234,12 @@ def _validate_model_for_tn_similarity(model):
         )
     
     # Check for RMSNorm on Q/K
-    for i, layer in enumerate(model.layers):
-        if hasattr(layer, 'norm_qk') and not isinstance(layer.norm_qk, nn.Identity):
-            errors.append(
-                f"Layer {i} has use_rmsnorm_qk=True, which is not supported for TN similarity"
-            )
+    if not ignore_norms:
+        for i, layer in enumerate(model.layers):
+            if hasattr(layer, 'norm_qk') and not isinstance(layer.norm_qk, nn.Identity):
+                errors.append(
+                    f"Layer {i} has use_rmsnorm_qk=True, which is not supported for TN similarity"
+                )
     
     if errors:
         raise ValueError(
