@@ -35,6 +35,7 @@ def mc_inner_product_seq(model_a, model_b, d_input, n_ctx, n_samples=200_000, **
 
 class MLPModel(torch.nn.Module):
     """Embed -> MLP -> head. Tests bilinear MLP similarity in isolation."""
+    n_ctx = 1
     def __init__(self, d_in, d, d_h, d_out, **kwargs):
         super().__init__()
         self.embed = Linear(d_in, d, bias=False)
@@ -50,6 +51,7 @@ class MLPModel(torch.nn.Module):
 
 class TwoLayerMLPModel(torch.nn.Module):
     """Embed -> MLP -> MLP -> head. Tests Gaussian propagation through 2 layers."""
+    n_ctx = 1
     def __init__(self, d_in, d, d_h, d_out, **kwargs):
         super().__init__()
         self.embed = Linear(d_in, d, bias=False)

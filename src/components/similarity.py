@@ -1,185 +1,176 @@
 """Exact Gaussian functional similarity via second-moment propagation.
 
-Three sentences:
-  (1) Σ = I_n ⊗ I_d — the Gaussian input covariance in padded representation.
-  (2) For each component: Σ ← Σ_{l, r ∈ terms} E[l · rᵀ | x ~ N(·, Σ)]
-      via Isserlis (deduped Wick matchings + μ-correction).
-  (3) `cross(a, b)` is the primitive (rank-4); `gauge(a) = cross(a, a)` is a
-      fast self-path; `similarity(a, b)` assembles the 2×2 block.
-
-`cross(a, b)` for a ≠ b jointly propagates the triple (Σ_aa, Σ_ab, Σ_bb) —
-the layer update for Σ_ab routes its bridges through Σ_aa/Σ_ab/Σ_bb based on
-which side each leg came from. See SIMILARITY.md for the math.
+Σ = I_n ⊗ I_d starts as the Gaussian input covariance in the padded rep.
+Per component: Σ ← Σ_{l, r ∈ terms} E[l · rᵀ | x ~ N(·, Σ)] via Isserlis
+(deduped Wick matchings + μ-correction). For a ≠ b we jointly propagate
+the triple (Σ_aa, Σ_ab, Σ_bb); the Σ_ab update routes each bridge by leg
+side. Self-pairs (Wick singletons) slice Σ at (pos=0, dat=0) — the padded
+constant-1 reference — giving μ. See SIMILARITY.md for the math.
 """
 from functools import cache, partial
+from itertools import combinations
 from math import prod
+from pathlib import Path
 
+import cotengra as ctg
 import torch
 from quimb.tensor import Tensor
 
 from src.components.utils import (
-    bridged_contract, capture_cuda_graph, direct_product, matchings, orbits,
+    capture_cuda_graph, direct_product, matchings, orbits,
 )
 
 _OUT = ('l:out:s', 'l:out:d', 'r:out:s', 'r:out:d')
-_GRAPHS: dict = {}
+
+_CACHE_DIR = Path.home() / '.cache' / 'tensor-mars' / 'ctg-paths'
+_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+_OPT = ctg.ReusableHyperOptimizer(
+    directory=str(_CACHE_DIR), minimize='size',
+    methods=('greedy', 'kahypar'), max_repeats=32,
+    parallel=False, progbar=False,
+)
+_PATHS: dict = {}     # cotengra exprs, keyed by (core_inds, bridge_inds)
+_GRAPHS: dict = {}    # CUDA-graph captures, keyed by (shapes, device, dtype)
 
 
-# ── Isserlis combinatorics ─────────────────────────────────────────────────
+def _side(leg): return 'l' if leg[0].startswith('l:') else 'r'
+
+
+# ── Isserlis combinatorics ────────────────────────────────────────────────
 
 def _canon(matching, perm, legs):
-    """Canonical form of a matching under a positional permutation."""
     return tuple(sorted(tuple(sorted((legs[perm[i]], legs[perm[j]])))
                          for i, j in matching))
 
 
 @cache
-def _isserlis_plan(legs, syms, device, dtype):
-    """Deduped Wick matchings + all-μ correction, weights as a ready tensor."""
+def _plan(legs, syms):
+    """Deduped Wick matchings + μ-correction config. Pure Python."""
     wick = orbits(matchings(tuple(range(len(legs)))), syms, partial(_canon, legs=legs))
     configs = tuple(m for m, _ in wick) + (tuple((i, i) for i in range(len(legs))),)
     weights = tuple(w for _, w in wick) + (-(prod(range(1, len(legs), 2)) - 1),)
-    return configs, torch.tensor(weights, device=device, dtype=dtype)
+    return configs, weights
 
 
-# ── joint TN for E[t_l · t_rᵀ] ────────────────────────────────────────────
+@cache
+def _weights(weights_py, device, dtype):
+    return torch.tensor(weights_py, device=device, dtype=dtype)
+
+
+# ── joint TN E[t_l · t_rᵀ] ────────────────────────────────────────────────
 
 def _sided(term, side):
-    """Prefix term's indices with `side:` (l = left half of outer product, r = right)."""
-    ren = lambda n: f'{side}:{n}'
-    tn = term.tn.reindex({i: ren(i) for i in term.tn.ind_map})
-    legs = tuple((ren(pos), ren(dat)) for dat, pos in sorted(term.legs.items()))
+    """Prefix every ind with `side:` (l = left half of t_l·t_rᵀ, r = right)."""
+    tn = term.tn.reindex({i: f'{side}:{i}' for i in term.tn.ind_map})
+    legs = tuple((f'{side}:{p}', f'{side}:{d}') for d, p in sorted(term.legs.items()))
     return tn, legs, term.symmetries
 
 
-def _join(term_l, term_r):
-    """Joint TN, legs, combined symmetries."""
-    tn_l, legs_l, sl = _sided(term_l, 'l')
-    tn_r, legs_r, sr = _sided(term_r, 'r')
-    return tn_l | tn_r, legs_l + legs_r, direct_product(sl, len(legs_l), sr, len(legs_r))
+def _join(tl, tr):
+    a, la, sa = _sided(tl, 'l')
+    b, lb, sb = _sided(tr, 'r')
+    return a | b, la + lb, direct_product(sa, len(la), sb, len(lb))
 
 
-def _bridge(sigmas, leg_i, leg_j):
-    """Attach the appropriate Σ between two legs.
-
-    `sigmas` has keys ('l','l') → Σ_aa, ('l','r') → Σ_ab, ('r','r') → Σ_bb.
-    Self-pair slices Σ at (pos_R=0, dat_R=0), yielding μ. The (r,l) combo
-    reuses Σ_ab with swapped attach order (= Σ_ba transpose)."""
-    side = lambda leg: 'l' if leg[0].startswith('l:') else 'r'
-    si, sj = side(leg_i), side(leg_j)
-    if leg_i == leg_j:
-        return sigmas[(si, si)][..., 0, 0], leg_i
-    if (si, sj) == ('r', 'l'):
-        return sigmas[('l', 'r')], (*leg_j, *leg_i)
-    return sigmas[(si, sj)], (*leg_i, *leg_j)
+def _slots(aa, ab, bb):
+    """Four (side_L, side_R) → Σ slots; Σ_ba = Σ_ab with L/R axes swapped."""
+    return {('l', 'l'): aa, ('l', 'r'): ab,
+            ('r', 'l'): ab.permute(2, 3, 0, 1), ('r', 'r'): bb}
 
 
-def _moment(term_l, term_r, sigmas):
+def _bridge(slots, i, j):
+    """Σ + attach-inds for a Wick pair. Self-pair sliced at (0, 0) = μ."""
+    k = (_side(i), _side(j))
+    return (slots[k][..., 0, 0], i) if i == j else (slots[k], (*i, *j))
+
+
+def _contract(core, bridges):
+    """Cache compiled cotengra expr per (core_inds, bridge_inds); fresh data each call
+    (`Attention.network()` rebuilds tensors, so per-term data capture can't work)."""
+    key = tuple(t.inds for t in core) + tuple(inds for _, inds in bridges)
+    if key not in _PATHS:
+        tn = core.copy()
+        for data, inds in bridges: tn &= Tensor(data, inds=inds)
+        _PATHS[key] = tn.contract(output_inds=_OUT, optimize=_OPT, get='expression')
+    return _PATHS[key](*(t.data for t in core), *(data for data, _ in bridges))
+
+
+def _moment(tl, tr, slots):
     """E[t_l · t_rᵀ] via Isserlis + μ correction."""
-    tn, legs, syms = _join(term_l, term_r)
-    s = sigmas[('l', 'l')]
-    configs, weights = _isserlis_plan(legs, syms, s.device, s.dtype)
-    return sum(w * bridged_contract(
-        tn, [_bridge(sigmas, legs[i], legs[j]) for i, j in c], _OUT)
-        for c, w in zip(configs, weights))
+    tn, legs, syms = _join(tl, tr)
+    configs, weights_py = _plan(legs, syms)
+    s = slots[('l', 'l')]
+    ws = _weights(weights_py, s.device, s.dtype)
+    return sum(w * _contract(tn, [_bridge(slots, legs[i], legs[j]) for i, j in c])
+               for c, w in zip(configs, ws))
 
 
-def _step(sigmas, terms_l, terms_r):
-    """Σ ← Σ_{l, r} E[l · rᵀ] over term pairs."""
-    return sum(_moment(l, r, sigmas) for l in terms_l for r in terms_r)
+def _update(slots, ts_l, ts_r):
+    """Σ ← Σ_{l, r} E[l · rᵀ]."""
+    return sum(_moment(l, r, slots) for l in ts_l for r in ts_r)
 
 
-def _self(sigma):
-    """The three-slot sigmas dict where all slots are the same self-moment."""
-    return {('l', 'l'): sigma, ('l', 'r'): sigma, ('r', 'r'): sigma}
-
-
-# ── initial state ─────────────────────────────────────────────────────────
+# ── propagation ───────────────────────────────────────────────────────────
 
 def _initial(model):
-    """Σ = I_n ⊗ I_d, rank-4 (n, d+1, n, d+1)."""
+    """Σ = I_n ⊗ I_d in the padded rep; rank-4 (n, d+1, n, d+1)."""
     p = next(model.parameters())
-    n = getattr(model, 'n_ctx', 1)
     d = model.components()[0].network().ind_size('in:d0')
-    kit = dict(device=p.device, dtype=p.dtype)
-    return (Tensor(torch.eye(n, **kit), inds=('l:out:s', 'r:out:s'))
-          & Tensor(torch.eye(d, **kit), inds=('l:out:d', 'r:out:d'))
+    like = dict(device=p.device, dtype=p.dtype)
+    return (Tensor(torch.eye(model.n_ctx, **like), inds=('l:out:s', 'r:out:s'))
+          & Tensor(torch.eye(d, **like), inds=('l:out:d', 'r:out:d'))
            ).contract(output_inds=_OUT).data
 
 
-# ── core propagation ──────────────────────────────────────────────────────
+def _propagate_self(m):
+    """Σ ← self-update through each component. Returns `(σ, σ, σ)` for uniformity."""
+    sigma = _initial(m)
+    for c in m.components():
+        ts = c.terms(m.n_ctx)
+        sigma = _update(_slots(sigma, sigma, sigma), ts, ts)
+    return (sigma,) * 3
 
-def _gauge(model):
-    """Self-propagation; returns rank-4 E[f · fᵀ]."""
-    sigma = _initial(model)
-    for c in model.components():
-        sigma = _step(_self(sigma), c.terms(getattr(model, 'n_ctx', 1)), c.terms(getattr(model, 'n_ctx', 1)))
-    return sigma
 
-
-def _joint(a, b):
-    """Propagate the triple (Σ_aa, Σ_ab, Σ_bb) through aligned components."""
-    s_aa = s_ab = _initial(a)
-    s_bb = _initial(b)
+def _propagate_cross(a, b):
+    """Joint (Σ_aa, Σ_ab, Σ_bb) through aligned components; 3 updates per layer."""
+    aa = ab = _initial(a); bb = _initial(b)
     for ca, cb in zip(a.components(), b.components()):
-        ta = ca.terms(getattr(a, 'n_ctx', 1))
-        tb = cb.terms(getattr(b, 'n_ctx', 1))
-        new_aa = _step(_self(s_aa), ta, ta)
-        new_ab = _step({('l','l'): s_aa, ('l','r'): s_ab, ('r','r'): s_bb}, ta, tb)
-        new_bb = _step(_self(s_bb), tb, tb)
-        s_aa, s_ab, s_bb = new_aa, new_ab, new_bb
-    return s_aa, s_ab, s_bb
+        ta, tb = ca.terms(a.n_ctx), cb.terms(b.n_ctx)
+        aa, ab, bb = (_update(_slots(aa, aa, aa), ta, ta),
+                      _update(_slots(aa, ab, bb), ta, tb),
+                      _update(_slots(bb, bb, bb), tb, tb))
+    return aa, ab, bb
 
 
 # ── CUDA graph wrapper ────────────────────────────────────────────────────
 
-def _graphed(fn, models, name):
-    """Run fn() with a CUDA graph cached per (arch, device, dtype, name)."""
+def _graphed(fn, *models):
+    """Cache a CUDA graph keyed by (param shapes, device, dtype)."""
     ps = tuple(p for m in models for p in m.parameters())
-    if not ps or not ps[0].is_cuda:
-        return fn()
-    key = (tuple(p.shape for p in ps), ps[0].device, ps[0].dtype, name)
+    if not ps[0].is_cuda: return fn()
+    key = (tuple(p.shape for p in ps), ps[0].device, ps[0].dtype)
     if key not in _GRAPHS:
         _GRAPHS[key] = capture_cuda_graph(fn, ps)
     bufs, out, graph = _GRAPHS[key]
     for src, dst in zip(ps, bufs): dst.copy_(src.data)
     graph.replay()
-    return tuple(o.clone() for o in out) if isinstance(out, tuple) else out.clone()
+    return tuple(o.clone() for o in out)
 
 
-# ── public primitives ─────────────────────────────────────────────────────
-
-@torch.no_grad()
-def precompile(a, b=None):
-    """Run the cold path up front: cotengra path optimization for every unique
-    contraction topology this (a, b) will hit. Populates the on-disk path cache
-    and the in-memory expression cache. After this, gauge/cross/similarity calls
-    for the same (arch, device, dtype) are warm. Idempotent."""
-    if b is None or a is b: _gauge(a)
-    else:                   _joint(a, b)
-
-
-@torch.no_grad()
-def gauge(model):
-    """E[f(x) · f(x)ᵀ] — self propagation, rank-4. First call per (arch, device,
-    dtype) is cold; call `precompile(model)` up front to control when that happens."""
-    return _graphed(lambda: _gauge(model), (model,), 'gauge')
-
-
-@torch.no_grad()
-def cross(a, b):
-    """E[f_a(x) · f_b(x)ᵀ], rank-4. See `precompile` for cold/warm separation."""
-    if a is b: return gauge(a)
-    return _graphed(lambda: _joint(a, b), (a, b), 'joint')[1]
-
+# ── public API ────────────────────────────────────────────────────────────
 
 @torch.no_grad()
 def similarity(a, b):
-    """2×2 block `[[⟨a,a⟩, ⟨a,b⟩], [⟨a,b⟩ᵀ, ⟨b,b⟩]]`, shape (2, 2, n, d+1, n, d+1).
-    See `precompile` for cold/warm separation."""
-    if a is b:
-        s = gauge(a)
-        return torch.stack([torch.stack([s, s]), torch.stack([s, s])])
-    s_aa, s_ab, s_bb = _graphed(lambda: _joint(a, b), (a, b), 'joint')
-    s_ba = s_ab.permute(2, 3, 0, 1)
-    return torch.stack([torch.stack([s_aa, s_ab]), torch.stack([s_ba, s_bb])])
+    """2×2 block `[[⟨a,a⟩, ⟨a,b⟩], [⟨a,b⟩ᵀ, ⟨b,b⟩]]`, shape (2, 2, n, d+1, n, d+1)."""
+    run = (lambda: _propagate_self(a)) if a is b else (lambda: _propagate_cross(a, b))
+    aa, ab, bb = _graphed(run, *((a,) if a is b else (a, b)))
+    ba = ab.permute(2, 3, 0, 1)
+    return torch.stack([torch.stack([aa, ab]), torch.stack([ba, bb])])
+
+
+@torch.no_grad()
+def precompile(*models):
+    """Cold path: populate cotengra paths, compiled exprs, and CUDA graphs for
+    `similarity(m, m)` and `similarity(a, b)` over `models`. Idempotent."""
+    for m in models: similarity(m, m)
+    for a, b in combinations(models, 2): similarity(a, b)
