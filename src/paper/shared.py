@@ -38,10 +38,10 @@ def make_model(seed):
     return PaperModel()
 
 
-def cosine(state):
-    """Cosine similarity from a State object."""
-    tr = lambda s: torch.einsum('ijij->', s[:, 1:, :, 1:])
-    return (tr(state.s_ab) / (tr(state.s_aa) * tr(state.s_bb)) ** 0.5).item()
+def cosine(s):
+    """Cosine similarity from a `(2, 2, n, d+1, n, d+1)` similarity tensor."""
+    tr = lambda x: torch.einsum('ijij->', x[:, 1:, :, 1:])
+    return (tr(s[0, 1]) / (tr(s[0, 0]) * tr(s[1, 1])) ** 0.5).item()
 
 
 def load_model(state_dict):

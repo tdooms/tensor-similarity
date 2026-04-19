@@ -61,7 +61,7 @@ class Component(nn.Module):
         """Returns the hidden wire names of the component."""
         return [idx for idx in self.network().ind_map.keys() if idx.startswith('h:d' if only_dims else 'h:')]
     
-    def terms(self, n_ctx, **like):
+    def terms(self, n_ctx):
         """TN terms with sequence wires. f(x) = sum of terms.
 
         Default: all input legs and the output share the same sequence position

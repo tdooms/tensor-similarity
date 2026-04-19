@@ -18,5 +18,5 @@ class Linear(nn.Linear):
         w = torch.block_diag(torch.eye(1, **self._like()), self.weight)
         return TensorNetwork([Tensor(w, inds=('out:d', 'in:d0'), tags=('E',))])
 
-    def terms(self, n_ctx, **like):
+    def terms(self, n_ctx):
         return [Term(self.network(), {'in:d0': 'out:s'})]

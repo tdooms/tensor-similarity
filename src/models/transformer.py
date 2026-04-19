@@ -19,6 +19,7 @@ class Layer(nn.Module):
 class Transformer(Model):
     def __init__(self, d_input, d_model, n_head, n_ctx, d_hidden, d_output, n_layer=2, mask='causal', bias=False, scale=1):
         super().__init__(None)
+        self.n_ctx = n_ctx
         self.embed = Linear(d_input, d_model, bias=False)
         self.body = nn.ModuleList([
             Layer(d_model, n_head, n_ctx, d_hidden, mask=mask, bias=bias, scale=scale)
