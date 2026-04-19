@@ -3,7 +3,7 @@ import pytest
 import torch
 
 from models import AttentionLM
-from tests.architecture_tests.conftest import B, T, V, D_MODEL, N_HEAD, N_LAYERS, N_CTX
+from tests.models.conftest import B, T, V, D_MODEL, N_HEAD, N_LAYERS, N_CTX
 
 
 def test_forward_shapes(test_config, random_input_ids):

@@ -3,7 +3,7 @@ import pytest
 import torch
 
 from models.attention_kernels.rotary import Rotary
-from tests.architecture_tests.conftest import B, T, N_HEAD, D_MODEL, ATOL, RTOL
+from tests.models.conftest import B, T, N_HEAD, D_MODEL, ATOL, RTOL
 
 
 def test_rope_preserves_norm():

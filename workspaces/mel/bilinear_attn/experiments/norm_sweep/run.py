@@ -555,7 +555,7 @@ def main():
             if dataset_mode == "half_induction":
                 val_loss, val_acc = evaluate_half_induction(model, val_dl, seq_len, device, max_batches=20)
                 row.update({"val_loss": val_loss, "val_acc": val_acc})
-                print(f"\n[step {step}]  val_loss={val_loss:.4f}  val_acc={val_acc:.3f}")
+                tqdm.write(f"[step {step}]  val_loss={val_loss:.4f}  val_acc={val_acc:.3f}")
             elif dataset_mode == "varied_induction":
                 val_loss, val_acc = evaluate_varied_induction(model, val_dl, device, max_batches=20)
                 row.update({"val_loss": val_loss, "val_acc": val_acc})
@@ -564,11 +564,11 @@ def main():
                 icl_msg = "  ".join(
                     f"{k}={v:.4f}" for k, v in icl_metrics.items() if isinstance(v, (int, float)) and math.isfinite(v)
                 )
-                print(f"\n[step {step}]  val_loss={val_loss:.4f}  val_acc={val_acc:.3f}  {icl_msg}")
+                tqdm.write(f"[step {step}]  val_loss={val_loss:.4f}  val_acc={val_acc:.3f}  {icl_msg}")
             else:
                 val_loss = evaluate_stories(model, val_dl, device, max_batches=20)
                 row["val_loss"] = val_loss
-                print(f"\n[step {step}]  val_loss={val_loss:.4f}")
+                tqdm.write(f"[step {step}]  val_loss={val_loss:.4f}")
             with open(metrics_file, "a") as f:
                 f.write(json.dumps(row) + "\n")
             if wandb_run is not None:

@@ -29,8 +29,10 @@ Performance:
     - Expression caching helps with repeated computations
 """
 
-import torch
+import warnings
 from typing import Union
+
+import torch
 
 from src.components.similarity import similarity as _compute_similarity, State
 from models.components.model import AttentionLMComponent, _validate_model_for_tn_similarity
@@ -185,8 +187,15 @@ def _cosine_from_state(state: State) -> float:
     tr_ab = trace(state.s_ab)
 
     denom = (tr_aa * tr_bb).sqrt()
-    if denom < 1e-30:
-        return 0.0
+    if not torch.isfinite(denom) or denom.item() < 1e-30:
+        warnings.warn(
+            f"TN cosine denominator underflowed or was non-finite "
+            f"(tr_aa={tr_aa.item():.3e}, tr_bb={tr_bb.item():.3e}). "
+            f"Returning nan.",
+            RuntimeWarning,
+            stacklevel=3,
+        )
+        return float("nan")
     return (tr_ab / denom).item()
 
 

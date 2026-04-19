@@ -19,7 +19,7 @@ class BilinearAttentionNorm(nn.Module):
         scores2 = q2 @ k2.T
         pattern = (scores1 * scores2) / d_head^2 * causal_mask
         z = pattern @ v
-        out = x + scale * Wo(z)
+        out = lerp(x, Wo(z), scale)
     
     Args:
         qk_norm_type: Type of Q/K normalization ('none', 'rmsnorm', 'alpha_head')
@@ -96,7 +96,9 @@ class BilinearAttentionNorm(nn.Module):
         )
         
         z_merge = rearrange(z, "b seq n_head d_head -> b seq (n_head d_head)")
-        out = x + self.scale * self.o(z_merge)
+        # lerp(x, o(z), scale); written as plain arithmetic to be AMP-safe
+        # (torch.lerp rejects mismatched dtypes under autocast).
+        out = x + self.scale * (self.o(z_merge) - x)
         
         if return_debug:
             debug = {
@@ -121,7 +123,7 @@ class QuadraticAttentionNorm(nn.Module):
         scores = q @ k.T
         pattern = (scores / d_head)^2 * causal_mask
         z = pattern @ v
-        out = x + scale * Wo(z)
+        out = lerp(x, Wo(z), scale)
     """
     
     def __init__(
@@ -175,7 +177,7 @@ class QuadraticAttentionNorm(nn.Module):
             "b seq_q n_head d_head, b seq_k n_head d_head -> b n_head seq_q seq_k",
         )
         
-        pattern = (scores / self.d_head).square()
+        pattern = (scores / self.d_head) ** 2
         pattern = pattern * self.causal_mask[None, None, :T, :T]
         
         z = einsum(
@@ -184,7 +186,7 @@ class QuadraticAttentionNorm(nn.Module):
         )
         
         z_merge = rearrange(z, "b seq n_head d_head -> b seq (n_head d_head)")
-        out = x + self.scale * self.o(z_merge)
+        out = x + self.scale * (self.o(z_merge) - x)
         
         if return_debug:
             debug = {
@@ -270,7 +272,8 @@ class SoftmaxAttentionNorm(nn.Module):
         )
         
         z_merge = rearrange(z, "b seq n_head d_head -> b seq (n_head d_head)")
-        out = x + self.scale * self.o(z_merge)
+        # lerp(x, o(z), scale); see BilinearAttentionNorm for why.
+        out = x + self.scale * (self.o(z_merge) - x)
         
         if return_debug:
             debug = {

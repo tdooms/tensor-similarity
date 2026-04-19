@@ -136,7 +136,13 @@ class AttentionLMComponent(Model):
                 rope_base = model.layers[0].rotary.base
             else:
                 rope_base = 10000  # Default
-        
+
+        # Determine whether Q/K projections carry a bias. BilinearAttention
+        # exposes (q1, k1, q2, k2); QuadraticAttention exposes (q, k).
+        first_layer = model.layers[0]
+        qk_proj = first_layer.q1 if hasattr(first_layer, 'q1') else first_layer.q
+        use_bias_qk = qk_proj.bias is not None
+
         # Create component model
         component = cls(
             vocab_size=model.vocab_size,
@@ -144,9 +150,9 @@ class AttentionLMComponent(Model):
             d_model=model.d_model,
             n_head=model.n_head,
             n_layers=model.n_layers,
-            attn_scale=model.layers[0].scale,
+            attn_scale=first_layer.scale,
             attn_type=model.attn_type,
-            use_bias_qk=model.layers[0].q1.bias is not None if hasattr(model.layers[0], 'q1') else model.layers[0].q.bias is not None,
+            use_bias_qk=use_bias_qk,
             rope_base=rope_base,
         )
         

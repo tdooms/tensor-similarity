@@ -26,6 +26,19 @@ _DTYPE_MAP = {
 
 
 def _build_log_linear_checkpoint_steps(max_steps: int, checkpoint_count: int, alpha: float) -> list[int]:
+    """Build a log-linear schedule of checkpoint steps.
+
+    Generates ``checkpoint_count`` evenly-spaced points in ``[0, 1]``, bends
+    them toward 0 with ``log1p((e-1)u)`` and mixes the curve in with the
+    linear schedule via ``alpha`` (``1.0`` = pure log, ``0.0`` = pure
+    linear). Steps are then scaled to ``[0, max_steps]``, rounded to ints,
+    and deduplicated.
+
+    Note: after rounding+deduplication the returned list may contain
+    **fewer than** ``checkpoint_count`` entries (early log-spaced steps can
+    collide, especially for small ``max_steps`` or large ``alpha``). Step
+    0 and ``max_steps`` are always included.
+    """
     if max_steps < 0:
         raise ValueError(f"max_steps must be >= 0, got {max_steps}")
     if checkpoint_count <= 0:
@@ -264,7 +277,7 @@ class Trainer:
             with open(self._hf_uploaded_manifest, "a") as f:
                 f.write(f"{name}\n")
         except OSError as exc:
-            print(f"Warning: failed to log uploaded checkpoint {name}: {exc}")
+            tqdm.write(f"Warning: failed to log uploaded checkpoint {name}: {exc}")
 
     def _load_uploaded_checkpoint_manifest(self) -> None:
         if not self._hf_uploaded_manifest.exists():

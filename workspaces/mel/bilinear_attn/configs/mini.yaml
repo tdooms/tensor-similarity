@@ -13,8 +13,8 @@ model:
   n_ctx: 8
   n_head: 2
   n_layers: 2
-  norm_places: []
-  norm_type: none
+  norm_places: [pre_unembed]
+  norm_type: tok0_batch
   rope_base: 1000
   use_bias_qk: true
   use_rmsnorm_qk: false

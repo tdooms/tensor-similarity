@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 
 from analysis.behaviour.icl import compute_token_k_losses, compute_icl_score
 from analysis.behaviour.tracker import BehaviourTracker, TrackerConfig
-from tests.analysis_tests.conftest import V, DictDataset, _collate_fn
+from tests.analysis.conftest import V, DictDataset, _collate_fn
 
 
 # ---------------------------------------------------------------------------

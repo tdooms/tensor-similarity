@@ -5,7 +5,7 @@ import torch
 from pathlib import Path
 
 from analysis.behaviour.bigram import BigramAnalyzer
-from tests.analysis_tests.conftest import V, T, B, PAD_TOKEN
+from tests.analysis.conftest import V, T, B, PAD_TOKEN
 
 
 def test_bigram_analyzer_init():

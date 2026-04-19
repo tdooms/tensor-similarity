@@ -9,8 +9,13 @@ Main exports:
 - inner_product: Compute unnormalized inner product
 - self_similarity: Convenience function for self-similarity
 
-Monte Carlo baseline:
-- mc_similarity: MC similarity using Gaussian residual-stream samples
+Monte Carlo baselines:
+- mc_similarity: MC similarity using Gaussian residual-stream samples.
+- mc_similarity_gaussian_tokens: TN-matched MC (Gaussian over the padded
+  vocab axis, propagated through the full model). This is the MC estimator
+  that converges to the TN value; use it to validate TN outputs.
+- random_sim: discrete-uniform token-sequence MC (for heatmaps, not a TN
+  baseline).
 
 Limitations:
 - Only supports models with norm_type='none' and norm_places=[]
@@ -18,18 +23,11 @@ Limitations:
 - Does not support use_rmsnorm_qk=True
 """
 
-# --- bridge to tensor-mars main codebase -------------------------------------
-# The bilinear_attn workspace is pip-installed as an editable package, but the
-# tensor-mars repo root (which owns `src.components.*`) is not. We prepend it
-# to sys.path here so `from src.components.similarity import ...` resolves for
-# any consumer of tn_sim (tests, scripts, notebooks).
-import sys as _sys
-from pathlib import Path as _Path
-
-_REPO_ROOT = _Path(__file__).resolve().parents[4]  # tn_sim/__init__.py -> bilinear_attn -> mel -> workspaces -> tensor-mars
-if (_REPO_ROOT / "src" / "components").is_dir() and str(_REPO_ROOT) not in _sys.path:
-    _sys.path.insert(0, str(_REPO_ROOT))
-# -----------------------------------------------------------------------------
+# The tensor-mars repo root (owner of ``src.components.*``) is not on
+# sys.path by default. ``models.components`` owns that path bridge; import
+# it here purely for the side effect so ``from src.components...`` works
+# inside ``.similarity`` below.
+import models.components as _models_components  # noqa: F401
 
 from .similarity import (
     compute_tn_similarity,
@@ -37,7 +35,7 @@ from .similarity import (
     inner_product,
     self_similarity,
 )
-from .mc_similarity import mc_similarity, random_sim
+from .mc_similarity import mc_similarity, mc_similarity_gaussian_tokens, random_sim
 
 __all__ = [
     "compute_tn_similarity",
@@ -45,5 +43,6 @@ __all__ = [
     "inner_product",
     "self_similarity",
     "mc_similarity",
+    "mc_similarity_gaussian_tokens",
     "random_sim",
 ]

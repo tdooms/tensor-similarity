@@ -91,3 +91,39 @@ def model(tiny_config):
     from models import AttentionLM
     torch.manual_seed(42)
     return AttentionLM.from_config(tiny_config)
+
+
+@pytest.fixture
+def make_tracker(model, dummy_dataloader, tmp_path):
+    """Factory that builds a BehaviourTracker with sensible defaults.
+
+    Call as ``make_tracker()`` or ``make_tracker(config=..., run_dir=...)``.
+    """
+    from analysis.behaviour.tracker import BehaviourTracker
+
+    _UNSET = object()
+
+    def _factory(config=None, run_dir=_UNSET, cache_dir=None):
+        if run_dir is _UNSET:
+            run_dir = tmp_path  # default to a fresh tmp dir
+        return BehaviourTracker(
+            model=model,
+            train_dataloader=dummy_dataloader,
+            val_dataloader=dummy_dataloader,
+            vocab_size=V,
+            run_dir=str(run_dir) if run_dir is not None else None,
+            cache_dir=str(cache_dir) if cache_dir is not None else None,
+            config=config,
+        )
+
+    return _factory
+
+
+def save_fake_checkpoint(model, path, step):
+    """Save a checkpoint in the same format as ``Trainer.save_checkpoint``."""
+    torch.save({
+        "step": step,
+        "model_state_dict": model.state_dict(),
+        "optimizer_state_dict": {},
+        "scheduler_state_dict": {},
+    }, path)

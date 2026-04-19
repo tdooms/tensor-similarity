@@ -3,7 +3,7 @@ import pytest
 import torch
 
 from models.attention_kernels.bilinear import QuadraticAttention
-from tests.architecture_tests.conftest import B, T, D_MODEL, N_HEAD, N_CTX
+from tests.models.conftest import B, T, D_MODEL, N_HEAD, N_CTX
 
 
 def test_causal_masking_future_zero():

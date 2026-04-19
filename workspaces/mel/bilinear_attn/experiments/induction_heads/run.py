@@ -350,7 +350,7 @@ def main():
                 f.write(json.dumps(row) + "\n")
             if wandb_run is not None:
                 wandb_run.log(row, step=step)
-            print(f"\n[step {step}]  val_loss={val_loss:.4f}  val_acc={val_acc:.3f}")
+            tqdm.write(f"[step {step}]  val_loss={val_loss:.4f}  val_acc={val_acc:.3f}")
             model.train()
 
         # ── checkpoint ────────────────────────────────────────────────

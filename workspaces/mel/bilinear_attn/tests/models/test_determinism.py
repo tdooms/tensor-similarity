@@ -3,7 +3,7 @@ import pytest
 import torch
 
 from models import AttentionLM
-from tests.architecture_tests.conftest import B, T, V
+from tests.models.conftest import B, T, V
 
 
 def test_same_seed_same_init(test_config):

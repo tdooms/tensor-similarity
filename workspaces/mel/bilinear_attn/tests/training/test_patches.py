@@ -347,29 +347,14 @@ class TestBetasDefault:
 class TestDtypeConfig:
     """Test that dtype config is parsed correctly in the trainer."""
 
-    def test_dtype_map_keys(self):
+    @pytest.mark.parametrize("key,dtype,use_scaler", [
+        ("float32", torch.float32, False),
+        ("float16", torch.float16, True),
+        ("bfloat16", torch.bfloat16, False),
+    ])
+    def test_dtype_map(self, key, dtype, use_scaler):
         from train.trainer import _DTYPE_MAP
-        assert "float32" in _DTYPE_MAP
-        assert "float16" in _DTYPE_MAP
-        assert "bfloat16" in _DTYPE_MAP
-
-    def test_float32_no_scaler(self):
-        from train.trainer import _DTYPE_MAP
-        dtype, use_scaler = _DTYPE_MAP["float32"]
-        assert dtype == torch.float32
-        assert use_scaler is False
-
-    def test_float16_uses_scaler(self):
-        from train.trainer import _DTYPE_MAP
-        dtype, use_scaler = _DTYPE_MAP["float16"]
-        assert dtype == torch.float16
-        assert use_scaler is True
-
-    def test_bfloat16_no_scaler(self):
-        from train.trainer import _DTYPE_MAP
-        dtype, use_scaler = _DTYPE_MAP["bfloat16"]
-        assert dtype == torch.bfloat16
-        assert use_scaler is False
+        assert _DTYPE_MAP[key] == (dtype, use_scaler)
 
 
 # ===================================================================

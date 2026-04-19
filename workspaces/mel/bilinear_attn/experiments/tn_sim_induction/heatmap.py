@@ -166,6 +166,7 @@ def compute_pairwise_similarity(
     mc_samples: int = 4000,
     window: Optional[int] = None,
     output_path: Optional[Path] = None,
+    ignore_norms: bool = False,
 ) -> np.ndarray:
     """Compute pairwise cosine similarity matrix.
     
@@ -196,7 +197,7 @@ def compute_pairwise_similarity(
     
     if method == "tn":
         models = [
-            m if isinstance(m, AttentionLMComponent) else AttentionLMComponent.from_trained_model(m)
+            m if isinstance(m, AttentionLMComponent) else AttentionLMComponent.from_trained_model(m, ignore_norms=ignore_norms)
             for m in models
         ]
     
@@ -232,7 +233,7 @@ def compute_pairwise_similarity(
             sim_matrix[i, j] = sim
             sim_matrix[j, i] = sim  # Symmetric
             computed += 1
-            print(f"  sim(step {steps[i]}, step {steps[j]}) = {sim:.4f}")
+            tqdm.write(f"  sim(step {steps[i]}, step {steps[j]}) = {sim:.4f}")
 
             # Save incrementally after each pair
             if output_path is not None:
@@ -263,6 +264,7 @@ def generate_heatmap(
     method: str = "mc",
     mc_samples: int = 4000,
     show: bool = True,
+    ignore_norms: bool = False,
 ) -> tuple[np.ndarray, list[int]]:
     """Generate cosine similarity heatmap from checkpoint directory.
     
@@ -282,6 +284,7 @@ def generate_heatmap(
             or "tn" (tensor network, slow/memory-intensive)
         mc_samples: Number of samples for MC/random similarity
         show: Whether to display the plot
+        ignore_norms: If True, skip norm validation for TN similarity (allows non-'none' norm_type)
         
     Returns:
         Tuple of (similarity matrix, list of step numbers)
@@ -350,7 +353,7 @@ def generate_heatmap(
     sim_matrix = compute_pairwise_similarity(
         models, steps, sim_matrix, device,
         method=method, mc_samples=mc_samples, window=window,
-        output_path=data_path,
+        output_path=data_path, ignore_norms=ignore_norms,
     )
     
     # Final save of raw data
@@ -435,6 +438,11 @@ def main():
         action="store_true",
         help="Don't display the plot (just save)",
     )
+    parser.add_argument(
+        "--ignore-norm",
+        action="store_true",
+        help="Ignore norm checks for TN similarity (allow non-'none' norm_type and non-empty norm_places)",
+    )
     args = parser.parse_args()
     
     generate_heatmap(
@@ -446,6 +454,7 @@ def main():
         method=args.method,
         mc_samples=args.mc_samples,
         show=not args.no_show,
+        ignore_norms=args.ignore_norm,
     )
 
 

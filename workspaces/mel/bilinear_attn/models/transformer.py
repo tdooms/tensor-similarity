@@ -81,6 +81,17 @@ class Tok0Batch(nn.Module):
         self.register_buffer("running_mean_energy", torch.ones(1))
         self.register_buffer("num_batches_tracked", torch.tensor(0, dtype=torch.long))
 
+    def reset_parameters(self) -> None:
+        """Reset running statistics to their initial values.
+
+        Mirrors ``nn.BatchNorm*d.reset_parameters``: re-initialises
+        ``running_mean_energy`` to 1 and ``num_batches_tracked`` to 0 so a
+        model can be re-used across training runs without stale buffer
+        state leaking in via ``use_running_stats=True`` at eval.
+        """
+        self.running_mean_energy.fill_(1.0)
+        self.num_batches_tracked.zero_()
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         assert x.shape[-1] == self.normalized_shape, (
             f"expected last dim {self.normalized_shape}, got {x.shape[-1]}"

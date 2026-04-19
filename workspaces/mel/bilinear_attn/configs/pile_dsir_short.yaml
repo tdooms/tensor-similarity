@@ -19,9 +19,9 @@ data:
 
 model:
   vocab_size: 4096
-  n_ctx: 512
-  d_model: 256
-  n_head: 8
+  n_ctx: 8
+  d_model: 8
+  n_head: 2
   n_layers: 2
   attn_type: bilinear
   attn_scale: 0.35
@@ -38,7 +38,7 @@ init:
   init_type: mup
 
 train:
-  batch_size: 64
+  batch_size: 8
   lr: 3.0e-4
   lr_decay_frac: 0.1
   use_muon: true
@@ -50,11 +50,11 @@ train:
   grad_clip: 1.0
   dtype: bfloat16
   checkpoint_schedule: log_linear
-  checkpoint_count: 20
+  checkpoint_count: 5
   checkpoint_log_linear_alpha: 0.5
-  hf_upload_checkpoints: false
+  hf_upload_checkpoints: true
   hf_upload_every_n_checkpoints: 5
-  hf_checkpoint_repo_id: melephant/2l-bilinear-attn
+  hf_checkpoint_repo_id: melephant/2l-bilinear-attention-test
   hf_checkpoint_repo_type: dataset
   hf_checkpoint_repo_private: true
   debug: true

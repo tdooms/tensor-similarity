@@ -4,7 +4,7 @@ import torch
 
 from models import AttentionLM
 from train.eval import evaluate
-from tests.training_tests.conftest import B, T, V
+from tests.training.conftest import B, T, V
 
 
 def test_evaluate_returns_float(tiny_config, dummy_dataloader, device):

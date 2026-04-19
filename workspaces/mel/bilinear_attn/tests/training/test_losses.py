@@ -3,7 +3,7 @@ import pytest
 import torch
 
 from train.losses import compute_loss, next_token_ce, per_position_ce
-from tests.training_tests.conftest import B, T, V
+from tests.training.conftest import B, T, V
 
 
 def test_next_token_ce_shape():

@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 from models import AttentionLM
 from train.losses import compute_loss
-from tests.architecture_tests.conftest import B, T, V
+from tests.models.conftest import B, T, V
 
 
 def test_gradients_exist_and_finite(test_config, random_input_ids):

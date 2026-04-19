@@ -1,37 +1,18 @@
 #!/usr/bin/env python3
 """Test TN similarity using main codebase against MC baseline.
 
-This test suite validates the migration from the custom TN similarity
-implementation to the main codebase's exact algorithm.
-
-Tests cover:
-1. Self-similarity (should be exactly 1.0)
-2. Cross-similarity vs MC baseline (should match within tolerance)
-3. Model validation (should reject incompatible configs)
-4. Component weight loading (should preserve weights correctly)
-
-Usage:
-    pytest tn_sim/test_similarity.py -v
-    
-    # Or run directly:
-    python -m tn_sim.test_similarity
+Covers self-similarity (==1), cross-similarity vs MC, model validation,
+and component weight loading.
 """
 
 import pytest
 import torch
-import numpy as np
 
 from models import AttentionLM
-from models.components import AttentionLMComponent, BilinearAttentionComponent, EmbeddingComponent
+from models.components import AttentionLMComponent, EmbeddingComponent
 from models.components.embedding import UnembeddingComponent
-from tn_sim.similarity import (
-    compute_tn_similarity,
-    cosine_similarity,
-    inner_product,
-    self_similarity,
-    _check_architectures_match,
-)
-from tn_sim.mc_similarity import mc_similarity, mc_similarity_gaussian_tokens
+from tn_sim.similarity import cosine_similarity, self_similarity
+from tn_sim.mc_similarity import mc_similarity_gaussian_tokens
 
 
 # Use float64 for numerical stability in tests
@@ -79,47 +60,19 @@ def make_tn_compatible_config(
 
 
 class TestSelfSimilarity:
-    """Test that self-similarity is exactly 1.0."""
-    
-    def test_self_similarity_1layer_bilinear(self):
-        """Self-similarity for 1-layer bilinear model."""
+    """Test that self-similarity is exactly 1.0 across configurations."""
+
+    @pytest.mark.parametrize("kw", [
+        dict(n_layers=1, attn_type="bilinear"),
+        dict(n_layers=1, attn_type="quadratic"),
+        dict(n_layers=2),
+        dict(use_bias_qk=False),
+    ])
+    def test_self_similarity(self, kw):
         torch.manual_seed(42)
-        cfg = make_tn_compatible_config(n_layers=1, attn_type="bilinear")
-        model = AttentionLM.from_config(cfg).to(dtype=DTYPE)
-        
+        model = AttentionLM.from_config(make_tn_compatible_config(**kw)).to(dtype=DTYPE)
         sim = self_similarity(model, device=DEVICE, dtype=DTYPE)
-        
-        assert abs(sim - 1.0) < SELF_SIM_TOL, f"Self-similarity should be 1.0, got {sim}"
-    
-    def test_self_similarity_1layer_quadratic(self):
-        """Self-similarity for 1-layer quadratic model."""
-        torch.manual_seed(42)
-        cfg = make_tn_compatible_config(n_layers=1, attn_type="quadratic")
-        model = AttentionLM.from_config(cfg).to(dtype=DTYPE)
-        
-        sim = self_similarity(model, device=DEVICE, dtype=DTYPE)
-        
-        assert abs(sim - 1.0) < SELF_SIM_TOL, f"Self-similarity should be 1.0, got {sim}"
-    
-    def test_self_similarity_2layer(self):
-        """Self-similarity for 2-layer model."""
-        torch.manual_seed(42)
-        cfg = make_tn_compatible_config(n_layers=2)
-        model = AttentionLM.from_config(cfg).to(dtype=DTYPE)
-        
-        sim = self_similarity(model, device=DEVICE, dtype=DTYPE)
-        
-        assert abs(sim - 1.0) < SELF_SIM_TOL, f"Self-similarity should be 1.0, got {sim}"
-    
-    def test_self_similarity_no_bias(self):
-        """Self-similarity for model without Q/K biases."""
-        torch.manual_seed(42)
-        cfg = make_tn_compatible_config(use_bias_qk=False)
-        model = AttentionLM.from_config(cfg).to(dtype=DTYPE)
-        
-        sim = self_similarity(model, device=DEVICE, dtype=DTYPE)
-        
-        assert abs(sim - 1.0) < SELF_SIM_TOL, f"Self-similarity should be 1.0, got {sim}"
+        assert abs(sim - 1.0) < SELF_SIM_TOL, f"kw={kw}, got {sim}"
 
 
 class TestCrossSimilarity:
@@ -381,65 +334,3 @@ class TestComponentInterface:
         assert len(terms[1].legs) == 5, "Active term should have 5 input legs"
 
 
-def run_quick_validation():
-    """Run a quick validation to check the migration works."""
-    print("=" * 60)
-    print("Quick Validation: TN Similarity Migration")
-    print("=" * 60)
-    
-    # Test 1: Self-similarity
-    print("\n1. Testing self-similarity...")
-    torch.manual_seed(42)
-    cfg = make_tn_compatible_config(n_layers=1)  # Uses defaults: d_model=8, n_ctx=3
-    model = AttentionLM.from_config(cfg).to(dtype=DTYPE)
-    
-    sim = self_similarity(model, device=DEVICE, dtype=DTYPE)
-    print(f"   Self-similarity: {sim:.10f}")
-    assert abs(sim - 1.0) < SELF_SIM_TOL, f"FAILED: Expected 1.0, got {sim}"
-    print("   ✓ PASSED")
-    
-    # Test 2: Cross-similarity
-    print("\n2. Testing cross-similarity...")
-    torch.manual_seed(99)
-    model_B = AttentionLM.from_config(cfg).to(dtype=DTYPE)
-    
-    sim_AB = cosine_similarity(model, model_B, device=DEVICE, dtype=DTYPE)
-    print(f"   Cross-similarity: {sim_AB:.6f}")
-    assert -1.0 <= sim_AB <= 1.0, f"FAILED: Similarity out of range: {sim_AB}"
-    print("   ✓ PASSED")
-    
-    # Test 3: MC comparison
-    print("\n3. Testing vs MC baseline...")
-    model_f32 = model.float()
-    model_B_f32 = model_B.float()
-    mc_sim = mc_similarity(
-        model_f32, model_B_f32,
-        device=DEVICE,
-        n_samples=5000,
-    )
-    print(f"   TN similarity:  {sim_AB:.6f}")
-    print(f"   MC similarity:  {mc_sim:.6f}")
-    print(f"   Difference:     {abs(sim_AB - mc_sim):.6f}")
-    print("   ✓ PASSED (comparison only, no assertion)")
-    
-    # Test 4: Model validation
-    print("\n4. Testing model validation...")
-    cfg_bad = make_tn_compatible_config()
-    cfg_bad["model"]["norm_type"] = "rmsnorm"
-    cfg_bad["model"]["norm_places"] = ["pre_unembed"]
-    model_bad = AttentionLM.from_config(cfg_bad)
-    
-    try:
-        cosine_similarity(model_bad, model_bad)
-        print("   ✗ FAILED: Should have raised ValueError")
-    except ValueError as e:
-        print(f"   Correctly rejected: {str(e)[:60]}...")
-        print("   ✓ PASSED")
-    
-    print("\n" + "=" * 60)
-    print("All quick validation tests PASSED!")
-    print("=" * 60)
-
-
-if __name__ == "__main__":
-    run_quick_validation()
