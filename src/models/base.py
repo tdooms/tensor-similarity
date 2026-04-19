@@ -9,6 +9,8 @@ from operator import mul
 from src.components.base import Component
 
 class Model(nn.Module):
+    n_ctx: int = 1
+
     def __init__(self, config) -> None:
         super().__init__()
         self.config = config
