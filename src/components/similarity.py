@@ -31,38 +31,51 @@ _OPT = ctg.ReusableHyperOptimizer(
     parallel=False, progbar=False,
 )
 
-# Persistent caches. Two levels:
-#   * cotengra's on-disk path cache (`_CACHE_DIR`) — managed by `_OPT`.
-#   * `_PATHS` — compiled cotengra `Contractor` callables, pickled to
-#     `_PATHS_FILE`. Loaded at import, saved when `_precompile_mode` exits
-#     back to strict mode. Contractors pickle cleanly with stdlib pickle.
-#   * `_GRAPHS` — CUDA-graph captures. In-memory only; graphs hold GPU memory
-#     addresses and cannot be serialized. All captures SHARE a single memory
-#     pool (`_POOL`), so peak VRAM = max(graph size) not sum.
-#   * `_PRECOMPILE` — fail-loud guard. `_contract` raises outside this mode;
-#     precompile() is the only entrypoint that may build new contractors or
-#     CUDA graphs.
-_PATHS_FILE = _CACHE_DIR / 'exprs.pkl'
+# Persistence strategy — explained because it matters:
+#
+# We cache PATHS (pure combinatorics: a list of (i, j) pairs specifying the
+# contraction order), NOT EXPRESSIONS (shape-specific compiled callables).
+# Path-finding via cotengra/kahypar is the expensive step — seconds per
+# topology. Building an expression from a known path is milliseconds. Paths
+# are topology-only and shape-invariant: one path works for any d_model,
+# vocab, etc. An expression compiled at d_model=128 is useless at d_model=256.
+#
+#   * `_CACHE_DIR`              cotengra's own on-disk path cache (low-level)
+#   * `_PATHS_FILE` (paths.pkl) our persistent cache of {topology_key: path}
+#                               loaded on import, saved when precompile exits
+#   * `_EXPRS` (in-memory only) expressions built from paths at current shapes
+#                               rebuilt per session; build is cheap
+#   * `_GRAPHS` (in-memory only) CUDA-graph captures; cannot be serialized
+#                               all graphs share `_POOL` → peak VRAM not sum
+#   * `_PRECOMPILE`             strict-mode guard; only precompile() may run
+#                               path-finding
+#
+# First session ever at some topology: path-find (slow) → save path.
+# Every other session: load path (instant) → build expr (ms) → capture graph
+# (bounded, once per (shapes, device, dtype)). Zero path-finding cost after
+# the first precompile.
+_PATHS_FILE = _CACHE_DIR / 'paths.pkl'
 _PATHS: dict = pickle.loads(_PATHS_FILE.read_bytes()) if _PATHS_FILE.exists() else {}
+_EXPRS: dict = {}
 _GRAPHS: dict = {}
 _POOL = None          # lazily initialised by `_graphed` on first CUDA capture
 _PRECOMPILE: bool = False
 
 
 def _save_paths():
-    """Atomic pickle write so a mid-flight crash cannot corrupt the cache."""
+    """Atomic pickle write of topology-keyed paths so a mid-flight crash
+    cannot corrupt the cache. Paths are tiny (list[tuple[int, int]]); the
+    whole dict for a typical model is ~kB."""
     tmp = _PATHS_FILE.with_suffix('.pkl.tmp')
     tmp.write_bytes(pickle.dumps(_PATHS))
     tmp.rename(_PATHS_FILE)
 
 
 class _precompile_mode:
-    """Context manager: while inside, `_contract` compiles uncached topologies
-    into `_PATHS` instead of raising. On return to strict mode (outermost
-    exit) the cache is persisted to disk so the next Python session finds
-    every contractor already built — no re-compilation ever on the hot path.
-
-    Nestable; inner exits do NOT save so we write at most once per precompile."""
+    """Context manager: while inside, `_contract` is allowed to run cotengra
+    path-finding for uncached topologies and cache the result in `_PATHS`.
+    On outermost exit we persist to disk — any subsequent session (same or
+    different shapes) finds the path already computed."""
     def __enter__(self):
         global _PRECOMPILE
         self.prev = _PRECOMPILE
@@ -128,20 +141,32 @@ def _join(tl, tr):
 
 
 def _contract(core, bridges):
-    """Run a cached cotengra expression for this (core_inds, bridge_inds) topology.
-    Raises outside `_precompile_mode` if the topology isn't in `_PATHS` — no
-    hidden path-opt / expression build on first call. `Attention.network()`
-    rebuilds its tensors each `.terms()` call, so the cache is topology-only
-    and we always feed fresh tensor data into the compiled expression."""
+    """Contract `core` TN + parametric bridges, via a topology-keyed PATH cache.
+
+    Two-tier lookup:
+      1. `_EXPRS[key]` (in-memory, this session): a compiled expression built
+         for the *current* shapes. Call it with fresh data and we're done.
+      2. `_PATHS[key]` (persistent on disk): a shape-invariant contraction
+         path. If present, we build an expression from it for the current
+         shapes (milliseconds) and cache in `_EXPRS`.
+      3. Cold: only in `_precompile_mode`, run cotengra path-finding (seconds)
+         and cache the path. Outside precompile, raise.
+
+    The path is topology-only — same list works for any `d_model` / `vocab` /
+    `n_ctx`. That's why we cache it and not the expression: a single ever-cost
+    precompile serves every future run, any shape."""
     key = tuple(t.inds for t in core) + tuple(inds for _, inds in bridges)
+    if key in _EXPRS:
+        return _EXPRS[key](*(t.data for t in core), *(data for data, _ in bridges))
+    tn = core.copy()
+    for data, inds in bridges: tn &= Tensor(data, inds=inds)
     if key not in _PATHS:
         if not _PRECOMPILE:
             raise RuntimeError(
                 f'uncompiled topology; call precompile(*models) first. key={key!r}')
-        tn = core.copy()
-        for data, inds in bridges: tn &= Tensor(data, inds=inds)
-        _PATHS[key] = tn.contract(output_inds=_OUT, optimize=_OPT, get='expression')
-    return _PATHS[key](*(t.data for t in core), *(data for data, _ in bridges))
+        _PATHS[key] = tn.contract(output_inds=_OUT, optimize=_OPT, get='path')
+    _EXPRS[key] = tn.contract(output_inds=_OUT, optimize=_PATHS[key], get='expression')
+    return _EXPRS[key](*(t.data for t in core), *(data for data, _ in bridges))
 
 
 def _moment(tl, tr, aa, ab, bb):

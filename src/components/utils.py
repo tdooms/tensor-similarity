@@ -48,6 +48,10 @@ def capture_cuda_graph(fn, params, pool=None):
     with torch.cuda.stream(stream):
         for _ in range(3): fn()
     torch.cuda.current_stream().wait_stream(stream)
+    # Warmup intermediates are unreferenced at this point but still sit in the
+    # PyTorch allocator's cache. Force-release so capture's memory pool doesn't
+    # expand its reservation to cover them — they're not needed for replay.
+    torch.cuda.empty_cache()
     graph = torch.cuda.CUDAGraph()
     with torch.cuda.graph(graph, pool=pool): output = fn()
     for p, o in zip(params, orig): p.data = o
