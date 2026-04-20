@@ -119,24 +119,17 @@ def _initial(model):
            ).contract(output_inds=_OUT).data
 
 
-def _propagate_self(m):
-    """Σ ← self-update through each component. Returns `(σ, σ, σ)` for uniformity."""
-    sigma = _initial(m)
-    for c in m.components():
-        ts = c.terms(m.n_ctx)
-        sigma = _update(sigma, sigma, sigma, ts, ts)
-    return (sigma,) * 3
-
-
-def _propagate_cross(a, b):
-    """Joint (Σ_aa, Σ_ab, Σ_bb) through aligned components; 3 updates per layer."""
-    aa = ab = _initial(a)
-    bb = _initial(b)
+def _propagate(a, b):
+    """Joint (Σ_aa, Σ_ab, Σ_bb) through aligned components. When a is b, all
+    three slots stay aliased → 1 update per layer; else 3. Input covariance
+    Σ = I is common, so the three start from a single `_initial` regardless."""
+    aa = ab = bb = _initial(a)
     for ca, cb in zip(a.components(), b.components()):
-        ta, tb = ca.terms(a.n_ctx), cb.terms(b.n_ctx)
-        aa, ab, bb = (_update(aa, aa, aa, ta, ta),
-                      _update(aa, ab, bb, ta, tb),
-                      _update(bb, bb, bb, tb, tb))
+        ta = ca.terms(a.n_ctx)
+        tb = ta if a is b else cb.terms(b.n_ctx)
+        aa_ = _update(aa, aa, aa, ta, ta)
+        aa, ab, bb = ((aa_,) * 3 if a is b
+                      else (aa_, _update(aa, ab, bb, ta, tb), _update(bb, bb, bb, tb, tb)))
     return aa, ab, bb
 
 
@@ -160,7 +153,6 @@ def _graphed(fn, *models):
 @torch.no_grad()
 def similarity(a, b):
     """2×2 block `[[⟨a,a⟩, ⟨a,b⟩], [⟨a,b⟩ᵀ, ⟨b,b⟩]]`, shape (2, 2, n, d+1, n, d+1)."""
-    aa, ab, bb = (_graphed(lambda: _propagate_self(a), a) if a is b
-                  else _graphed(lambda: _propagate_cross(a, b), a, b))
+    aa, ab, bb = _graphed(lambda: _propagate(a, b), *((a,) if a is b else (a, b)))
     ba = ab.permute(2, 3, 0, 1)   # Σ_ba = E[b · aᵀ] = Σ_ab with L/R axes swapped
     return torch.stack([torch.stack([aa, ab]), torch.stack([ba, bb])])
