@@ -31,8 +31,14 @@ def direct_product(perms_l, nl, perms_r, nr):
     return tuple(g + h for g in gl for h in gr)
 
 
-def capture_cuda_graph(fn, params):
-    """Capture `fn()` as a CUDA graph with `params` rebound to static buffers."""
+def capture_cuda_graph(fn, params, pool=None):
+    """Capture `fn()` as a CUDA graph with `params` rebound to static buffers.
+
+    Pass a shared `pool = torch.cuda.graph_pool_handle()` to have multiple
+    captured graphs reuse one GPU memory pool — peak VRAM then = max(live
+    sets across graphs) instead of sum. Our `similarity()` captures one
+    self-graph and one cross-graph; sharing the pool is the difference
+    between ~8 GB peak and ~16 GB peak at Mel scale."""
     params = tuple(params)
     bufs = tuple(p.data.clone() for p in params)
     orig = [p.data for p in params]
@@ -43,6 +49,6 @@ def capture_cuda_graph(fn, params):
         for _ in range(3): fn()
     torch.cuda.current_stream().wait_stream(stream)
     graph = torch.cuda.CUDAGraph()
-    with torch.cuda.graph(graph): output = fn()
+    with torch.cuda.graph(graph, pool=pool): output = fn()
     for p, o in zip(params, orig): p.data = o
     return bufs, output, graph

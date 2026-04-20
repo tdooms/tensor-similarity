@@ -8,8 +8,8 @@ position (left-term legs < right-term legs in the joined list). Self-pairs
 (Wick singletons) slice Σ at (pos=0, dat=0) — the padded constant-1 reference
 — giving μ. See SIMILARITY.md for the math.
 """
+import pickle
 from functools import cache, partial
-from itertools import combinations
 from math import prod
 from pathlib import Path
 
@@ -30,14 +30,39 @@ _OPT = ctg.ReusableHyperOptimizer(
     methods=('greedy', 'kahypar'), max_repeats=32,
     parallel=False, progbar=False,
 )
-_PATHS: dict = {}     # compiled cotengra exprs, keyed by (core_inds, bridge_inds)
-_GRAPHS: dict = {}    # CUDA-graph captures, keyed by (shapes, device, dtype)
-_PRECOMPILE: bool = False     # toggled via precompile() — _contract fails loud off it
+
+# Persistent caches. Two levels:
+#   * cotengra's on-disk path cache (`_CACHE_DIR`) — managed by `_OPT`.
+#   * `_PATHS` — compiled cotengra `Contractor` callables, pickled to
+#     `_PATHS_FILE`. Loaded at import, saved when `_precompile_mode` exits
+#     back to strict mode. Contractors pickle cleanly with stdlib pickle.
+#   * `_GRAPHS` — CUDA-graph captures. In-memory only; graphs hold GPU memory
+#     addresses and cannot be serialized. All captures SHARE a single memory
+#     pool (`_POOL`), so peak VRAM = max(graph size) not sum.
+#   * `_PRECOMPILE` — fail-loud guard. `_contract` raises outside this mode;
+#     precompile() is the only entrypoint that may build new contractors or
+#     CUDA graphs.
+_PATHS_FILE = _CACHE_DIR / 'exprs.pkl'
+_PATHS: dict = pickle.loads(_PATHS_FILE.read_bytes()) if _PATHS_FILE.exists() else {}
+_GRAPHS: dict = {}
+_POOL = None          # lazily initialised by `_graphed` on first CUDA capture
+_PRECOMPILE: bool = False
+
+
+def _save_paths():
+    """Atomic pickle write so a mid-flight crash cannot corrupt the cache."""
+    tmp = _PATHS_FILE.with_suffix('.pkl.tmp')
+    tmp.write_bytes(pickle.dumps(_PATHS))
+    tmp.rename(_PATHS_FILE)
 
 
 class _precompile_mode:
     """Context manager: while inside, `_contract` compiles uncached topologies
-    into `_PATHS` instead of raising. Nestable; always restores on exit."""
+    into `_PATHS` instead of raising. On return to strict mode (outermost
+    exit) the cache is persisted to disk so the next Python session finds
+    every contractor already built — no re-compilation ever on the hot path.
+
+    Nestable; inner exits do NOT save so we write at most once per precompile."""
     def __enter__(self):
         global _PRECOMPILE
         self.prev = _PRECOMPILE
@@ -45,6 +70,7 @@ class _precompile_mode:
     def __exit__(self, *_):
         global _PRECOMPILE
         _PRECOMPILE = self.prev
+        if not self.prev: _save_paths()
 
 
 # ── Isserlis combinatorics ────────────────────────────────────────────────
@@ -165,12 +191,17 @@ def _propagate(a, b):
 # ── CUDA graph wrapper ────────────────────────────────────────────────────
 
 def _graphed(fn, *models):
-    """Cache a CUDA graph keyed by (param shapes, device, dtype)."""
+    """Cache a CUDA graph keyed by (param shapes, device, dtype). All graphs
+    captured here share one memory pool (`_POOL`) so peak VRAM is max(graph
+    size), not sum — critical with vocab-scale outputs where each graph's
+    live set is ~3 GB and two graphs (self + cross) would otherwise double it."""
+    global _POOL
     ps = tuple(p for m in models for p in m.parameters())
     if not ps[0].is_cuda: return fn()
     key = (tuple(p.shape for p in ps), ps[0].device, ps[0].dtype)
     if key not in _GRAPHS:
-        _GRAPHS[key] = capture_cuda_graph(fn, ps)
+        if _POOL is None: _POOL = torch.cuda.graph_pool_handle()
+        _GRAPHS[key] = capture_cuda_graph(fn, ps, pool=_POOL)
     bufs, out, graph = _GRAPHS[key]
     for src, dst in zip(ps, bufs): dst.copy_(src.data)
     graph.replay()
@@ -190,9 +221,16 @@ def similarity(a, b):
 @torch.no_grad()
 def precompile(*models):
     """The ONLY entry point that may build new contraction expressions or CUDA
-    graphs. Populates caches for every self- and cross-pair over `models`, then
-    returns. After this, `similarity(·, ·)` over the same shapes is pure replay;
-    any hit of a topology not covered here raises."""
+    graphs. Every self-path hits the same cache keys (topology = term-pair
+    structure, inds-only; graph = param shapes) so ONE `similarity(m, m)` call
+    covers all self-pairs over same-arch `models`. Same for cross: one call
+    covers every (a, b) with a ≠ b. Two calls total, not O(N²).
+
+    Contractors then persist to disk via `_precompile_mode.__exit__`; a fresh
+    Python session finds them already built and only re-captures CUDA graphs
+    (which hold GPU memory addresses and can't be serialized)."""
     with _precompile_mode():
-        for m in models: similarity(m, m)
-        for a, b in combinations(models, 2): similarity(a, b)
+        if models:
+            similarity(models[0], models[0])              # one self graph
+        if len(models) >= 2:
+            similarity(models[0], models[1])              # one cross graph
