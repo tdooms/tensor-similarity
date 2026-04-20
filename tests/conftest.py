@@ -15,7 +15,16 @@ import pytest
 import torch
 from src.components.attention import Attention
 from src.components.mlp import MLP
+from src.components.similarity import _precompile_mode
 from src.models.transformer import Transformer
+
+
+@pytest.fixture(autouse=True)
+def _allow_compile():
+    """Tests build fresh models on every run; let `similarity()` compile on
+    demand inside tests. Production callers stay fail-loud."""
+    with _precompile_mode():
+        yield
 
 
 @pytest.fixture

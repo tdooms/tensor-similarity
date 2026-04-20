@@ -9,6 +9,7 @@ position (left-term legs < right-term legs in the joined list). Self-pairs
 — giving μ. See SIMILARITY.md for the math.
 """
 from functools import cache, partial
+from itertools import combinations
 from math import prod
 from pathlib import Path
 
@@ -29,8 +30,21 @@ _OPT = ctg.ReusableHyperOptimizer(
     methods=('greedy', 'kahypar'), max_repeats=32,
     parallel=False, progbar=False,
 )
-_PATHS: dict = {}     # cotengra exprs, keyed by (core_inds, bridge_inds)
+_PATHS: dict = {}     # compiled cotengra exprs, keyed by (core_inds, bridge_inds)
 _GRAPHS: dict = {}    # CUDA-graph captures, keyed by (shapes, device, dtype)
+_PRECOMPILE: bool = False     # toggled via precompile() — _contract fails loud off it
+
+
+class _precompile_mode:
+    """Context manager: while inside, `_contract` compiles uncached topologies
+    into `_PATHS` instead of raising. Nestable; always restores on exit."""
+    def __enter__(self):
+        global _PRECOMPILE
+        self.prev = _PRECOMPILE
+        _PRECOMPILE = True
+    def __exit__(self, *_):
+        global _PRECOMPILE
+        _PRECOMPILE = self.prev
 
 
 # ── Isserlis combinatorics ────────────────────────────────────────────────
@@ -71,18 +85,33 @@ def _sided(term, side):
 
 
 def _join(tl, tr):
-    """Joint TN, legs, left-leg count n_l, and combined positional symmetries."""
+    """Joint TN, legs, left-leg count n_l, and combined positional symmetries.
+
+    When `tl is tr` (Σ_aa or Σ_bb update — self-like sum), the joint TN is
+    l↔r exchange-symmetric (M(t,t)[s_l,d_l,s_r,d_r] = M(t,t)[s_r,d_r,s_l,d_l]).
+    We augment `syms` with the positional swap `i ↔ i+n_l` to dedup Wick orbits
+    — cuts active×active from ~236 to ~60 configs."""
     a, la = _sided(tl, 'l')
     b, lb = _sided(tr, 'r')
-    syms = direct_product(tl.symmetries, len(la), tr.symmetries, len(lb))
-    return a | b, la + lb, len(la), syms
+    n_l, n_r = len(la), len(lb)
+    syms = direct_product(tl.symmetries, n_l, tr.symmetries, n_r)
+    if tl is tr:
+        swap = tuple(i + n_l if i < n_l else i - n_l for i in range(n_l + n_r))
+        syms = syms + tuple(tuple(g[swap[i]] for i in range(n_l + n_r)) for g in syms)
+    return a | b, la + lb, n_l, syms
 
 
 def _contract(core, bridges):
-    """Cache compiled cotengra expr per (core_inds, bridge_inds); fresh data each call
-    (`Attention.network()` rebuilds tensors, so per-term data capture can't work)."""
+    """Run a cached cotengra expression for this (core_inds, bridge_inds) topology.
+    Raises outside `_precompile_mode` if the topology isn't in `_PATHS` — no
+    hidden path-opt / expression build on first call. `Attention.network()`
+    rebuilds its tensors each `.terms()` call, so the cache is topology-only
+    and we always feed fresh tensor data into the compiled expression."""
     key = tuple(t.inds for t in core) + tuple(inds for _, inds in bridges)
     if key not in _PATHS:
+        if not _PRECOMPILE:
+            raise RuntimeError(
+                f'uncompiled topology; call precompile(*models) first. key={key!r}')
         tn = core.copy()
         for data, inds in bridges: tn &= Tensor(data, inds=inds)
         _PATHS[key] = tn.contract(output_inds=_OUT, optimize=_OPT, get='expression')
@@ -156,3 +185,14 @@ def similarity(a, b):
     aa, ab, bb = _graphed(lambda: _propagate(a, b), *((a,) if a is b else (a, b)))
     ba = ab.permute(2, 3, 0, 1)   # Σ_ba = E[b · aᵀ] = Σ_ab with L/R axes swapped
     return torch.stack([torch.stack([aa, ab]), torch.stack([ba, bb])])
+
+
+@torch.no_grad()
+def precompile(*models):
+    """The ONLY entry point that may build new contraction expressions or CUDA
+    graphs. Populates caches for every self- and cross-pair over `models`, then
+    returns. After this, `similarity(·, ·)` over the same shapes is pure replay;
+    any hit of a topology not covered here raises."""
+    with _precompile_mode():
+        for m in models: similarity(m, m)
+        for a, b in combinations(models, 2): similarity(a, b)
