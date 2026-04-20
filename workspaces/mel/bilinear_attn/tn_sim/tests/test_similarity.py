@@ -34,12 +34,11 @@ from tn_sim.similarity import (
 from tn_sim.mc_similarity import mc_similarity
 
 
-# Use float64 for numerical stability in tests
-DTYPE = torch.float64
+DTYPE = torch.float32
 DEVICE = "cpu"
 
 # Tolerances
-SELF_SIM_TOL = 1e-6  # Self-similarity should be very close to 1.0
+SELF_SIM_TOL = 1e-4  # fp32 rounding across layered propagation
 MC_REL_TOL = 0.3     # MC vs TN relative tolerance (30% for small sample sizes)
 MC_ABS_TOL = 0.1     # MC vs TN absolute tolerance
 
@@ -87,7 +86,7 @@ class TestSelfSimilarity:
         cfg = make_tn_compatible_config(n_layers=1, attn_type="bilinear")
         model = AttentionLM.from_config(cfg).to(dtype=DTYPE)
         
-        sim = self_similarity(model, device=DEVICE, dtype=DTYPE)
+        sim = self_similarity(model, device=DEVICE)
         
         assert abs(sim - 1.0) < SELF_SIM_TOL, f"Self-similarity should be 1.0, got {sim}"
     
@@ -97,7 +96,7 @@ class TestSelfSimilarity:
         cfg = make_tn_compatible_config(n_layers=1, attn_type="quadratic")
         model = AttentionLM.from_config(cfg).to(dtype=DTYPE)
         
-        sim = self_similarity(model, device=DEVICE, dtype=DTYPE)
+        sim = self_similarity(model, device=DEVICE)
         
         assert abs(sim - 1.0) < SELF_SIM_TOL, f"Self-similarity should be 1.0, got {sim}"
     
@@ -107,7 +106,7 @@ class TestSelfSimilarity:
         cfg = make_tn_compatible_config(n_layers=2)
         model = AttentionLM.from_config(cfg).to(dtype=DTYPE)
         
-        sim = self_similarity(model, device=DEVICE, dtype=DTYPE)
+        sim = self_similarity(model, device=DEVICE)
         
         assert abs(sim - 1.0) < SELF_SIM_TOL, f"Self-similarity should be 1.0, got {sim}"
     
@@ -117,7 +116,7 @@ class TestSelfSimilarity:
         cfg = make_tn_compatible_config(use_bias_qk=False)
         model = AttentionLM.from_config(cfg).to(dtype=DTYPE)
         
-        sim = self_similarity(model, device=DEVICE, dtype=DTYPE)
+        sim = self_similarity(model, device=DEVICE)
         
         assert abs(sim - 1.0) < SELF_SIM_TOL, f"Self-similarity should be 1.0, got {sim}"
 
@@ -135,7 +134,7 @@ class TestCrossSimilarity:
         torch.manual_seed(99)
         model_B = AttentionLM.from_config(cfg).to(dtype=DTYPE)
         
-        sim = cosine_similarity(model_A, model_B, device=DEVICE, dtype=DTYPE)
+        sim = cosine_similarity(model_A, model_B, device=DEVICE)
         
         assert sim < 1.0, f"Different models should have similarity < 1, got {sim}"
         assert sim > -1.0, f"Similarity should be > -1, got {sim}"
@@ -150,8 +149,8 @@ class TestCrossSimilarity:
         torch.manual_seed(99)
         model_B = AttentionLM.from_config(cfg).to(dtype=DTYPE)
         
-        sim_AB = cosine_similarity(model_A, model_B, device=DEVICE, dtype=DTYPE)
-        sim_BA = cosine_similarity(model_B, model_A, device=DEVICE, dtype=DTYPE)
+        sim_AB = cosine_similarity(model_A, model_B, device=DEVICE)
+        sim_BA = cosine_similarity(model_B, model_A, device=DEVICE)
         
         assert abs(sim_AB - sim_BA) < 1e-10, f"Similarity should be symmetric: {sim_AB} != {sim_BA}"
 
@@ -169,7 +168,7 @@ class TestMCComparison:
         model_B = AttentionLM.from_config(cfg).to(dtype=DTYPE)
         
         # TN similarity
-        tn_sim = cosine_similarity(model_A, model_B, device=DEVICE, dtype=DTYPE)
+        tn_sim = cosine_similarity(model_A, model_B, device=DEVICE)
         
         # MC similarity (use float32 for MC as it's faster)
         model_A_f32 = model_A.float()
@@ -195,7 +194,7 @@ class TestMCComparison:
         cfg = make_tn_compatible_config(n_layers=1)
         model = AttentionLM.from_config(cfg).to(dtype=DTYPE)
         
-        tn_sim = self_similarity(model, device=DEVICE, dtype=DTYPE)
+        tn_sim = self_similarity(model, device=DEVICE)
         
         model_f32 = model.float()
         mc_sim = mc_similarity(
@@ -351,7 +350,7 @@ class TestComponentInterface:
         comp = AttentionLMComponent.from_trained_model(model)
         
         attn = comp.layers[0]
-        terms = attn.terms(n_ctx=cfg["model"]["n_ctx"], device=DEVICE, dtype=DTYPE)
+        terms = attn.terms(n_ctx=cfg["model"]["n_ctx"], device=DEVICE)
         
         assert len(terms) == 2, f"Expected 2 terms, got {len(terms)}"
         
@@ -374,7 +373,7 @@ def run_quick_validation():
     cfg = make_tn_compatible_config(n_layers=1)  # Uses defaults: d_model=8, n_ctx=3
     model = AttentionLM.from_config(cfg).to(dtype=DTYPE)
     
-    sim = self_similarity(model, device=DEVICE, dtype=DTYPE)
+    sim = self_similarity(model, device=DEVICE)
     print(f"   Self-similarity: {sim:.10f}")
     assert abs(sim - 1.0) < SELF_SIM_TOL, f"FAILED: Expected 1.0, got {sim}"
     print("   ✓ PASSED")
@@ -384,7 +383,7 @@ def run_quick_validation():
     torch.manual_seed(99)
     model_B = AttentionLM.from_config(cfg).to(dtype=DTYPE)
     
-    sim_AB = cosine_similarity(model, model_B, device=DEVICE, dtype=DTYPE)
+    sim_AB = cosine_similarity(model, model_B, device=DEVICE)
     print(f"   Cross-similarity: {sim_AB:.6f}")
     assert -1.0 <= sim_AB <= 1.0, f"FAILED: Similarity out of range: {sim_AB}"
     print("   ✓ PASSED")

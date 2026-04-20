@@ -66,7 +66,7 @@ class TwoLayerMLPModel(torch.nn.Module):
         return self.head(self.mlp1(self.mlp0(self.embed(x))))
 
 
-LIKE = dict(device="cpu", dtype=torch.float64)
+LIKE = dict(device="cpu", dtype=torch.float32)
 
 
 def assert_exact(state, model_a, model_b, d_input, tol=0.02, n_ctx=None):
