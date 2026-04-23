@@ -190,20 +190,23 @@ class NgramAnalyzer:
         n: int,
         bos_token_id: int,
         batch_size: int = 128,
+        prepend_bos: bool = True,
     ) -> float:
-        """Compute l_ngram(n): avg CE predicting t_n given [BOS, t_1, ..., t_{n-1}].
-        
-        For each n-gram (t_1, ..., t_n) in the probe set:
-          - input:  [BOS, t_1, ..., t_{n-1}]   (length n)
-          - target: t_n
-          - loss:   CE(logits[:, -1, :], t_n)
-        
+        """Compute l_ngram(n): avg CE predicting t_n given the (n-1)-token context.
+
+        - ``prepend_bos=True``: input is ``[BOS, t_1, ..., t_{n-1}]`` (length n).
+        - ``prepend_bos=False``: input is ``[t_1, ..., t_{n-1}]`` (length n-1).
+          Requires n >= 2.
+
+        In both cases the loss is taken at the final input position.
+
         Args:
             model: The language model
             n: The n-gram size (e.g., 2 for bigrams)
-            bos_token_id: BOS token id to prepend
+            bos_token_id: BOS token id (used only when prepend_bos=True)
             batch_size: Batch size for processing
-            
+            prepend_bos: See above.
+
         Returns:
             Average cross-entropy loss on n-gram final token prediction
         """
@@ -223,17 +226,24 @@ class NgramAnalyzer:
                 batch_ngrams = ngrams[i:i+batch_size]
                 bs = len(batch_ngrams)
                 
-                # Build input: [BOS, t_1, ..., t_{n-1}]  (length n)
+                # Build input with or without BOS prepending.
                 inputs = []
                 targets = []
                 for context, final in batch_ngrams:
-                    inputs.append([bos_token_id] + context)
+                    if prepend_bos:
+                        inputs.append([bos_token_id] + context)
+                    else:
+                        if len(context) == 0:
+                            raise ValueError(
+                                f"prepend_bos=False requires n>=2 (got n={n})"
+                            )
+                        inputs.append(list(context))
                     targets.append(final)
-                
-                input_ids = torch.tensor(inputs, device=self.device)   # (bs, n)
+
+                input_ids = torch.tensor(inputs, device=self.device)   # (bs, L)
                 target_ids = torch.tensor(targets, device=self.device)  # (bs,)
-                
-                logits = model(input_ids)  # (bs, n, vocab)
+
+                logits = model(input_ids)  # (bs, L, vocab)
                 final_logits = logits[:, -1, :]  # (bs, vocab)
                 
                 loss = F.cross_entropy(final_logits, target_ids, reduction='sum')
@@ -249,24 +259,29 @@ class NgramAnalyzer:
         n: int,
         bos_token_id: int,
         max_batches: Optional[int] = None,
+        prepend_bos: bool = True,
     ) -> float:
-        """Compute l_test(n): avg CE predicting x_n given [BOS, x_1, ..., x_{n-1}].
-        
-        For each validation sequence with at least n real tokens:
-          - input:  [BOS, x_1, ..., x_{n-1}]   (length n)
-          - target: x_n
-          - loss:   CE(logits[:, -1, :], x_n)
-        
+        """Compute l_test(n): avg CE predicting x_n given the (n-1)-token context.
+
+        - ``prepend_bos=True``: input is ``[BOS, x_1, ..., x_{n-1}]`` (length n).
+        - ``prepend_bos=False``: input is ``[x_1, ..., x_{n-1}]`` (length n-1).
+          Requires n >= 2.
+
+        In both cases the loss is taken at the final input position.
+
         Args:
             model: The language model
             dataloader: Validation dataloader
             n: The n-gram size (number of real tokens needed)
-            bos_token_id: BOS token id to prepend
+            bos_token_id: BOS token id (used only when prepend_bos=True)
             max_batches: Maximum batches to process (None = all)
-            
+            prepend_bos: See above.
+
         Returns:
             Average cross-entropy loss at position n
         """
+        if not prepend_bos and n < 2:
+            raise ValueError(f"prepend_bos=False requires n>=2 (got n={n})")
         model.eval()
         total_loss = 0.0
         n_samples = 0
@@ -294,13 +309,19 @@ class NgramAnalyzer:
                     input_ids = input_ids[valid]
                     B = input_ids.shape[0]
                 
-                # Build input: [BOS, x_1, ..., x_{n-1}]  (length n)
+                # Targets are x_n at 0-index n-1.
                 first_n = input_ids[:, :n]  # (B, n)
-                bos_col = torch.full((B, 1), bos_token_id, dtype=torch.long, device=self.device)
-                inp = torch.cat([bos_col, first_n[:, :-1]], dim=1)  # (B, n)
-                targets = first_n[:, -1]  # (B,)  i.e. x_n
-                
-                logits = model(inp)  # (B, n, V)
+                targets = first_n[:, -1]    # (B,)
+
+                if prepend_bos:
+                    bos_col = torch.full(
+                        (B, 1), bos_token_id, dtype=torch.long, device=self.device
+                    )
+                    inp = torch.cat([bos_col, first_n[:, :-1]], dim=1)  # (B, n)
+                else:
+                    inp = first_n[:, :-1]  # (B, n-1)
+
+                logits = model(inp)  # (B, L, V)
                 loss = F.cross_entropy(logits[:, -1, :], targets, reduction='sum')
                 total_loss += loss.item()
                 n_samples += B
@@ -314,22 +335,19 @@ class NgramAnalyzer:
         n: int,
         bos_token_id: int,
         max_val_batches: Optional[int] = None,
+        prepend_bos: bool = True,
     ) -> Dict[str, float]:
         """Compute the n-gram score: l_test^n / l_ngram^n.
-        
-        Args:
-            model: The language model
-            val_dataloader: Validation dataloader
-            n: The n-gram size
-            bos_token_id: BOS token id to prepend
-            max_val_batches: Max batches for validation loss (None = all)
-            
-        Returns:
-            Dict with ngram_loss, test_loss, and ngram_score
+
+        See :meth:`compute_ngram_loss` / :meth:`compute_test_loss` for the
+        meaning of ``prepend_bos``.
         """
-        ngram_loss = self.compute_ngram_loss(model, n, bos_token_id)
+        ngram_loss = self.compute_ngram_loss(
+            model, n, bos_token_id, prepend_bos=prepend_bos
+        )
         test_loss = self.compute_test_loss(
-            model, val_dataloader, n, bos_token_id, max_batches=max_val_batches
+            model, val_dataloader, n, bos_token_id,
+            max_batches=max_val_batches, prepend_bos=prepend_bos,
         )
         
         if ngram_loss > 0:
@@ -349,6 +367,7 @@ class NgramAnalyzer:
         val_dataloader,
         bos_token_id: int,
         max_val_batches: Optional[int] = None,
+        prepend_bos: bool = True,
     ) -> Dict[str, float]:
         """Compute n-gram scores for all fitted n values.
         
@@ -367,7 +386,8 @@ class NgramAnalyzer:
         results = {}
         for n in sorted(self.common_ngrams.keys()):
             scores = self.compute_ngram_score(
-                model, val_dataloader, n, bos_token_id, max_val_batches
+                model, val_dataloader, n, bos_token_id, max_val_batches,
+                prepend_bos=prepend_bos,
             )
             results.update(scores)
         

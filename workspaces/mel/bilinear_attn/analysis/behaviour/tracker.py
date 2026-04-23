@@ -30,6 +30,7 @@ class TrackerConfig:
     ngram_compute_every: int = 500
     ngram_max_n: int = 4
     ngram_max_val_batches: int = 50
+    ngram_prepend_bos: bool = True  # Set False for contiguous-text training (e.g. Pile streaming)
     
     # Loss tracking
     loss_enabled: bool = True
@@ -45,6 +46,7 @@ class TrackerConfig:
     icl_k1: int = 50
     icl_k2: int = 500
     icl_max_val_batches: Optional[int] = None
+    icl_prepend_bos: bool = True  # Set False for contiguous-text training
     
     # General
     seed: int = 42
@@ -232,6 +234,7 @@ class BehaviourTracker:
                 self.val_dataloader,
                 bos_token_id=self.bos_token_id,
                 max_val_batches=self.config.ngram_max_val_batches,
+                prepend_bos=self.config.ngram_prepend_bos,
             )
             metrics.update(ngram_metrics)
         
@@ -247,6 +250,7 @@ class BehaviourTracker:
                 k2=self.config.icl_k2,
                 device=self.device,
                 max_batches=self.config.icl_max_val_batches,
+                prepend_bos=self.config.icl_prepend_bos,
             )
             metrics.update(icl_metrics)
         
@@ -455,6 +459,7 @@ class BehaviourTracker:
                 self.val_dataloader,
                 bos_token_id=self.bos_token_id,
                 max_val_batches=self.config.ngram_max_val_batches,
+                prepend_bos=self.config.ngram_prepend_bos,
             )
             metrics.update(ngram_metrics)
         
@@ -482,6 +487,7 @@ class BehaviourTracker:
                 k2=self.config.icl_k2,
                 device=self.device,
                 max_batches=self.config.icl_max_val_batches,
+                prepend_bos=self.config.icl_prepend_bos,
             )
             metrics.update(icl_metrics)
         
@@ -587,11 +593,10 @@ class BehaviourTracker:
             A BehaviourTracker ready for ``fit()`` and checkpoint evaluation
         """
         from models import AttentionLM
-        from data.cached import create_dataloaders
-        
+
         run_dir = Path(run_dir)
         device = device or ("cuda" if torch.cuda.is_available() else "cpu")
-        
+
         # Locate config
         if cfg_path is not None:
             cfg_file = Path(cfg_path)
@@ -604,26 +609,60 @@ class BehaviourTracker:
                     f"No config YAML found in {run_dir}. Pass cfg_path explicitly."
                 )
             cfg_file = yamls[0]
-        
+
         with open(cfg_file) as f:
             cfg = yaml.safe_load(f)
-        
+
         model_cfg = cfg["model"]
         train_cfg = cfg.get("train", {})
-        
-        # Build model and dataloaders
+        data_cfg = cfg.get("data", {})
+
+        # Build model
         model = AttentionLM.from_config(cfg)
         model.to(device)
-        
-        train_dataloader, val_dataloader = create_dataloaders(
-            n_ctx=model_cfg["n_ctx"],
-            batch_size=train_cfg.get("batch_size", 16),
-            max_train_samples=train_cfg.get("max_train_samples"),
-            max_val_samples=train_cfg.get("max_val_samples", 1000),
-        )
-        
+
+        # Build dataloaders based on the dataset declared in the config.
+        # Falls back to SimpleStories for legacy configs without a ``data``
+        # section.
+        dataset_name = data_cfg.get("name", "simple_stories")
+        tokenizer = None
+        if dataset_name.startswith("pile"):
+            from data.pile import create_pile_dataloaders, _load_tokenizer
+
+            train_dataloader, val_dataloader = create_pile_dataloaders(
+                n_ctx=model_cfg["n_ctx"],
+                batch_size=train_cfg.get("batch_size", 16),
+                vocab_size=model_cfg["vocab_size"],
+                val_cache_size=data_cfg.get("val_cache_size", 500),
+                max_val_samples=data_cfg.get("val_cache_size", 500),
+                tokenizer_name=data_cfg.get("tokenizer", "melephant/pile-dsir-4096"),
+                dataset_repo=data_cfg.get("repo", "stanford-crfm/DSIR-filtered-pile-50M"),
+                text_field=data_cfg.get("text_field", "contents"),
+                train_split=data_cfg.get("train_split", "train"),
+                val_split=data_cfg.get("val_split", "heldout"),
+                dataset_revision=data_cfg.get("revision"),
+                train_shuffle=data_cfg.get("train_shuffle", True),
+                train_shuffle_seed=data_cfg.get("train_shuffle_seed", 0),
+                train_shuffle_buffer_size=data_cfg.get("train_shuffle_buffer_size", 10_000),
+                insert_eos_between_documents=data_cfg.get("insert_eos_between_documents", True),
+                holdout_fraction=data_cfg.get("holdout_fraction", 0.01),
+                holdout_seed=data_cfg.get("holdout_seed", 0),
+            )
+            tokenizer = _load_tokenizer(
+                data_cfg.get("tokenizer", "melephant/pile-dsir-4096")
+            )
+        else:
+            from data.cached import create_dataloaders
+
+            train_dataloader, val_dataloader = create_dataloaders(
+                n_ctx=model_cfg["n_ctx"],
+                batch_size=train_cfg.get("batch_size", 16),
+                max_train_samples=train_cfg.get("max_train_samples"),
+                max_val_samples=train_cfg.get("max_val_samples", 1000),
+            )
+
         cache_dir = cache_dir or str(run_dir / "behaviour_cache")
-        
+
         tracker = cls(
             model=model,
             train_dataloader=train_dataloader,
@@ -633,6 +672,7 @@ class BehaviourTracker:
             config=config or TrackerConfig(),
             run_dir=str(run_dir),
             cache_dir=cache_dir,
+            tokenizer=tokenizer,
         )
-        
+
         return tracker

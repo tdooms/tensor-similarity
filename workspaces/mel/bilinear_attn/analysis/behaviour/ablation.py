@@ -57,7 +57,7 @@ def compute_ablated_loss(
     """
     model.eval()
     total_loss = 0.0
-    n_batches = 0
+    total_tokens = 0
     
     with ablate_rotary(model):
         for i, batch in enumerate(dataloader):
@@ -67,15 +67,18 @@ def compute_ablated_loss(
             input_ids = batch["input_ids"].to(device)
             logits = model(input_ids)
             
-            # Standard next-token cross-entropy
+            # Token-weighted next-token cross-entropy (avoids bias on
+            # variable-sized final batches)
             loss = F.cross_entropy(
                 logits[:, :-1].contiguous().view(-1, logits.size(-1)),
                 input_ids[:, 1:].contiguous().view(-1),
+                reduction="sum",
             )
+            n_tok = input_ids[:, 1:].numel()
             total_loss += loss.item()
-            n_batches += 1
+            total_tokens += n_tok
     
-    return total_loss / max(1, n_batches)
+    return total_loss / max(1, total_tokens)
 
 
 @torch.no_grad()
@@ -98,7 +101,7 @@ def compute_val_loss(
     """
     model.eval()
     total_loss = 0.0
-    n_batches = 0
+    total_tokens = 0
     
     for i, batch in enumerate(dataloader):
         if max_batches is not None and i >= max_batches:
@@ -110,8 +113,10 @@ def compute_val_loss(
         loss = F.cross_entropy(
             logits[:, :-1].contiguous().view(-1, logits.size(-1)),
             input_ids[:, 1:].contiguous().view(-1),
+            reduction="sum",
         )
+        n_tok = input_ids[:, 1:].numel()
         total_loss += loss.item()
-        n_batches += 1
+        total_tokens += n_tok
     
-    return total_loss / max(1, n_batches)
+    return total_loss / max(1, total_tokens)

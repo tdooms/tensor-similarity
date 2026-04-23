@@ -1,0 +1,60 @@
+data:
+  holdout_fraction: 0.01
+  holdout_seed: 42
+  insert_eos_between_documents: true
+  name: pile_dsir
+  repo: stanford-crfm/DSIR-filtered-pile-50M
+  revision: 2b07626eba22fbb8ac936faa385767e06cba6593
+  text_field: contents
+  tokenizer: melephant/pile-dsir-4096
+  tokenizer_hf_private: true
+  tokenizer_hf_repo_id: melephant/pile-dsir-4096
+  train_shuffle: true
+  train_shuffle_buffer_size: 10000
+  train_shuffle_seed: 42
+  train_split: train
+  val_cache_size: 500
+  val_split: heldout
+init:
+  init_type: mup
+  std_embed: 0.02
+  std_o: 0.01
+  std_qkv: 0.02
+model:
+  attn_scale: 0.35
+  attn_type: bilinear
+  d_model: 256
+  n_ctx: 512
+  n_head: 8
+  n_layers: 2
+  norm_places: []
+  norm_type: none
+  rope_base: 10000
+  use_bias_qk: true
+  use_rmsnorm_qk: false
+  vocab_size: 4096
+name: pile
+seed: 42
+train:
+  batch_size: 384
+  betas:
+  - 0.9
+  - 0.95
+  checkpoint_count: 1000
+  checkpoint_log_linear_alpha: 0.5
+  checkpoint_schedule: log_linear
+  dtype: bfloat16
+  eval_every: 100
+  grad_clip: 1.0
+  hf_checkpoint_repo_id: melephant/2l-bilinear-attn-v2
+  hf_checkpoint_repo_private: false
+  hf_checkpoint_repo_type: dataset
+  hf_upload_checkpoints: true
+  hf_upload_every_n_checkpoints: 100
+  lr: 0.0003
+  lr_decay_frac: 0.2
+  max_steps: 20000
+  muon_lr: 0.02
+  use_muon: true
+  warmup_steps: 500
+  weight_decay: 0.1
