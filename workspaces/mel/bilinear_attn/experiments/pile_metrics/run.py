@@ -6,10 +6,8 @@ Usage
 From ``workspaces/mel/bilinear_attn``::
 
     python -m experiments.pile_metrics.run \
-        --config configs/pile_dsir.yaml \
-        --hf-repo melephant/2l-bilinear-attn-v2 \
-        --device cuda \
-        --stride 20
+        --hf-repo melephant/2l-bilinear-attn \
+        --stride 1000
 
 The script is resumable: already-evaluated steps are skipped by reading
 ``analysis_metrics.jsonl``. Each checkpoint is downloaded to a temp
@@ -38,17 +36,171 @@ _WORKSPACE = Path(__file__).resolve().parents[2]
 if str(_WORKSPACE) not in sys.path:
     sys.path.insert(0, str(_WORKSPACE))
 
+from analysis.behaviour import load_metrics  # noqa: E402
 from analysis.behaviour.tracker import BehaviourTracker, TrackerConfig  # noqa: E402
 from data.pile import create_pile_dataloaders, _load_tokenizer  # noqa: E402
 from models import AttentionLM  # noqa: E402
 
 
 _STEP_RE = re.compile(r"step_(\d+)\.pt$")
+_DEFAULT_OUT_DIR = object()
 
 
 def _parse_step(name: str) -> int | None:
     m = _STEP_RE.search(name)
     return int(m.group(1)) if m else None
+
+
+def _sanitize_component(value: str) -> str:
+    """Return a filesystem-safe component (used for run directories)."""
+    value = value.strip().replace(os.sep, "_").replace("/", "__")
+    value = re.sub(r"[^0-9A-Za-z._-]+", "_", value)
+    return value or "default"
+
+
+def _default_run_dir(hf_repo: str, path_prefix: str) -> Path:
+    runs_root = Path(__file__).resolve().parent / "runs"
+    repo_component = _sanitize_component(hf_repo)
+    prefix_component = _sanitize_component(path_prefix)
+    return runs_root / repo_component / prefix_component
+
+
+def _extract_series(rows: list[dict], key: str) -> tuple[list[int], list[float]]:
+    steps: list[int] = []
+    values: list[float] = []
+    for row in rows:
+        if key in row and "step" in row:
+            steps.append(int(row["step"]))
+            values.append(row[key])
+    # Sort by step to ensure correct plotting order
+    sorted_pairs = sorted(zip(steps, values), key=lambda x: x[0])
+    if sorted_pairs:
+        steps, values = zip(*sorted_pairs)
+        return list(steps), list(values)
+    return [], []
+
+
+def _first_key_with_prefix(rows: list[dict], prefix: str) -> str | None:
+    for row in rows:
+        for key in row:
+            if key.startswith(prefix):
+                return key
+    return None
+
+
+def _plot_series_or_note(ax, steps: list[int], values: list[float], label: str, **plot_kwargs) -> bool:
+    if steps:
+        ax.plot(steps, values, label=label, **plot_kwargs)
+        return True
+    return False
+
+
+def _annotate_empty(ax, message: str) -> None:
+    ax.text(0.5, 0.5, message, ha="center", va="center", transform=ax.transAxes, fontsize=10, color="0.4")
+    ax.set_axis_off()
+
+
+def _generate_summary_plots(metrics_path: Path, plots_dir: Path) -> None:
+    if not metrics_path.exists():
+        print(f"Skipping plot generation (missing {metrics_path})")
+        return
+
+    metrics = load_metrics(metrics_path)
+    if not metrics:
+        print(f"Skipping plot generation (no entries in {metrics_path})")
+        return
+
+    try:
+        import matplotlib
+        matplotlib.use("Agg", force=True)
+        import matplotlib.pyplot as plt
+    except Exception as exc:  # pragma: no cover - matplotlib optional in CI
+        print(f"Skipping plot generation (matplotlib unavailable: {exc})")
+        return
+
+    plots_dir.mkdir(parents=True, exist_ok=True)
+
+    fig, axes = plt.subplots(4, 1, figsize=(12, 16), sharex=False)
+    fig.suptitle("Behaviour metrics overview", fontsize=16)
+
+    # 1) N-gram scores
+    ax = axes[0]
+    ngram_keys: list[tuple[int, str]] = []
+    for row in metrics:
+        for key in row:
+            match = re.match(r"^(\d+)gram_score$", key)
+            if match:
+                order = int(match.group(1))
+                ngram_keys.append((order, key))
+        if ngram_keys:
+            break
+    ngram_keys = sorted(set(ngram_keys))
+    if ngram_keys:
+        for order, key in ngram_keys:
+            steps, values = _extract_series(metrics, key)
+            if steps:
+                ax.plot(steps, values, marker="o", markersize=3, label=f"{order}-gram")
+        ax.axhline(1.0, color="gray", linestyle="--", linewidth=0.8, alpha=0.5)
+        ax.set_ylabel("Score (ratio)")
+        ax.set_title("N-gram scores")
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+    else:
+        _annotate_empty(ax, "No n-gram metrics yet")
+
+    # 2) Position-ablated loss
+    ax = axes[1]
+    plotted = False
+    val_steps, val_loss = _extract_series(metrics, "val_loss")
+    plotted |= _plot_series_or_note(ax, val_steps, val_loss, "Val loss", linewidth=1.2)
+    abl_steps, abl_loss = _extract_series(metrics, "ablated_loss")
+    plotted |= _plot_series_or_note(ax, abl_steps, abl_loss, "Ablated loss", linestyle="--", linewidth=1.2)
+    if plotted:
+        ax.set_ylabel("Loss")
+        ax.set_title("Validation vs position-ablated loss")
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+    else:
+        _annotate_empty(ax, "No ablation metrics yet")
+
+    # 3) ICL score
+    ax = axes[2]
+    icl_key = _first_key_with_prefix(metrics, "icl_")
+    if icl_key:
+        icl_steps, icl_values = _extract_series(metrics, icl_key)
+        if icl_steps:
+            ax.plot(icl_steps, icl_values, color="tab:purple", linewidth=1.2, label=icl_key.replace("_", " "))
+            ax.axhline(0.0, color="gray", linestyle="--", linewidth=0.8, alpha=0.5)
+            ax.set_ylabel("Δ loss")
+            ax.set_title("ICL score")
+            ax.legend()
+            ax.grid(True, alpha=0.3)
+        else:
+            _annotate_empty(ax, "No ICL data yet")
+    else:
+        _annotate_empty(ax, "No ICL data yet")
+
+    # 4) Bigram score vs entropy baseline
+    ax = axes[3]
+    score_steps, score_values = _extract_series(metrics, "bigram_score")
+    entropy_steps, entropy_values = _extract_series(metrics, "bigram_entropy")
+    plotted = False
+    plotted |= _plot_series_or_note(ax, score_steps, score_values, "Bigram score", linewidth=1.2)
+    plotted |= _plot_series_or_note(ax, entropy_steps, entropy_values, "Bigram entropy", linestyle="--", linewidth=1.2)
+    if plotted:
+        ax.set_xlabel("Step")
+        ax.set_ylabel("nats")
+        ax.set_title("Bigram score vs entropy baseline")
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+    else:
+        _annotate_empty(ax, "No bigram metrics yet")
+
+    fig.tight_layout(rect=(0, 0, 1, 0.97))
+    output_path = plots_dir / "behaviour_metrics.png"
+    fig.savefig(output_path, dpi=150)
+    plt.close(fig)
+    print(f"Saved behaviour plots to {output_path}")
 
 
 def load_repo_config(
@@ -284,8 +436,11 @@ def main():
     )
     parser.add_argument(
         "--out-dir", type=Path,
-        default=Path(__file__).resolve().parent,
-        help="Directory for analysis_metrics.jsonl, cache/, etc.",
+        default=_DEFAULT_OUT_DIR,
+        help=(
+            "Root directory to hold run artifacts. Defaults to "
+            "<script>/runs/<repo>/<path_prefix> with repo/prefix sanitized."
+        ),
     )
     parser.add_argument(
         "--device", type=str,
@@ -305,8 +460,21 @@ def main():
                              "and exit.")
     args = parser.parse_args()
 
-    out_dir: Path = args.out_dir
-    out_dir.mkdir(parents=True, exist_ok=True)
+    if args.out_dir is _DEFAULT_OUT_DIR:
+        out_dir = _default_run_dir(args.hf_repo, args.hf_path_prefix)
+    else:
+        out_dir = args.out_dir
+
+    metadata_dir = out_dir / "metadata"
+    metrics_dir = out_dir / "metrics"
+    cache_dir = out_dir / "cache"
+    download_dir = out_dir / "downloads"
+    plots_dir = out_dir / "plots"
+
+    for path in (metadata_dir, metrics_dir, cache_dir, download_dir, plots_dir):
+        path.mkdir(parents=True, exist_ok=True)
+
+    print(f"Writing artifacts to {out_dir}")
 
     # Load config: prefer the one stored alongside the checkpoints in the HF
     # repo (the training-time config) unless the user explicitly overrides.
@@ -323,12 +491,9 @@ def main():
         cfg = load_repo_config(args.hf_repo, repo_type="dataset")
         cfg_source = f"hf://{args.hf_repo}"
         # Persist a copy alongside the jsonl for provenance.
-        with open(out_dir / "resolved_config.yaml", "w") as f:
+        with open(metadata_dir / "resolved_config.yaml", "w") as f:
             yaml.safe_dump(cfg, f, sort_keys=False)
-    jsonl_path = out_dir / "analysis_metrics.jsonl"
-    cache_dir = out_dir / "cache"
-    download_dir = out_dir / "downloads"
-    download_dir.mkdir(parents=True, exist_ok=True)
+    jsonl_path = metrics_dir / "analysis_metrics.jsonl"
 
     api = HfApi()
     all_ckpts = list_remote_checkpoints(api, args.hf_repo, args.hf_path_prefix)
@@ -362,7 +527,7 @@ def main():
     )
 
     # Write a sidecar describing the run settings (overwritten each invocation)
-    with open(out_dir / "run_settings.yaml", "w") as f:
+    with open(metadata_dir / "run_settings.yaml", "w") as f:
         yaml.safe_dump(
             {
                 "config_source": cfg_source,
@@ -391,6 +556,8 @@ def main():
             if k not in ("remote_path",)
         }
         print(f"    {summary}")
+
+    _generate_summary_plots(jsonl_path, plots_dir)
 
 
 if __name__ == "__main__":
