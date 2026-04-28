@@ -11,9 +11,9 @@ import json
 import math
 import os
 import re
-from itertools import product
 
 import polars as pl
+import polars.selectors as cs
 import torch
 from huggingface_hub import list_repo_files, snapshot_download
 from loguru import logger
@@ -50,15 +50,10 @@ def pick_steps(steps, n):
     the late phase (where adjacent available steps are widely spaced)."""
     nonzero = [s for s in steps if s > 0]
     log_lo, log_hi = math.log(nonzero[0]), math.log(nonzero[-1])
-    m = 2 * n
-    targets = [math.exp(log_lo + (log_hi - log_lo) * i / (m - 1)) for i in range(m)]
+    targets = [math.exp(log_lo + (log_hi - log_lo) * i / (2 * n - 1)) for i in range(2 * n)]
     chosen = {min(steps, key=lambda s: abs(s - t)) for t in targets}
     chosen.add(0)
     return sorted(chosen)
-
-
-def _ckpt_path(step):
-    return INPUT_DIR / f"checkpoints/step_{step:05d}.pt"
 
 
 def main():
@@ -66,7 +61,6 @@ def main():
     progress_file = CACHE / "_progress.jsonl"
 
     picked = pick_steps(available_steps(), N_STEPS)
-    picked_set = set(picked)
     logger.info(f"{len(picked)} unique steps from {picked[0]} to {picked[-1]}")
 
     snapshot_download(
@@ -76,20 +70,19 @@ def main():
     )
     config = load_config(INPUT_DIR / "config.json")
 
-    models = [load_pt(_ckpt_path(s), config, n_ctx=N_CTX)
+    models = [load_pt(INPUT_DIR / f"checkpoints/step_{s:05d}.pt", config, n_ctx=N_CTX)
               for s in tqdm(picked, desc="load", unit="ckpt")]
     precompile(models[0], models[1])
 
     progress = (
         {(int(d["step_i"]), int(d["step_j"])): float(d["similarity"])
          for d in map(json.loads, progress_file.read_text(encoding="utf-8").splitlines())
-         if int(d["step_i"]) in picked_set and int(d["step_j"]) in picked_set}
+         if int(d["step_i"]) in picked and int(d["step_j"]) in picked}
         if progress_file.exists() else {}
     )
 
-    pairs = [(i, j) for i in range(len(picked)) for j in range(i + 1, len(picked))]
-    todo = [(i, j) for i, j in pairs if (picked[i], picked[j]) not in progress]
-    logger.info(f"{len(pairs)} pairs total — {len(progress)} reused, {len(todo)} to compute")
+    todo = [(i, j) for i in range(len(picked)) for j in range(i + 1, len(picked)) if (picked[i], picked[j]) not in progress]
+    logger.info(f"{len(todo) + len(progress)} pairs total — {len(progress)} reused, {len(todo)} to compute")
 
     with progress_file.open("a", encoding="utf-8") as fh:
         for i, j in tqdm(todo, desc="pairs", unit="pair"):
@@ -98,27 +91,18 @@ def main():
             fh.write(json.dumps({"step_i": picked[i], "step_j": picked[j], "similarity": sim}) + "\n")
             fh.flush()
 
-    n = len(picked)
-    step_idx = {s: i for i, s in enumerate(picked)}
-    matrix = torch.eye(n, dtype=torch.float64)
-    for (si, sj), sim in progress.items():
-        i, j = step_idx[si], step_idx[sj]
-        matrix[i, j] = matrix[j, i] = sim
-
-    pairs_ij = list(product(range(n), range(n)))
+    keys = list(progress)
+    sims = list(progress.values())
     pl.DataFrame({
-        "step_i": [picked[i] for i, _ in pairs_ij],
-        "step_j": [picked[j] for _, j in pairs_ij],
-        "similarity": matrix.flatten().tolist(),
+        "step_i": [k[0] for k in keys] + [k[1] for k in keys] + picked,
+        "step_j": [k[1] for k in keys] + [k[0] for k in keys] + picked,
+        "similarity": sims + sims + [1.0] * len(picked),
     }).write_ipc(CACHE / "matrix.feather")
 
     metrics = pl.read_ndjson(INPUT_DIR / "metrics/analysis_metrics.jsonl").filter(
-        pl.col("step").cast(pl.Int64).is_in(picked_set)
+        pl.col("step").cast(pl.Int64).is_in(picked)
     )
-    drop = {c for c in metrics.columns
-            if c == "remote_path"
-            or metrics[c].dtype not in (pl.Float64, pl.Float32, pl.Int64, pl.Int32)}
-    (metrics.drop(drop)
+    (metrics.select(cs.by_dtype(pl.Float64, pl.Float32, pl.Int64, pl.Int32) | cs.by_name("step"))
             .unpivot(index="step", variable_name="metric", value_name="value")
             .with_columns(pl.col("value").cast(pl.Float64))
             .write_ipc(CACHE / "behavior.feather"))

@@ -1,5 +1,8 @@
 from src.figures import FIGURE_DIR
 
+for _d in ("pdf", "png"):
+    (FIGURE_DIR / _d).mkdir(parents=True, exist_ok=True)
+
 COLORWAY = ("#0F172A", "#0EA5E9", "#14B8A6", "#84CC16", "#F59E0B",
             "#F97316", "#E11D48", "#8B5CF6")
 
@@ -31,12 +34,9 @@ def style_xy_axes(fig, x_title=None, y_title=None, x_grid=False, y_grid=True):
                      ticks="outside", tickcolor="#CBD5E1", tickfont=dict(color="#475569"))
     fig.update_yaxes(title_text=f"<b>{y_title}</b>" if y_title else None,
                      showgrid=y_grid, gridcolor="#E2E8F0",
-                     showline=False,
                      ticks="outside", tickcolor="#CBD5E1", tickfont=dict(color="#475569"))
 
 
 def save_figure(fig, stem):
-    (FIGURE_DIR / "pdf").mkdir(parents=True, exist_ok=True)
-    (FIGURE_DIR / "png").mkdir(parents=True, exist_ok=True)
     fig.write_image(FIGURE_DIR / "pdf" / f"{stem}.pdf")
     fig.write_image(FIGURE_DIR / "png" / f"{stem}.png", scale=2)

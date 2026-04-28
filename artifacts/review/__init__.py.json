@@ -1,65 +1,16 @@
 [
   {
     "cycle": 0,
-    "ts": "2026-04-27T21:50:39.532613+00:00",
-    "phase": "ok",
-    "rate": {
-      "score": 7,
-      "praise": "Tiny, declarative, zero fluff \u2014 the registry pattern and `stages()` filter are exactly right.",
-      "cuts": [
-        {
-          "location": "cosine_from_parts lines 25-27",
-          "issue": "The identical `torch.einsum(\"ijij->\", t[:, 1:, :, 1:])` pattern is written three times, and the parameter names `aa`/`bb` are shadowed mid-function (input tensor \u2192 output scalar), breaking the reader's mental model.",
-          "fix": "trace = lambda t: torch.einsum(\"ijij->\", t[:, 1:, :, 1:]); norm_a = trace(aa).clamp_min(0).sqrt(); norm_b = trace(bb).clamp_min(0).sqrt(); return (trace(ab) / (norm_a * norm_b)).item()"
-        },
-        {
-          "location": "cosine_from_parts line 28",
-          "issue": "`.item()` forces a CPU\u2194GPU sync; per project memory (feedback_no_sync_in_hot.md) this should be audited.",
-          "fix": "Return the 0-d tensor and let callers call `.item()` at the display boundary if they need a Python scalar \u2014 figure prep code can tolerate the tensor."
-        }
-      ]
-    },
-    "post_hash": "564453522184f2747b1f3a5c4de77788584bc2b6"
-  },
-  {
-    "cycle": 1,
-    "ts": "2026-04-27T21:51:39.658674+00:00",
-    "phase": "ok",
-    "rate": {
-      "score": 8,
-      "praise": "Tight registry pattern with clean dynamic dispatch; `stages` and `resolve` compose well and the directory layout is explicit.",
-      "cuts": [
-        {
-          "location": "line 25",
-          "issue": "`trace` is a single-use lambda defined inside the function body \u2014 obscures the three call sites and adds a layer of indirection for no reuse benefit",
-          "fix": "inline `torch.einsum(\"ijij->\", t[:, 1:, :, 1:])` at each of the three call sites"
-        },
-        {
-          "location": "line 27",
-          "issue": "`.clamp_min(0)` is defensive guarding against numerically impossible negative squared norms; per project conventions, let it crash",
-          "fix": "remove `.clamp_min(0)` from both norm lines"
-        },
-        {
-          "location": "lines 12-17 (FIGURES values)",
-          "issue": "Dict keys map to dot-path strings that are silently wrong until runtime; the only validated key is `description` (never used programmatically) \u2014 the stage keys are pattern-repeated and error-prone",
-          "fix": "minor: acceptable for a research registry, but consider a small dataclass or NamedTuple to surface missing keys at import time rather than at `resolve` call time"
-        }
-      ]
-    },
-    "post_hash": "2cbf25d8d88803d6efc083bfc31f451c3d3a5980"
-  },
-  {
-    "cycle": 2,
-    "ts": "2026-04-27T21:51:49.256484+00:00",
+    "ts": "2026-04-28T08:47:54.882267+00:00",
     "phase": "stop",
     "rate": {
       "score": 9,
-      "praise": "Lean and purposeful: every binding does real work, the KeyError raise is idiomatic and informative, and cosine_from_parts is a clean crystallisation of the slice-then-contract pattern.",
+      "praise": "Tight registry pattern, no defensive noise, paths computed once at module level, and `cosine_from_parts` is three lines doing exactly what it says.",
       "cuts": [
         {
-          "location": "line 31-33 (resolve)",
-          "issue": "The `if action not in FIGURES[name]` guard is a defensive conditional for a case that is caller-controlled; the KeyError from `FIGURES[name][action]` would be clear enough, but the richer error message is genuinely useful \u2014 however the guard can be collapsed to a single expression.",
-          "fix": "module = FIGURES[name].get(action); if module is None: raise KeyError(f\"{name} does not support {action}. Available: {', '.join(stages(name))}\"); return importlib.import_module(module).main \u2014 actually this is the same length; keep as-is, score stands."
+          "location": "line 40-42 (cosine_from_parts)",
+          "issue": "The slice `[:, 1:, :, 1:]` is repeated three times \u2014 one typo breaks only one of the three silently.",
+          "fix": "Hoist: `s = (slice(None), slice(1,None), slice(None), slice(1,None)); return ab[s].einsum('ijij->') / (aa[s].einsum('ijij->').sqrt() * bb[s].einsum('ijij->').sqrt())` \u2014 or accept it as-is if the repetition is intentional documentation of what each tensor skips."
         }
       ]
     }
