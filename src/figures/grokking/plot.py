@@ -139,35 +139,39 @@ def main():
         log_mid = (math.log10(max(phase["first_step"], steps[0])) +
                    math.log10(phase["last_step"])) / 2
         x_paper = (log_mid - log_range[0]) / log_span
-        fig.add_annotation(x=x_paper, y=0.945, xref="paper", yref="paper",
+        fig.add_annotation(x=x_paper, y=0.955, xref="paper", yref="paper",
                            xanchor="center", yanchor="middle",
                            text=f"<b>{phase['name']}</b>", showarrow=False,
-                           font=dict(size=12, color=PHASE_LABEL_COLOR[phase["name"]]))
+                           font=dict(size=14, color=PHASE_LABEL_COLOR[phase["name"]]))
 
     for row in (1, 2, 3, 4):
         fig.update_xaxes(type="log", range=log_range, row=row, col=1)
     fig.update_xaxes(title="<b>Training step</b>", row=4, col=1)
     fig.update_yaxes(automargin=False, title=None)
-    fig.update_yaxes(range=[0, 1.05], domain=[0.84, 0.93], row=1, col=1)
-    fig.update_yaxes(type="log", domain=[0.73, 0.82], row=2, col=1)
-    fig.update_yaxes(type="log", range=log_range, domain=[0.22, 0.71], row=3, col=1)
-    fig.update_yaxes(domain=[0.04, 0.20], row=4, col=1)
+    fig.update_yaxes(range=[0, 1.05], domain=[0.86, 0.94], row=1, col=1)
+    fig.update_yaxes(type="log", domain=[0.76, 0.84], row=2, col=1)
+    fig.update_yaxes(type="log", range=log_range, domain=[0.28, 0.74], row=3, col=1)
+    fig.update_yaxes(domain=[0.04, 0.26], row=4, col=1)
 
     # Y-axis titles as fixed paper-x annotations so they align across rows
     # regardless of tick-label widths.
-    for label, mid_y in (("Accuracy",  0.885),
-                         ("Loss",      0.775),
-                         ("Step",      0.465),
-                         ("Frequency", 0.12)):
+    for label, mid_y in (("Accuracy",  0.90),
+                         ("Loss",      0.80),
+                         ("Step",      0.51),
+                         ("Frequency", 0.15)):
         fig.add_annotation(text=f"<b>{label}</b>", xref="paper", yref="paper",
-                           x=-0.085, y=mid_y, xanchor="center", yanchor="middle",
+                           x=-0.07, y=mid_y, xanchor="center", yanchor="middle",
                            textangle=-90, showarrow=False,
-                           font=dict(size=16, color="#0F172A"))
+                           font=dict(size=18, color="#0F172A"))
 
     apply_style(fig, title=f"Grokking on modular addition (P={meta['config']['P']})",
-                width=900, height=1620, legend=False)
+                width=900, height=1450)
     fig.update_layout(
-        margin=dict(l=90, r=60, t=70, b=60),
+        margin=dict(l=85, r=30, t=40, b=25),
         title=dict(y=0.99),
+        legend=dict(orientation="h", yanchor="middle", y=0.97,
+                    xanchor="center", x=0.5,
+                    bgcolor="rgba(255,255,255,0)",
+                    font=dict(size=12)),
     )
     save_figure(fig, "grokking")
