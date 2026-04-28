@@ -380,6 +380,7 @@ When something didn't go as expected (an estimate was wrong, code crashed, outpu
 - **Did you just edit code in this area?** Re-read the diff. Check if your edit caused it.
 - **Do you have a memory or convention warning against what you did?** Apply it. Violating your own written rules and then explaining the consequence away is the worst version of this failure.
 - **Could the explanation fit any case?** If yes, it explains nothing.
+- **Make sure your explanation fits all symptoms**
 
 A rationalization always sounds reasonable. That's the trap. Force a specific concrete answer naming what you changed, or admit you don't know and investigate before answering. The pattern of rationalizing past warning signs (slow runs, weird outputs, partial crashes) compounds — every excuse delays the real fix and ships uglier code.
 
