@@ -40,11 +40,13 @@ def test_checkpoint_transformer_from_hf_config_smoke():
     assert -1.0 <= cosine <= 1.0
 
 
-def test_official_figures_code_does_not_reference_workspaces():
+def test_official_figures_code_does_not_import_from_workspaces():
+    """Reading workspace data from prepare.py is fine (e.g. logan's grokking bundle);
+    importing workspace *code* into the official pipeline is not."""
     for path in (REPO_ROOT / "src" / "figures").rglob("*.py"):
         text = path.read_text(encoding="utf-8")
-        assert "workspaces/" not in text
-        assert "workspaces\\" not in text
+        assert "from workspaces" not in text, f"{path} imports from workspaces"
+        assert "import workspaces" not in text, f"{path} imports workspaces"
 
 
 @pytest.mark.parametrize("entrypoint", [train_main, prepare_main, plot_main])
@@ -72,11 +74,13 @@ def test_color_palettes_share_one_source():
 
 
 def test_no_numpy_in_official_figures_code():
-    """Hard ban: no `numpy` imports in `src/figures/` or `src/models/`. Torch is the math primitive."""
-    for path in (
+    """Math primitive is torch; numpy is allowed only in prepare.py at the .npy/.npz
+    I/O boundary (e.g. logan's grokking bundle ships .npy files)."""
+    paths = [p for p in (
         *(REPO_ROOT / "src" / "figures").rglob("*.py"),
         *(REPO_ROOT / "src" / "models").rglob("*.py"),
-    ):
+    ) if p.name != "prepare.py"]
+    for path in paths:
         text = path.read_text(encoding="utf-8")
         assert "import numpy" not in text, f"{path} imports numpy"
         assert "from numpy" not in text, f"{path} from-imports numpy"
