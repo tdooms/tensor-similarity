@@ -21,7 +21,7 @@ import polars as pl
 from src.figures import CACHE_DIR, REPO_ROOT
 
 BUNDLE = REPO_ROOT / "workspaces" / "logan" / "grokking_summary_bundle" / "results_grokking_summary"
-CACHE = CACHE_DIR / "grokking"
+CACHE = CACHE_DIR / "grokking_similarity"
 
 SIMILARITY_NAMES = ("tn_similarity", "act_similarity", "js_divergence")
 TUCKER_MODES = ("output", "input_a", "input_b")

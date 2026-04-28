@@ -19,7 +19,7 @@ def test_artifact_directories_live_at_repo_root():
 
 
 def test_registry_contains_public_figure_families():
-    assert set(FIGURES) == {"seed-convergence", "curriculum-shift", "language-similarity", "grokking", "subset-training"}
+    assert set(FIGURES) == {"seed-convergence", "curriculum-shift", "language-similarity", "grokking-similarity", "subset-training"}
 
 
 def test_deep_mlp_similarity_smoke():
