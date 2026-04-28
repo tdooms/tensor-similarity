@@ -19,14 +19,18 @@ from src.figures.style import apply_style, save_figure
 
 LINE_COLOR = "#0F172A"
 
-PHASE_FILLS_LINE = ("rgba(241,245,249,0.7)",   # slate-100  — start
-                    "rgba(219,234,254,0.65)",  # blue-100   — memorize
-                    "rgba(254,215,170,0.6)",   # orange-200 — grok
-                    "rgba(204,251,241,0.65)")  # teal-100   — consolidate
-PHASE_FILLS_HEAT = ("rgba(100,116,139,0.18)",  # slate-500
-                    "rgba(59,130,246,0.18)",   # blue-500
-                    "rgba(249,115,22,0.18)",   # orange-500
-                    "rgba(20,184,166,0.18)")   # teal-500
+PHASE_FILLS_LINE = {
+    "start":       "rgba(241,245,249,0.7)",   # slate-100
+    "memorize":    "rgba(219,234,254,0.65)",  # blue-100
+    "grok":        "rgba(254,215,170,0.6)",   # orange-200
+    "consolidate": "rgba(204,251,241,0.65)",  # teal-100
+}
+PHASE_FILLS_HEAT = {
+    "start":       "rgba(100,116,139,0.18)",  # slate-500
+    "memorize":    "rgba(59,130,246,0.18)",   # blue-500
+    "grok":        "rgba(249,115,22,0.18)",   # orange-500
+    "consolidate": "rgba(20,184,166,0.18)",   # teal-500
+}
 
 
 def main():
@@ -56,20 +60,32 @@ def main():
                         row_heights=[0.13, 0.13, 0.50, 0.24],
                         vertical_spacing=0.04)
 
-    # Per-phase shapes: opaque-ish fills behind the line panels (so the label
-    # sits inside the colored band between row 1 and row 2), and lower-opacity
-    # tints over each individual heatmap (no fill in the gap between row 3
-    # and row 4).
-    for phase, line_fill, heat_fill in zip(phases, PHASE_FILLS_LINE, PHASE_FILLS_HEAT):
-        x0 = max(phase["start_step"], steps[0])
-        x1 = max(phase["end_step"], steps[0])
+    # Cell-edge phase boundaries: geometric mean of the last step of phase i
+    # and the first step of phase i+1 (so the band edge falls between cells,
+    # not through the middle of one). The first phase extends to the left
+    # edge of the x axis; the last phase to the right edge.
+    axis_lo, axis_hi = 10 ** log_range[0], 10 ** log_range[1]
+    bounds = []
+    left = axis_lo
+    for i, phase in enumerate(phases):
+        right = (math.sqrt(phase["last_step"] * phases[i + 1]["first_step"])
+                 if i < len(phases) - 1 else axis_hi)
+        bounds.append((left, right))
+        left = right
+
+    # Named phases only: colored band in the gap between row 1 and row 2 (so
+    # the line panels themselves stay clean) + low-opacity tints on each
+    # heatmap. Unnamed middle phase stays white.
+    for (x0, x1), phase in zip(bounds, phases):
+        if not phase["name"]:
+            continue
         fig.add_shape(type="rect", xref="x", yref="paper",
-                      x0=x0, x1=x1, y0=0.62, y1=0.91,
-                      fillcolor=line_fill, line_width=0, layer="below")
+                      x0=x0, x1=x1, y0=0.74, y1=0.79,
+                      fillcolor=PHASE_FILLS_LINE[phase["name"]], line_width=0, layer="below")
         for ax in ("3", "4"):
             fig.add_shape(type="rect", xref=f"x{ax}", yref=f"y{ax} domain",
                           x0=x0, x1=x1, y0=0, y1=1,
-                          fillcolor=heat_fill, line_width=0, layer="above")
+                          fillcolor=PHASE_FILLS_HEAT[phase["name"]], line_width=0, layer="above")
     train_acc = history.filter(pl.col("metric") == "train_acc").sort("step")
     val_acc = history.filter(pl.col("metric") == "val_acc").sort("step")
     fig.add_trace(go.Scatter(x=train_acc["step"], y=train_acc["value"], mode="lines+markers",
@@ -110,14 +126,15 @@ def main():
     plot_right = 1 - 120 / 900
     span = plot_right - plot_left
     log_span = log_range[1] - log_range[0]
-    for phase in phases:
-        log_mid = (math.log10(max(phase["start_step"], steps[0])) +
-                   math.log10(phase["end_step"])) / 2
+    for (x0, x1), phase in zip(bounds, phases):
+        if not phase["name"]:
+            continue
+        log_mid = (math.log10(max(x0, axis_lo)) + math.log10(x1)) / 2
         x_paper = plot_left + (log_mid - log_range[0]) / log_span * span
         fig.add_annotation(x=x_paper, y=0.766, xref="paper", yref="paper",
                            xanchor="center", yanchor="middle",
-                           text=phase["name"], showarrow=False,
-                           font=dict(size=12, color="#334155", style="italic"))
+                           text=f"<b>{phase['name']}</b>", showarrow=False,
+                           font=dict(size=12, color="#334155"))
 
     for row in (1, 2, 3, 4):
         fig.update_xaxes(type="log", range=log_range, row=row, col=1)
