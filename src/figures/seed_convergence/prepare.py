@@ -6,8 +6,8 @@ from safetensors.torch import load_file
 from tqdm import tqdm
 
 from src.components.similarity import precompile, similarity_parts
-from src.figures import CACHE_DIR, FIGURES, cosine_from_parts, resolve
-from src.figures.seed_convergence.train import OUT, REFERENCE_SEED, SEEDS, build_model, seed_dir
+from src.figures import CACHE_DIR, cosine_from_parts
+from src.figures.seed_convergence.train import REFERENCE_SEED, SEEDS, build_model, seed_dir
 
 CACHE = CACHE_DIR / "seed_convergence"
 
@@ -24,10 +24,6 @@ def load_seed_checkpoints(seed):
 
 
 def main():
-    if not all((seed_dir(seed) / "checkpoints.json").exists() for seed in SEEDS):
-        if "train" in FIGURES["seed-convergence"]:
-            resolve("seed-convergence", "train")()
-
     ref_checkpoints = load_seed_checkpoints(REFERENCE_SEED)
     ref_model = load_model(REFERENCE_SEED, ref_checkpoints[-1]["state_dict"])
     second_model = None

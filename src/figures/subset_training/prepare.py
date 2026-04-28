@@ -3,11 +3,12 @@
 import json
 
 import polars as pl
+from loguru import logger
 from safetensors.torch import load_file
 from tqdm import tqdm
 
 from src.components.similarity import precompile, similarity_parts
-from src.figures import CACHE_DIR, EXPERIMENT_DIR, FIGURES, cosine_from_parts, resolve
+from src.figures import CACHE_DIR, EXPERIMENT_DIR, cosine_from_parts
 from src.figures.subset_training.train import SEEDS, SUBSET_CONFIGS, build_model
 
 OUT = EXPERIMENT_DIR / "subset_training"
@@ -32,11 +33,6 @@ def load_run_checkpoints(seed: int, config_name: str):
 
 
 def main():
-    expected = [run_dir(seed, name) / "checkpoints.json" for seed in SEEDS for name in SUBSET_CONFIGS]
-    if not all(path.exists() for path in expected):
-        if "train" in FIGURES["subset-training"]:
-            resolve("subset-training", "train")()
-
     reference_checkpoints = load_run_checkpoints(REFERENCE_SEED, "all")
     reference_model = build_model(REFERENCE_SEED)
     reference_model.load_state_dict(reference_checkpoints[-1]["state_dict"])
@@ -96,4 +92,4 @@ def main():
         ),
         encoding="utf-8",
     )
-    print(f"Saved subset training figure cache to {CACHE}")
+    logger.info(f"Saved subset training figure cache to {CACHE}")

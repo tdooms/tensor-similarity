@@ -7,7 +7,7 @@ from safetensors.torch import load_file
 from tqdm import tqdm
 
 from src.components.similarity import precompile, similarity_parts
-from src.figures import CACHE_DIR, FIGURES, cosine_from_parts, resolve
+from src.figures import CACHE_DIR, cosine_from_parts
 from src.figures.curriculum_shift.train import OUT, SEED, build_model
 
 CACHE = CACHE_DIR / "curriculum_shift"
@@ -30,10 +30,6 @@ def load_stage_checkpoints(name):
 
 
 def main():
-    if not (OUT / "curriculum.json").exists():
-        if "train" in FIGURES["curriculum-shift"]:
-            resolve("curriculum-shift", "train")()
-
     curriculum = json.loads((OUT / "curriculum.json").read_text(encoding="utf-8"))
     all_checkpoints = []
     cumulative = 0
