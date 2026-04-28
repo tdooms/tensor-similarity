@@ -24,6 +24,7 @@ from src.figures import CACHE_DIR, DOWNLOAD_DIR, cosine_from_parts
 from src.models.checkpoint_transformer import load_config, load_pt
 
 REPO_ID = "melephant/2l-bilinear-attn-normalised-v2"
+REPO_REVISION = "8b02b9ce5363a66f5766d28ae76202b5f46efd05"
 INPUT_DIR = DOWNLOAD_DIR / "language-similarity"
 CACHE = CACHE_DIR / "language_similarity"
 
@@ -35,7 +36,7 @@ _STEP_RE = re.compile(r"^checkpoints/step_(\d+)\.pt$")
 
 def available_steps():
     """All checkpoint step numbers present on the HF dataset, sorted."""
-    files = list_repo_files(REPO_ID, repo_type="dataset")
+    files = list_repo_files(REPO_ID, repo_type="dataset", revision=REPO_REVISION)
     return sorted(int(m.group(1)) for m in (_STEP_RE.match(f) for f in files) if m)
 
 
@@ -64,7 +65,7 @@ def main():
     logger.info(f"{len(picked)} unique steps from {picked[0]} to {picked[-1]}")
 
     snapshot_download(
-        repo_id=REPO_ID, repo_type="dataset", local_dir=str(INPUT_DIR),
+        repo_id=REPO_ID, repo_type="dataset", revision=REPO_REVISION, local_dir=str(INPUT_DIR),
         allow_patterns=["config.json", "metrics/analysis_metrics.jsonl",
                         *(f"checkpoints/step_{s:05d}.pt" for s in picked)],
     )

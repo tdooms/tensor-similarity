@@ -8,6 +8,8 @@ Research code for tensor-network similarity experiments.
 uv sync
 ```
 
+`uv.lock` is committed; the install is reproducible against the exact versions used to produce every committed artifact under `artifacts/`.
+
 ## Figures workflow
 
 ```bash
@@ -18,7 +20,20 @@ uv run plot    <family>   # render figures from prepared cache
 
 Available `<family>` values: `seed-convergence`, `curriculum-shift`, `language-similarity`, `subset-training`.
 
-To force a recompute, delete the family's cache: `rm -rf artifacts/cache/<family>`.
+The committed `artifacts/cache/<family>/` is the canonical figure data (small `.feather` + `.json` files). `uv run plot <family>` reproduces the published figure from this cache directly. To regenerate the cache from scratch, delete it and re-run `prepare`.
+
+## Compute envelope
+
+| Family | Stage | Hardware | Wall-clock | Notes |
+|---|---|---|---|---|
+| `seed-convergence` | train | GPU (or CPU) | ~25 min | 5 seeds × 20 epochs × MNIST DeepMLP |
+| `seed-convergence` | prepare | GPU (or CPU) | seconds | TN cosine over saved checkpoints |
+| `curriculum-shift` | train | GPU (or CPU) | ~30 min | 1 seed × 8 stages × 15 epochs |
+| `curriculum-shift` | prepare | GPU (or CPU) | ~5 min | 100×100 pairwise heatmap |
+| `language-similarity` | prepare | **GPU required** | ~30 min @ N=50, ~2.5 h @ N=75, ~5 h @ N=100 | Pulls 75 checkpoints from `melephant/2l-bilinear-attn-normalised-v2` (revision pinned in `prepare.py`); `_progress.jsonl` lets it resume |
+| `subset-training` | train | GPU (or CPU) | ~30 min | 10 seeds × 2 configs × 20 epochs |
+| `subset-training` | prepare | GPU (or CPU) | ~2 min | Per-checkpoint cosine vs reference |
+| any | plot | CPU | seconds | Reads `artifacts/cache/<family>/`, writes PDF + PNG to `artifacts/figures/{pdf,png}/` |
 
 ## Figure Families
 

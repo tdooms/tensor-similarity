@@ -33,12 +33,14 @@ build/
 old/
 
 
-uv.lock
 _data/
 
-# Track only rendered figures under artifacts/; everything else regenerates from code + GPU.
+# Track only rendered figures + canonical figure data under artifacts/. Everything else
+# (training checkpoints, EDA outputs, review logs) regenerates from code + GPU.
 artifacts/*
 !artifacts/figures/
+!artifacts/cache/
+artifacts/cache/*/_progress.jsonl
 
 # Transient EDA scripts are tracked; their regenerable cache outputs are not.
 workspaces/**/transient/**/cache/
