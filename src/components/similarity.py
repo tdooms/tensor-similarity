@@ -9,6 +9,7 @@ position (left-term legs < right-term legs in the joined list). Self-pairs
 — giving μ. See SIMILARITY.md for the math.
 """
 import pickle
+from contextlib import contextmanager
 from functools import cache, partial
 from math import prod
 from pathlib import Path
@@ -71,19 +72,20 @@ def _save_paths():
     tmp.rename(_PATHS_FILE)
 
 
-class _precompile_mode:
-    """Context manager: while inside, `_contract` is allowed to run cotengra
-    path-finding for uncached topologies and cache the result in `_PATHS`.
-    On outermost exit we persist to disk — any subsequent session (same or
-    different shapes) finds the path already computed."""
-    def __enter__(self):
-        global _PRECOMPILE
-        self.prev = _PRECOMPILE
-        _PRECOMPILE = True
-    def __exit__(self, *_):
-        global _PRECOMPILE
-        _PRECOMPILE = self.prev
-        if not self.prev: _save_paths()
+@contextmanager
+def _precompile_mode():
+    """While inside, `_contract` is allowed to run cotengra path-finding for
+    uncached topologies and cache the result in `_PATHS`. On outermost exit
+    we persist to disk — any subsequent session (same or different shapes)
+    finds the path already computed."""
+    global _PRECOMPILE
+    prev, _PRECOMPILE = _PRECOMPILE, True
+    try:
+        yield
+    finally:
+        _PRECOMPILE = prev
+        if not prev:
+            _save_paths()
 
 
 # ── Isserlis combinatorics ────────────────────────────────────────────────
@@ -259,30 +261,16 @@ def similarity_parts(a, b):
 
 
 @torch.no_grad()
-def similarity(a, b):
-    """2×2 block `[[⟨a,a⟩, ⟨a,b⟩], [⟨a,b⟩ᵀ, ⟨b,b⟩]]`, shape (2, 2, n, d+1, n, d+1).
-
-    Legacy wrapper. The stack duplicates ~4× the combined Σ footprint into a
-    fresh allocation — if you don't need the stacked form, call
-    `similarity_parts()` directly."""
-    aa, ab, bb = similarity_parts(a, b)
-    ba = ab.permute(2, 3, 0, 1)   # Σ_ba = E[b · aᵀ] = Σ_ab with L/R axes swapped
-    return torch.stack([torch.stack([aa, ab]), torch.stack([ba, bb])])
-
-
-@torch.no_grad()
-def precompile(*models):
+def precompile(self_model, cross_model):
     """The ONLY entry point that may build new contraction expressions or CUDA
     graphs. Every self-path hits the same cache keys (topology = term-pair
-    structure, inds-only; graph = param shapes) so ONE `similarity(m, m)` call
-    covers all self-pairs over same-arch `models`. Same for cross: one call
-    covers every (a, b) with a ≠ b. Two calls total, not O(N²).
+    structure, inds-only; graph = param shapes) so ONE `similarity_parts(m, m)`
+    call covers all self-pairs over same-arch models. Same for cross: one call
+    covers every `(a, b)` with `a ≠ b`. Two calls total, not O(N²).
 
-    Contractors then persist to disk via `_precompile_mode.__exit__`; a fresh
-    Python session finds them already built and only re-captures CUDA graphs
-    (which hold GPU memory addresses and can't be serialized)."""
+    Contractors persist to disk via `_precompile_mode`; a fresh Python session
+    finds them already built and only re-captures CUDA graphs (which hold GPU
+    memory addresses and can't be serialized)."""
     with _precompile_mode():
-        if models:
-            similarity(models[0], models[0])              # one self graph
-        if len(models) >= 2:
-            similarity(models[0], models[1])              # one cross graph
+        similarity_parts(self_model, self_model)
+        similarity_parts(self_model, cross_model)

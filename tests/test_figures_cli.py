@@ -47,12 +47,6 @@ def test_official_figures_code_does_not_reference_workspaces():
         assert "workspaces\\" not in text
 
 
-def test_official_figures_code_uses_shared_similarity_parts():
-    for path in (REPO_ROOT / "src" / "figures").rglob("prepare.py"):
-        text = path.read_text(encoding="utf-8")
-        assert "from src.components.similarity import similarity" not in text
-
-
 @pytest.mark.parametrize("entrypoint", [train_main, prepare_main, plot_main])
 def test_top_level_entrypoints_reject_missing_family(entrypoint):
     with pytest.raises(SystemExit):
