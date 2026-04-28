@@ -4,16 +4,16 @@ import torch
 from src.components.linear import Linear
 from src.components.mlp import MLP
 from src.components.attention import Attention
-from src.components.similarity import similarity
+from src.components.similarity import similarity_parts
 from src.models.transformer import Transformer
 
 
-def cosine(s):
-    """Cosine from the 2x2 stacked similarity output. `_propagate` returns
-    Σ normalized per-layer; the prefactors cancel in the ratio."""
+def cosine(aa, ab, bb):
+    """Cosine from the (Σ_aa, Σ_ab, Σ_bb) triple. `_propagate` returns Σ
+    normalized per-layer; the prefactors cancel in the ratio."""
     tr = lambda x: torch.einsum('ijij->', x[:, 1:, :, 1:])
-    return (tr(s[0, 1]) / (tr(s[0, 0]).clamp_min(0).sqrt()
-                           * tr(s[1, 1]).clamp_min(0).sqrt() + 1e-30)).item()
+    return (tr(ab) / (tr(aa).clamp_min(0).sqrt()
+                      * tr(bb).clamp_min(0).sqrt() + 1e-30)).item()
 
 
 def mc_cosine(model_a, model_b, d_input, n_samples=1_000_000, n_ctx=None):
@@ -70,16 +70,16 @@ class TwoLayerMLPModel(torch.nn.Module):
 LIKE = dict(device="cpu", dtype=torch.float32)
 
 
-def assert_exact(state, model_a, model_b, d_input, tol=0.02, n_ctx=None, n_samples=1_000_000):
+def assert_exact(parts, model_a, model_b, d_input, tol=0.02, n_ctx=None, n_samples=1_000_000):
     """Assert exact cosine matches MC cosine within tolerance."""
-    exact = cosine(state)
+    exact = cosine(*parts)
     mc = mc_cosine(model_a, model_b, d_input, n_samples=n_samples, n_ctx=n_ctx)
     rel_err = abs(exact - mc) / max(abs(mc), 1e-8)
     assert rel_err < tol, f"exact={exact:.6f}, mc={mc:.6f}, rel_err={rel_err:.4%}"
 
 
-def assert_self_cosine(state, tol=1e-10):
-    assert abs(cosine(state) - 1.0) < tol
+def assert_self_cosine(parts, tol=1e-10):
+    assert abs(cosine(*parts) - 1.0) < tol
 
 
 # --- Linear ---
@@ -88,14 +88,14 @@ class TestLinear:
     def test_self(self):
         torch.manual_seed(0)
         m = MLPModel(6, 8, 16, 4, scale=0.0).double()  # scale=0 => pure linear
-        s = similarity(m, m)
+        s = similarity_parts(m, m)
         assert_exact(s, m, m, 6)
         assert_self_cosine(s)
 
     def test_cross(self):
         torch.manual_seed(0); a = MLPModel(6, 8, 16, 4, scale=0.0).double()
         torch.manual_seed(1); b = MLPModel(6, 8, 16, 4, scale=0.0).double()
-        assert_exact(similarity(a, b), a, b, 6)
+        assert_exact(similarity_parts(a, b), a, b, 6)
 
 
 # --- Bilinear MLP ---
@@ -104,33 +104,33 @@ class TestBilinear:
     def test_no_residual(self):
         torch.manual_seed(42)
         m = MLPModel(4, 8, 16, 3, scale=1.0).double()
-        s = similarity(m, m)
+        s = similarity_parts(m, m)
         assert_exact(s, m, m, 4)
         assert_self_cosine(s)
 
     def test_with_residual(self):
         torch.manual_seed(42)
         m = MLPModel(4, 8, 16, 3, scale=0.5).double()
-        s = similarity(m, m)
+        s = similarity_parts(m, m)
         assert_exact(s, m, m, 4)
         assert_self_cosine(s)
 
     def test_with_bias(self):
         torch.manual_seed(42)
         m = MLPModel(4, 8, 16, 3, scale=0.7, bias=True).double()
-        s = similarity(m, m)
+        s = similarity_parts(m, m)
         assert_exact(s, m, m, 4)
         assert_self_cosine(s)
 
     def test_cross(self):
         torch.manual_seed(42); a = MLPModel(4, 8, 16, 3, scale=0.5).double()
         torch.manual_seed(99); b = MLPModel(4, 8, 16, 3, scale=0.5).double()
-        assert_exact(similarity(a, b), a, b, 4)
+        assert_exact(similarity_parts(a, b), a, b, 4)
 
     def test_cross_with_bias(self):
         torch.manual_seed(42); a = MLPModel(4, 8, 16, 3, scale=0.7, bias=True).double()
         torch.manual_seed(99); b = MLPModel(4, 8, 16, 3, scale=0.7, bias=True).double()
-        assert_exact(similarity(a, b), a, b, 4)
+        assert_exact(similarity_parts(a, b), a, b, 4)
 
 
 # --- Two-layer MLP (Gaussian approximation) ---
@@ -139,13 +139,13 @@ class TestTwoLayerMLP:
     def test_self(self):
         torch.manual_seed(42)
         m = TwoLayerMLPModel(4, 8, 16, 3, scale=0.5).double()
-        s = similarity(m, m)
+        s = similarity_parts(m, m)
         assert_exact(s, m, m, 4, tol=0.1)
 
     def test_cross(self):
         torch.manual_seed(42); a = TwoLayerMLPModel(4, 8, 16, 3, scale=0.5).double()
         torch.manual_seed(99); b = TwoLayerMLPModel(4, 8, 16, 3, scale=0.5).double()
-        assert_exact(similarity(a, b), a, b, 4, tol=0.2)
+        assert_exact(similarity_parts(a, b), a, b, 4, tol=0.2)
 
 
 # --- Attention (using Transformer with n_layer=1, no MLP via scale trick) ---
@@ -156,14 +156,14 @@ class TestAttention:
         m = Transformer(4, 8, 2, 3, 16, 3, n_layer=1, mask='none', scale=1.0).double()
         # Remove MLP effect by setting its scale to 0 (pure passthrough)
         m.body[0].mlp = MLP(8, 16, scale=0.0).double()
-        s = similarity(m, m)
+        s = similarity_parts(m, m)
         assert_exact(s, m, m, 4, tol=0.1, n_ctx=3)
 
     def test_with_residual(self):
         torch.manual_seed(42)
         m = Transformer(4, 8, 2, 3, 16, 3, n_layer=1, mask='none', scale=0.5).double()
         m.body[0].mlp = MLP(8, 16, scale=0.0).double()
-        s = similarity(m, m)
+        s = similarity_parts(m, m)
         assert_exact(s, m, m, 4, tol=0.1, n_ctx=3)
 
     def test_cross(self):
@@ -173,13 +173,13 @@ class TestAttention:
         torch.manual_seed(99)
         b = Transformer(4, 8, 2, 3, 16, 3, n_layer=1, mask='none', scale=1.0).double()
         b.body[0].mlp = MLP(8, 16, scale=0.0).double()
-        assert_exact(similarity(a, b), a, b, 4, tol=0.3, n_ctx=3, n_samples=500_000)
+        assert_exact(similarity_parts(a, b), a, b, 4, tol=0.3, n_ctx=3, n_samples=500_000)
 
     def test_causal_mask(self):
         torch.manual_seed(42)
         m = Transformer(4, 8, 2, 3, 16, 3, n_layer=1, mask='causal', scale=0.5).double()
         m.body[0].mlp = MLP(8, 16, scale=0.0).double()
-        s = similarity(m, m)
+        s = similarity_parts(m, m)
         assert_exact(s, m, m, 4, tol=0.1, n_ctx=3)
         assert_self_cosine(s, tol=1e-6)
 
@@ -187,7 +187,7 @@ class TestAttention:
         torch.manual_seed(42)
         m = Transformer(4, 8, 2, 3, 16, 3, n_layer=1, mask='none', bias=True, scale=0.5).double()
         m.body[0].mlp = MLP(8, 16, scale=0.0, bias=True).double()
-        s = similarity(m, m)
+        s = similarity_parts(m, m)
         assert_exact(s, m, m, 4, tol=0.1, n_ctx=3)
         assert_self_cosine(s, tol=1e-6)
 
@@ -198,7 +198,7 @@ class TestTransformer:
     def test_single_layer(self):
         torch.manual_seed(42)
         m = Transformer(4, 8, 2, 2, 16, 3, n_layer=1, mask='none', scale=0.5).double()
-        s = similarity(m, m)
+        s = similarity_parts(m, m)
         assert_exact(s, m, m, 4, tol=0.2, n_ctx=2)
         assert_self_cosine(s, tol=1e-6)
 
@@ -207,12 +207,12 @@ class TestTransformer:
         a = Transformer(4, 8, 2, 2, 16, 3, n_layer=1, mask='none', scale=0.5).double()
         torch.manual_seed(99)
         b = Transformer(4, 8, 2, 2, 16, 3, n_layer=1, mask='none', scale=0.5).double()
-        assert_exact(similarity(a, b), a, b, 4, tol=0.3, n_ctx=2, n_samples=500_000)
+        assert_exact(similarity_parts(a, b), a, b, 4, tol=0.3, n_ctx=2, n_samples=500_000)
 
     def test_two_layer(self):
         torch.manual_seed(42)
         m = Transformer(4, 8, 2, 2, 16, 3, n_layer=2, mask='none', scale=0.5).double()
-        s = similarity(m, m)
+        s = similarity_parts(m, m)
         assert_self_cosine(s, tol=1e-4)
 
 
@@ -227,7 +227,7 @@ class TestScale:
         torch.manual_seed(42)
         m = Transformer(4096, 128, 8, 4, 128, 4096, n_layer=2,
                         mask='none', scale=0.5).double()
-        assert_self_cosine(similarity(m, m), tol=1e-4)
+        assert_self_cosine(similarity_parts(m, m), tol=1e-4)
 
 
 # --- Numerical robustness (regression for the fp32 overflow bug) ---
@@ -287,21 +287,21 @@ class TestCrossPairSymmetry:
     def test_fp64_bit_exact(self):
         torch.manual_seed(42); a = MLPModel(4, 8, 16, 3, scale=0.5).double()
         torch.manual_seed(99); b = MLPModel(4, 8, 16, 3, scale=0.5).double()
-        assert cosine(similarity(a, b)) == cosine(similarity(b, a))
+        assert cosine(*similarity_parts(a, b)) == cosine(*similarity_parts(b, a))
 
     def test_fp32_within_ulp(self):
         torch.manual_seed(42); a = MLPModel(4, 8, 16, 3, scale=1.0).float()
         torch.manual_seed(99); b = MLPModel(4, 8, 16, 3, scale=1.0).float()
-        diff = abs(cosine(similarity(a, b)) - cosine(similarity(b, a)))
+        diff = abs(cosine(*similarity_parts(a, b)) - cosine(*similarity_parts(b, a)))
         assert diff < 1e-5, f"fp32 asymmetry {diff:.2e} exceeds ULP-scale tolerance"
 
     def test_repeat_call_is_deterministic(self):
         """Same call ordering, repeated, must give bit-identical results."""
         torch.manual_seed(42); a = MLPModel(4, 8, 16, 3, scale=1.0).float()
         torch.manual_seed(99); b = MLPModel(4, 8, 16, 3, scale=1.0).float()
-        c1 = cosine(similarity(a, b))
-        c2 = cosine(similarity(a, b))
-        c3 = cosine(similarity(a, b))
+        c1 = cosine(*similarity_parts(a, b))
+        c2 = cosine(*similarity_parts(a, b))
+        c3 = cosine(*similarity_parts(a, b))
         assert c1 == c2 == c3
 
 
