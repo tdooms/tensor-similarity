@@ -27,10 +27,10 @@ FIGURES = {
         "prepare": "src.figures.language_similarity.prepare",
         "plot": "src.figures.language_similarity.plot",
     },
-    "grokking": {
+    "grokking-similarity": {
         "description": "Pairwise TN similarity across grokking checkpoints (modular addition).",
-        "prepare": "src.figures.grokking.prepare",
-        "plot": "src.figures.grokking.plot",
+        "prepare": "src.figures.grokking_similarity.prepare",
+        "plot": "src.figures.grokking_similarity.plot",
     },
     "subset-training": {
         "description": "Laurence-derived MNIST subset training across seeds.",
