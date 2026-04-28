@@ -43,7 +43,7 @@ def main():
     apply_style(fig, title="Curriculum shift similarity and test accuracy")
     style_xy_axes(fig, x_title="Cumulative batch steps", y_title="Tensor similarity")
     fig.update_yaxes(range=[0, 1.05], secondary_y=False)
-    fig.update_yaxes(title_text="<b>Test accuracy</b>", range=[0.8, 1.0], secondary_y=True)
+    fig.update_yaxes(title_text="<b>Test accuracy</b>", range=[0.9, 1.0], secondary_y=True)
     save_figure(fig, "curriculum_shift_similarity_accuracy")
 
     matrix = (heat.sort(["batch_i", "batch_j"])
