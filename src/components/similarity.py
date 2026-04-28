@@ -200,48 +200,30 @@ def _initial(model):
 
 
 def _propagate(a, b):
-    """Joint (Σ_aa, Σ_ab, Σ_bb) through aligned components.
+    """Joint (Σ_aa, Σ_ab, Σ_bb) through aligned components — *normalized*.
 
-    Per-layer normalization + un-scale: each iteration divides the three Σ
-    by (α_aa, √(α_aa·α_bb), α_bb) where α_slot = max|slot|. The computation
-    proceeds with bounded intermediates (critical at vocab scale: raw Σ_aa
-    entries reach O(10^8) after two bilinear-attention layers and active×active
-    contractions quickly overflow fp32 in intermediate tensors). We multiply
-    through by the accumulated factors at the end so the returned Σ matches
-    un-normalized propagation bit-for-bit up to fp re-association — callers
-    relying on raw `tr(Σ_ab)` (not just cosine) see no behaviour change.
-
-    The trio (α, √(α·β), β) is exactly the freedom cosine is invariant to
-    (see tests/test_normalization.py), so the normalization is exact math,
-    not approximation.
+    Per-layer normalization divides the three Σ by (α_aa, √(α_aa·α_bb), α_bb)
+    where α_slot = max|slot|. The trio is exactly the freedom cosine is
+    invariant to, so we never un-scale — the prefactors cancel in any cosine
+    consumer. Skipping the un-scale also removes the only fp32 dynamic-range
+    failure mode at vocab scale (un-scaled traces could reach >10^19 and the
+    `aa·bb` product in `cosine_from_parts` would overflow fp32 max ~3.4e38).
 
     When `a is b` all three slots stay aliased → 1 update + 1 normalization
     per layer; else 3 updates and 3 normalizations."""
     aa = ab = bb = _initial(a)
-    log_α_aa = log_α_bb = 0.0   # accumulate in log-space to avoid overflow
     for ca, cb in zip(a.components(), b.components()):
         ta = ca.terms(a.n_ctx)
         tb = ta if a is b else cb.terms(b.n_ctx)
         aa_ = _update(aa, aa, aa, ta, ta)
         if a is b:
-            α = aa_.abs().max()
-            aa = ab = bb = aa_ / α
-            log_α_aa = log_α_aa + α.log()
+            aa = ab = bb = aa_ / aa_.abs().max()
         else:
             ab_ = _update(aa, ab, bb, ta, tb)
             bb_ = _update(bb, bb, bb, tb, tb)
             α, β = aa_.abs().max(), bb_.abs().max()
-            aa, ab, bb = aa_ / α, ab_ / (α * β).sqrt(), bb_ / β
-            log_α_aa = log_α_aa + α.log()
-            log_α_bb = log_α_bb + β.log()
-    # Un-scale: aa × ∏α, bb × ∏β, ab × √(∏α·∏β). Done via exp of log-sums.
-    if a is b:
-        α = log_α_aa.exp()
-        return aa * α, ab * α, bb * α
-    total_aa = log_α_aa.exp()
-    total_bb = log_α_bb.exp()
-    total_ab = ((log_α_aa + log_α_bb) / 2).exp()
-    return aa * total_aa, ab * total_ab, bb * total_bb
+            aa, ab, bb = aa_ / α, ab_ / (α.sqrt() * β.sqrt()), bb_ / β
+    return aa, ab, bb
 
 
 # ── CUDA graph wrapper ────────────────────────────────────────────────────
