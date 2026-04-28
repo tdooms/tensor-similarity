@@ -44,5 +44,27 @@
     "schedule_mode": "power",
     "n_checkpoints": 30,
     "schedule_exponent": 5.0
-  }
+  },
+  "phases": [
+    {
+      "name": "start",
+      "start_step": 0,
+      "end_step": 159
+    },
+    {
+      "name": "memorize",
+      "start_step": 159,
+      "end_step": 5112
+    },
+    {
+      "name": "grok",
+      "start_step": 5112,
+      "end_step": 19911
+    },
+    {
+      "name": "consolidate",
+      "start_step": 19911,
+      "end_step": 100000
+    }
+  ]
 }
