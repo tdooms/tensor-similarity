@@ -19,18 +19,17 @@ from src.figures.style import apply_style, save_figure
 
 LINE_COLOR = "#0F172A"
 
-PHASE_FILLS_LINE = {
-    "start":       "rgba(241,245,249,0.7)",   # slate-100
-    "memorize":    "rgba(219,234,254,0.65)",  # blue-100
-    "grok":        "rgba(254,215,170,0.6)",   # orange-200
-    "consolidate": "rgba(204,251,241,0.65)",  # teal-100
+# One base color per phase; same RGB used in both contexts (line panel
+# background AND heatmap tint), just different alpha — so the colors
+# read as identical across panels.
+PHASE_RGB = {
+    "start":       "148,163,184",  # slate-400
+    "memorize":    "96,165,250",   # blue-400
+    "grok":        "251,146,60",   # orange-400
+    "consolidate": "45,212,191",   # teal-400
 }
-PHASE_FILLS_HEAT = {
-    "start":       "rgba(100,116,139,0.18)",  # slate-500
-    "memorize":    "rgba(59,130,246,0.18)",   # blue-500
-    "grok":        "rgba(249,115,22,0.18)",   # orange-500
-    "consolidate": "rgba(20,184,166,0.18)",   # teal-500
-}
+PHASE_FILLS_LINE = {k: f"rgba({rgb},0.35)" for k, rgb in PHASE_RGB.items()}
+PHASE_FILLS_HEAT = {k: f"rgba({rgb},0.30)" for k, rgb in PHASE_RGB.items()}
 
 
 def main():
@@ -73,19 +72,23 @@ def main():
         bounds.append((left, right))
         left = right
 
-    # Named phases only: colored fill spanning both line panels + the gap
-    # (paper y 0.62 — 0.91) and low-opacity tints over each heatmap.
-    # Unnamed middle phase stays white.
+    # Named phases only: colored fill behind row 1 (acc) and row 2 (loss)
+    # panels separately — the gap between them stays white so the labels
+    # have a clean uncolored band to live in. Heatmaps get low-opacity
+    # tints. Unnamed middle phase stays white throughout.
     for (x0, x1), phase in zip(bounds, phases):
         if not phase["name"]:
             continue
-        fig.add_shape(type="rect", xref="x", yref="paper",
-                      x0=x0, x1=x1, y0=0.72, y1=0.96,
-                      fillcolor=PHASE_FILLS_LINE[phase["name"]], line_width=0, layer="below")
+        line_fill = PHASE_FILLS_LINE[phase["name"]]
+        heat_fill = PHASE_FILLS_HEAT[phase["name"]]
+        for ax in ("", "2"):
+            fig.add_shape(type="rect", xref=f"x{ax}", yref=f"y{ax} domain",
+                          x0=x0, x1=x1, y0=0, y1=1,
+                          fillcolor=line_fill, line_width=0, layer="below")
         for ax in ("3", "4"):
             fig.add_shape(type="rect", xref=f"x{ax}", yref=f"y{ax} domain",
                           x0=x0, x1=x1, y0=0, y1=1,
-                          fillcolor=PHASE_FILLS_HEAT[phase["name"]], line_width=0, layer="above")
+                          fillcolor=heat_fill, line_width=0, layer="above")
     train_acc = history.filter(pl.col("metric") == "train_acc").sort("step")
     val_acc = history.filter(pl.col("metric") == "val_acc").sort("step")
     fig.add_trace(go.Scatter(x=train_acc["step"], y=train_acc["value"], mode="lines+markers",
@@ -95,8 +98,8 @@ def main():
                   row=1, col=1)
     fig.add_trace(go.Scatter(x=val_acc["step"], y=val_acc["value"], mode="lines+markers",
                              name="Validation", legendgroup="val",
-                             line=dict(color=LINE_COLOR, width=2.5, dash="dash"),
-                             marker=dict(size=5, color=LINE_COLOR, symbol="diamond-open")),
+                             line=dict(color=LINE_COLOR, width=2.5, dash="dot"),
+                             marker=dict(size=5, color=LINE_COLOR)),
                   row=1, col=1)
 
     train_loss = history.filter(pl.col("metric") == "train_loss").sort("step")
@@ -108,8 +111,8 @@ def main():
                   row=2, col=1)
     fig.add_trace(go.Scatter(x=val_loss["step"], y=val_loss["value"], mode="lines+markers",
                              name="Validation", legendgroup="val", showlegend=False,
-                             line=dict(color=LINE_COLOR, width=2.5, dash="dash"),
-                             marker=dict(size=5, color=LINE_COLOR, symbol="diamond-open")),
+                             line=dict(color=LINE_COLOR, width=2.5, dash="dot"),
+                             marker=dict(size=5, color=LINE_COLOR)),
                   row=2, col=1)
 
     fig.add_trace(go.Heatmap(z=matrix, x=steps, y=steps, zmin=0, zmax=1,
@@ -122,16 +125,16 @@ def main():
                              colorbar=dict(y=0.10, len=0.16, thickness=12, xpad=10)),
                   row=4, col=1)
 
-    plot_left = 90 / 900
-    plot_right = 1 - 120 / 900
-    span = plot_right - plot_left
+    # Plotly "paper" x runs 0..1 across the plot area (between margins), and
+    # the shared xaxis spans that whole domain. So a data value v maps to
+    # paper x = (log10(v) - log_lo) / log_span — no margin offsets.
     log_span = log_range[1] - log_range[0]
     for phase in phases:
         if not phase["name"]:
             continue
         log_mid = (math.log10(max(phase["first_step"], steps[0])) +
                    math.log10(phase["last_step"])) / 2
-        x_paper = plot_left + (log_mid - log_range[0]) / log_span * span
+        x_paper = (log_mid - log_range[0]) / log_span
         fig.add_annotation(x=x_paper, y=0.84, xref="paper", yref="paper",
                            xanchor="center", yanchor="middle",
                            text=f"<b>{phase['name']}</b>", showarrow=False,
@@ -140,23 +143,27 @@ def main():
     for row in (1, 2, 3, 4):
         fig.update_xaxes(type="log", range=log_range, row=row, col=1)
     fig.update_xaxes(title="<b>Training step</b>", row=4, col=1)
-    fig.update_yaxes(automargin=False, title_standoff=14)
-    fig.update_yaxes(title="<b>Accuracy</b>", range=[0, 1.05],
-                     domain=[0.86, 0.96], row=1, col=1)
-    fig.update_yaxes(type="log", title="<b>Loss</b>",
-                     domain=[0.72, 0.82], row=2, col=1)
-    fig.update_yaxes(type="log", range=log_range, title="<b>Step</b>",
-                     domain=[0.21, 0.66], row=3, col=1)
-    fig.update_yaxes(title="<b>Frequency</b>",
-                     domain=[0.02, 0.18], row=4, col=1)
+    fig.update_yaxes(automargin=False, title=None)
+    fig.update_yaxes(range=[0, 1.05], domain=[0.85, 0.95], row=1, col=1)
+    fig.update_yaxes(type="log", domain=[0.71, 0.81], row=2, col=1)
+    fig.update_yaxes(type="log", range=log_range, domain=[0.22, 0.68], row=3, col=1)
+    fig.update_yaxes(domain=[0.03, 0.19], row=4, col=1)
+
+    # Y-axis titles as fixed paper-x annotations so they align across rows
+    # regardless of tick-label widths.
+    for label, mid_y in (("Accuracy",  0.90),
+                         ("Loss",      0.76),
+                         ("Step",      0.45),
+                         ("Frequency", 0.11)):
+        fig.add_annotation(text=f"<b>{label}</b>", xref="paper", yref="paper",
+                           x=-0.06, y=mid_y, xanchor="center", yanchor="middle",
+                           textangle=-90, showarrow=False,
+                           font=dict(size=14, color="#0F172A"))
 
     apply_style(fig, title=f"Grokking on modular addition (P={meta['config']['P']})",
-                width=900, height=1620)
+                width=900, height=1620, legend=False)
     fig.update_layout(
-        margin=dict(l=90, r=120, t=70, b=60),
+        margin=dict(l=90, r=120, t=50, b=60),
         title=dict(y=0.985),
-        legend=dict(orientation="h", yanchor="bottom", y=0.97,
-                    xanchor="center", x=0.5,
-                    bgcolor="rgba(255,255,255,0.85)"),
     )
     save_figure(fig, "grokking")
