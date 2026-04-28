@@ -73,14 +73,14 @@ def main():
         bounds.append((left, right))
         left = right
 
-    # Named phases only: colored band in the gap between row 1 and row 2 (so
-    # the line panels themselves stay clean) + low-opacity tints on each
-    # heatmap. Unnamed middle phase stays white.
+    # Named phases only: colored fill spanning both line panels + the gap
+    # (paper y 0.62 — 0.91) and low-opacity tints over each heatmap.
+    # Unnamed middle phase stays white.
     for (x0, x1), phase in zip(bounds, phases):
         if not phase["name"]:
             continue
         fig.add_shape(type="rect", xref="x", yref="paper",
-                      x0=x0, x1=x1, y0=0.74, y1=0.79,
+                      x0=x0, x1=x1, y0=0.72, y1=0.96,
                       fillcolor=PHASE_FILLS_LINE[phase["name"]], line_width=0, layer="below")
         for ax in ("3", "4"):
             fig.add_shape(type="rect", xref=f"x{ax}", yref=f"y{ax} domain",
@@ -114,24 +114,25 @@ def main():
 
     fig.add_trace(go.Heatmap(z=matrix, x=steps, y=steps, zmin=0, zmax=1,
                              colorscale="Greys",
-                             colorbar=dict(y=0.385, len=0.4, thickness=12, xpad=10)),
+                             colorbar=dict(y=0.435, len=0.45, thickness=12, xpad=10)),
                   row=3, col=1)
 
     fig.add_trace(go.Heatmap(z=freq_z, x=steps, y=list(range(n_freqs)),
                              colorscale="Greys",
-                             colorbar=dict(y=0.085, len=0.18, thickness=12, xpad=10)),
+                             colorbar=dict(y=0.10, len=0.16, thickness=12, xpad=10)),
                   row=4, col=1)
 
     plot_left = 90 / 900
     plot_right = 1 - 120 / 900
     span = plot_right - plot_left
     log_span = log_range[1] - log_range[0]
-    for (x0, x1), phase in zip(bounds, phases):
+    for phase in phases:
         if not phase["name"]:
             continue
-        log_mid = (math.log10(max(x0, axis_lo)) + math.log10(x1)) / 2
+        log_mid = (math.log10(max(phase["first_step"], steps[0])) +
+                   math.log10(phase["last_step"])) / 2
         x_paper = plot_left + (log_mid - log_range[0]) / log_span * span
-        fig.add_annotation(x=x_paper, y=0.766, xref="paper", yref="paper",
+        fig.add_annotation(x=x_paper, y=0.84, xref="paper", yref="paper",
                            xanchor="center", yanchor="middle",
                            text=f"<b>{phase['name']}</b>", showarrow=False,
                            font=dict(size=12, color="#334155"))
@@ -141,19 +142,20 @@ def main():
     fig.update_xaxes(title="<b>Training step</b>", row=4, col=1)
     fig.update_yaxes(automargin=False, title_standoff=14)
     fig.update_yaxes(title="<b>Accuracy</b>", range=[0, 1.05],
-                     domain=[0.80, 0.91], row=1, col=1)
+                     domain=[0.86, 0.96], row=1, col=1)
     fig.update_yaxes(type="log", title="<b>Loss</b>",
-                     domain=[0.62, 0.73], row=2, col=1)
+                     domain=[0.72, 0.82], row=2, col=1)
     fig.update_yaxes(type="log", range=log_range, title="<b>Step</b>",
-                     domain=[0.18, 0.58], row=3, col=1)
+                     domain=[0.21, 0.66], row=3, col=1)
     fig.update_yaxes(title="<b>Frequency</b>",
-                     domain=[0.00, 0.16], row=4, col=1)
+                     domain=[0.02, 0.18], row=4, col=1)
 
     apply_style(fig, title=f"Grokking on modular addition (P={meta['config']['P']})",
                 width=900, height=1620)
     fig.update_layout(
-        margin=dict(l=90, r=120, t=160, b=60),
-        legend=dict(orientation="h", yanchor="bottom", y=0.985,
+        margin=dict(l=90, r=120, t=70, b=60),
+        title=dict(y=0.985),
+        legend=dict(orientation="h", yanchor="bottom", y=0.97,
                     xanchor="center", x=0.5,
                     bgcolor="rgba(255,255,255,0.85)"),
     )
