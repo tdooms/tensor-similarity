@@ -245,21 +245,17 @@ def compute_tn_similarity_batch(
     models_a: Sequence,
     models_b: Sequence,
     device: str | None = None,
-    dtype: torch.dtype | None = None,
 ) -> StateBatched:
-    """Compute batched TN similarity for lists of model pairs."""
+    """Compute batched TN similarity for lists of model pairs. Runs in the
+    models' native dtype — no conversion."""
     comp_a = [_as_component(model) for model in models_a]
     comp_b = [_as_component(model) for model in models_b]
 
     _validate_batch_compatibility(comp_a, comp_b)
 
-    if device is None:
-        device = next(comp_a[0].parameters()).device
-    if dtype is None:
-        dtype = next(comp_a[0].parameters()).dtype
-
-    comp_a = [model.to(device=device, dtype=dtype) for model in comp_a]
-    comp_b = [model.to(device=device, dtype=dtype) for model in comp_b]
+    if device is not None:
+        comp_a = [model.to(device=device) for model in comp_a]
+        comp_b = [model.to(device=device) for model in comp_b]
 
     return similarity_batch(comp_a, comp_b)
 
@@ -283,8 +279,7 @@ def cosine_similarity_batch(
     models_a: Sequence,
     models_b: Sequence,
     device: str | None = None,
-    dtype: torch.dtype = torch.float64,
 ) -> list[float]:
     """Compute cosine similarity for batched model pairs."""
-    state = compute_tn_similarity_batch(models_a, models_b, device=device, dtype=dtype)
-    return _cosine_from_state_batch(state).detach().cpu().tolist()
+    state = compute_tn_similarity_batch(models_a, models_b, device=device)
+    return _cosine_from_state_batch(state).cpu().tolist()

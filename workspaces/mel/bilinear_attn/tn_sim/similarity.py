@@ -30,7 +30,6 @@ Performance:
 """
 
 import torch
-from typing import Union
 
 from src.components.similarity import similarity as _compute_similarity, State
 from models.components.model import AttentionLMComponent, _validate_model_for_tn_similarity
@@ -43,126 +42,40 @@ def _as_component(model):
     return AttentionLMComponent.from_trained_model(model)
 
 
-def compute_tn_similarity(
-    model_A,
-    model_B,
-    device: str = None,
-    dtype: torch.dtype = None,
-) -> State:
+def compute_tn_similarity(model_A, model_B, device: str = None) -> State:
     """Compute exact TN similarity between two AttentionLM models.
-    
-    Uses the main codebase's TN similarity algorithm which:
-    1. Propagates second-moment matrices through layers
-    2. Uses Isserlis theorem for polynomial expectations
-    3. Handles residual connections via term decomposition
-    
-    Args:
-        model_A: First AttentionLM model
-        model_B: Second AttentionLM model
-        device: Device for computation (default: model's device)
-        dtype: Data type for computation (default: model's dtype, recommend float64)
-        
-    Returns:
-        State object containing:
-            - S_aa: Second moment E[f_A(x) f_A(x)^T]
-            - S_bb: Second moment E[f_B(x) f_B(x)^T]
-            - S_ab: Cross moment E[f_A(x) f_B(x)^T]
-        
-    Raises:
-        ValueError: If models have incompatible configurations for TN similarity
+
+    Runs in the models' native dtype — no conversion. Upstream code should
+    train and load in fp32 (the regime this path is designed for).
+
+    Returns State(S_aa, S_bb, S_ab).
     """
-    # Convert to Component-compatible versions (skip conversion if already components)
     comp_A = _as_component(model_A)
     comp_B = _as_component(model_B)
-
-    # Check model compatibility
     _validate_model_compatibility(comp_A, comp_B)
-    
-    # Determine device and dtype
-    if device is None:
-        device = next(comp_A.parameters()).device
-    if dtype is None:
-        dtype = next(comp_A.parameters()).dtype
-    
-    # Move to specified device/dtype
-    comp_A = comp_A.to(device=device, dtype=dtype)
-    comp_B = comp_B.to(device=device, dtype=dtype)
-    
-    # Compute similarity using main codebase algorithm
-    state = _compute_similarity(comp_A, comp_B)
-    
-    return state
+
+    if device is not None:
+        comp_A = comp_A.to(device=device)
+        comp_B = comp_B.to(device=device)
+
+    return _compute_similarity(comp_A, comp_B)
 
 
-def cosine_similarity(
-    model_A,
-    model_B,
-    device: str = None,
-    dtype: torch.dtype = torch.float64,
-) -> float:
-    """Compute cosine similarity between two AttentionLM models.
-    
-    This is the most common use case: a single scalar measuring how similar
-    two models are in their functional behavior.
-    
-    Args:
-        model_A: First AttentionLM model
-        model_B: Second AttentionLM model
-        device: Device for computation (default: model's device)
-        dtype: Data type for computation (default: float64 for numerical stability)
-        
-    Returns:
-        Cosine similarity in [-1, 1], where:
-            - 1.0 = identical functions
-            - 0.0 = orthogonal functions
-            - -1.0 = opposite functions
-        
-    Raises:
-        ValueError: If models have incompatible configurations
-    """
-    state = compute_tn_similarity(model_A, model_B, device=device, dtype=dtype)
+def cosine_similarity(model_A, model_B, device: str = None) -> float:
+    """Cosine similarity in [-1, 1]. Runs in the models' native dtype."""
+    state = compute_tn_similarity(model_A, model_B, device=device)
     return _cosine_from_state(state)
 
 
-def inner_product(
-    model_A,
-    model_B,
-    device: str = None,
-    dtype: torch.dtype = torch.float64,
-) -> float:
-    """Compute inner product E[f_A(x)^T f_B(x)] between two models.
-    
-    Args:
-        model_A: First AttentionLM model
-        model_B: Second AttentionLM model
-        device: Device for computation
-        dtype: Data type for computation
-        
-    Returns:
-        Inner product (unnormalized similarity)
-    """
-    state = compute_tn_similarity(model_A, model_B, device=device, dtype=dtype)
+def inner_product(model_A, model_B, device: str = None) -> float:
+    """Inner product E[f_A(x)^T f_B(x)]. Runs in the models' native dtype."""
+    state = compute_tn_similarity(model_A, model_B, device=device)
     return _inner_product_from_state(state)
 
 
-def self_similarity(
-    model,
-    device: str = None,
-    dtype: torch.dtype = torch.float64,
-) -> float:
-    """Compute self-similarity (should be 1.0 for cosine).
-    
-    Useful for validation: self-similarity should always be exactly 1.0.
-    
-    Args:
-        model: AttentionLM model
-        device: Device for computation
-        dtype: Data type for computation
-        
-    Returns:
-        Cosine self-similarity (should be 1.0)
-    """
-    return cosine_similarity(model, model, device=device, dtype=dtype)
+def self_similarity(model, device: str = None) -> float:
+    """Self cosine similarity (should be 1.0; useful for validation)."""
+    return cosine_similarity(model, model, device=device)
 
 
 def _cosine_from_state(state: State) -> float:

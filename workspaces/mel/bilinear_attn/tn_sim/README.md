@@ -28,7 +28,7 @@ model_A = AttentionLM.from_config(cfg)
 model_B = AttentionLM.from_config(cfg)
 
 # Compute similarity
-sim = cosine_similarity(model_A, model_B, dtype=torch.float64)
+sim = cosine_similarity(model_A, model_B)
 print(f"Similarity: {sim:.6f}")
 ```
 

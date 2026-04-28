@@ -261,15 +261,29 @@ def _graphed(fn, *models):
     bufs, out, graph = _GRAPHS[key]
     for src, dst in zip(ps, bufs): dst.copy_(src.data)
     graph.replay()
-    return tuple(o.clone() for o in out)
+    return out
 
 
 # ── public API ────────────────────────────────────────────────────────────
 
 @torch.no_grad()
+def similarity_parts(a, b):
+    """`(Σ_aa, Σ_ab, Σ_bb)` direct from the captured graph — each of shape
+    `(n, d+1, n, d+1)`. Prefer this over `similarity()` when you only need the
+    three tensors: avoids the `torch.stack` that allocates 4× their combined
+    size fresh on every call (at vocab scale this is ~GB per call and
+    fragments the allocator)."""
+    return _graphed(lambda: _propagate(a, b), *((a,) if a is b else (a, b)))
+
+
+@torch.no_grad()
 def similarity(a, b):
-    """2×2 block `[[⟨a,a⟩, ⟨a,b⟩], [⟨a,b⟩ᵀ, ⟨b,b⟩]]`, shape (2, 2, n, d+1, n, d+1)."""
-    aa, ab, bb = _graphed(lambda: _propagate(a, b), *((a,) if a is b else (a, b)))
+    """2×2 block `[[⟨a,a⟩, ⟨a,b⟩], [⟨a,b⟩ᵀ, ⟨b,b⟩]]`, shape (2, 2, n, d+1, n, d+1).
+
+    Legacy wrapper. The stack duplicates ~4× the combined Σ footprint into a
+    fresh allocation — if you don't need the stacked form, call
+    `similarity_parts()` directly."""
+    aa, ab, bb = similarity_parts(a, b)
     ba = ab.permute(2, 3, 0, 1)   # Σ_ba = E[b · aᵀ] = Σ_ab with L/R axes swapped
     return torch.stack([torch.stack([aa, ab]), torch.stack([ba, bb])])
 

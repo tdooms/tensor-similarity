@@ -1,3 +1,7 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "tensor-mars"
 version = "0.1.0"
@@ -43,4 +47,7 @@ dev = [
 markers = [
     "slow: realistic-scale tests; not run by default. Use `pytest -m slow`.",
 ]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
 
