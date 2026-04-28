@@ -1,29 +1,29 @@
 # Paper figures
 
 Figure modules in this folder are the public paper-facing entrypoints. They are
-the canonical figure pipelines. Each family should stay within the three-stage
-shape `train -> prepare -> plot`, with at most three experiment-specific files.
+the canonical figure pipelines. Each family stays within the three-stage shape
+`train -> prepare -> plot`, with at most three experiment-specific files. EDA
+does not live here — promote durable figure code to this folder, push everything
+else to `workspaces/<user>/transient/`.
 
 ## Workflow
 
 ```bash
-uv run figures train seed-convergence
-uv run figures prepare seed-convergence
-uv run figures plot seed-convergence
+uv run train   <family>   # training step (where applicable)
+uv run prepare <family>   # cache step
+uv run plot    <family>   # render figures from prepared cache
 ```
 
 Available figure families:
 
 - `seed-convergence`
 - `curriculum-shift`
-- `checkpoint-similarity`
+- `language-similarity`
 - `subset-training`
 
-Keep shared design and export helpers in `style.py`. Experiment-specific logic
-should live in per-experiment folders under `src/figures/`, with only
-`train.py`, `prepare.py`, and `plot.py` inside each folder.
+Shared design + export helpers live in `style.py`. Per-experiment logic lives
+in `src/figures/<family>/{train,prepare,plot}.py`.
 
 Repo-local inputs live in `_downloads/`, prepared tabular caches live in
-`artifacts/cache/`, and final renders live in `artifacts/figures/`. Official
-pipelines should prefer `.safetensors`, `.feather`, and `.json`, using older
-formats only when importing legacy data.
+`artifacts/cache/<family>/`, and rendered figures live in `artifacts/figures/`
+as `.pdf`. Pipelines prefer `.safetensors`, `.feather`, and `.json` for I/O.

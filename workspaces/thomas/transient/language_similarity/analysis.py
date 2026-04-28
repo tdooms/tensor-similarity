@@ -1,9 +1,9 @@
 """CPU-only mechanistic analyses on the cached checkpoint state-dicts.
 
-Reads `_downloads/checkpoint-similarity/checkpoints/step_NNNNN.pt`, applies the
+Reads `_downloads/language-similarity/checkpoints/step_NNNNN.pt`, applies the
 same `_absorb_final_norm` rewrite that `load_pt` does (so the analysed weights
 match the function the TN similarity sees), and writes per-layer trajectories
-to `artifacts/cache/checkpoint_similarity/`.
+to this script's local `cache/`.
 
 Outputs:
     weight_norms.feather       — step, param, l2_norm
@@ -16,17 +16,17 @@ Outputs:
 """
 from itertools import accumulate
 import json
+from pathlib import Path
 
 import polars as pl
 import torch
 from loguru import logger
 from tqdm import tqdm
 
-from src.figures import CACHE_DIR
-from src.figures.checkpoint_similarity.prepare import INPUT_DIR
+from src.figures.language_similarity.prepare import CACHE as CANONICAL, INPUT_DIR
 from src.models.checkpoint_transformer import _absorb_final_norm
 
-CACHE = CACHE_DIR / "checkpoint_similarity"
+CACHE = Path(__file__).parent / "cache"
 
 
 def _flatten_state(state):
@@ -53,7 +53,8 @@ def _params_of_interest(state):
 
 
 def main():
-    picked = json.loads((CACHE / "metadata.json").read_text(encoding="utf-8"))["steps"]
+    CACHE.mkdir(parents=True, exist_ok=True)
+    picked = json.loads((CANONICAL / "metadata.json").read_text(encoding="utf-8"))["steps"]
     logger.info(f"[1/6] loading {len(picked)} state-dicts from {INPUT_DIR}/checkpoints")
     states = [_load_state(INPUT_DIR / f"checkpoints/step_{s:05d}.pt") for s in tqdm(picked, desc="load")]
     params = _params_of_interest(states[0])
@@ -116,8 +117,8 @@ def main():
     )
 
     # A4: metric correlations (incl. cos→final)
-    behavior = pl.read_ipc(CACHE / "behavior.feather")
-    matrix = pl.read_ipc(CACHE / "matrix.feather")
+    behavior = pl.read_ipc(CANONICAL / "behavior.feather")
+    matrix = pl.read_ipc(CANONICAL / "matrix.feather")
     n = len(picked)
     mat = torch.zeros(n, n, dtype=torch.float64)
     idx = {s: i for i, s in enumerate(picked)}

@@ -40,7 +40,6 @@ dependencies = [
 ]
 
 [project.scripts]
-figures = "src.figures.cli:main"
 train   = "src.figures.cli:train_main"
 prepare = "src.figures.cli:prepare_main"
 plot    = "src.figures.cli:plot_main"

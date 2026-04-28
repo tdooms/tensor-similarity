@@ -3,7 +3,6 @@ import pytest
 
 from src.components.similarity import precompile, similarity_parts
 from src.figures import ARTIFACT_DIR, CACHE_DIR, DOWNLOAD_DIR, EXPERIMENT_DIR, FIGURE_DIR, FIGURES, REPO_ROOT, cosine_from_parts
-from src.figures.cli import main as figures_cli_main
 from src.figures.cli import plot_main, prepare_main, train_main
 from src.figures.style import COLORWAY, CURRICULUM_COLORS, SUBSET_COLORS
 from src.models.checkpoint_transformer import CheckpointTransformer
@@ -20,7 +19,7 @@ def test_artifact_directories_live_at_repo_root():
 
 
 def test_registry_contains_public_figure_families():
-    assert set(FIGURES) == {"seed-convergence", "curriculum-shift", "checkpoint-similarity", "subset-training"}
+    assert set(FIGURES) == {"seed-convergence", "curriculum-shift", "language-similarity", "subset-training"}
 
 
 def test_deep_mlp_similarity_smoke():
@@ -54,22 +53,6 @@ def test_official_figures_code_uses_shared_similarity_parts():
         assert "from src.components.similarity import similarity" not in text
 
 
-@pytest.mark.parametrize(
-    "argv",
-    [
-        [],
-        ["prepare"],
-        ["plot"],
-        ["unknown", "seed-convergence"],
-        ["prepare", "unknown"],
-        ["train", "checkpoint-similarity"],
-    ],
-)
-def test_figures_cli_rejects_invalid_usage(argv):
-    with pytest.raises(SystemExit):
-        figures_cli_main(argv)
-
-
 @pytest.mark.parametrize("entrypoint", [train_main, prepare_main, plot_main])
 def test_top_level_entrypoints_reject_missing_family(entrypoint):
     with pytest.raises(SystemExit):
@@ -80,6 +63,12 @@ def test_top_level_entrypoints_reject_missing_family(entrypoint):
 def test_top_level_entrypoints_reject_unknown_family(entrypoint):
     with pytest.raises(SystemExit):
         entrypoint(["nonexistent"])
+
+
+def test_train_rejects_hf_sourced_family():
+    """language-similarity has no train stage; argparse rejects it for `train`."""
+    with pytest.raises(SystemExit):
+        train_main(["language-similarity"])
 
 
 def test_color_palettes_share_one_source():

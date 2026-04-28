@@ -35,4 +35,10 @@ old/
 
 uv.lock
 _data/
-artifacts/
+
+# Track only rendered figures under artifacts/; everything else regenerates from code + GPU.
+artifacts/*
+!artifacts/figures/
+
+# Transient EDA scripts are tracked; their regenerable cache outputs are not.
+workspaces/**/transient/**/cache/

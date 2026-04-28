@@ -18,6 +18,7 @@ context use the warm path cache without graph capture: ~6 s per call × 124
 calls ≈ 12 min total instead of ~22 min.
 """
 import json
+from pathlib import Path
 
 import polars as pl
 import torch
@@ -25,11 +26,11 @@ from loguru import logger
 from tqdm import tqdm
 
 from src.components.similarity import _precompile_mode, _propagate
-from src.figures import CACHE_DIR, cosine_from_parts
-from src.figures.checkpoint_similarity.prepare import INPUT_DIR, N_CTX
+from src.figures import cosine_from_parts
+from src.figures.language_similarity.prepare import CACHE as CANONICAL, INPUT_DIR, N_CTX
 from src.models.checkpoint_transformer import load_config, load_pt
 
-CACHE = CACHE_DIR / "checkpoint_similarity"
+CACHE = Path(__file__).parent / "cache"
 ABLATION_FILE = CACHE / "ablation_cosine.feather"
 
 MODES = {
@@ -49,7 +50,8 @@ def _apply(model, scale_0, scale_1, original):
 
 @torch.no_grad()
 def main():
-    picked = json.loads((CACHE / "metadata.json").read_text(encoding="utf-8"))["steps"]
+    CACHE.mkdir(parents=True, exist_ok=True)
+    picked = json.loads((CANONICAL / "metadata.json").read_text(encoding="utf-8"))["steps"]
     config = load_config(INPUT_DIR / "config.json")
 
     logger.info(f"[1/3] loading {len(picked)} checkpoints to GPU")

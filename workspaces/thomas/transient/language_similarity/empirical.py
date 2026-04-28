@@ -9,23 +9,22 @@ Also emits per-position divergence ranking between two chosen checkpoints
 (default: step 5947, the start of the late climb, vs step 20000, final).
 Outputs concrete examples of where late training changes predictions.
 
-Outputs:
-    artifacts/cache/checkpoint_similarity/
-        empirical_cosine.feather   step, cos_to_final
-        divergence_examples.json   list of {context_tokens, low_cos_step, top5_a, top5_b}
+Outputs (under this script's local `cache/`):
+    empirical_cosine.feather   step, cos_to_final
+    divergence_examples.json   list of {context_tokens, low_cos_step, top5_a, top5_b}
 """
 import json
 import sys
+from pathlib import Path
 
 import polars as pl
 import torch
 from loguru import logger
 from tqdm import tqdm
 
-from src.figures import CACHE_DIR
-from src.figures.checkpoint_similarity.prepare import INPUT_DIR
+from src.figures.language_similarity.prepare import CACHE as CANONICAL, INPUT_DIR
 
-CACHE = CACHE_DIR / "checkpoint_similarity"
+CACHE = Path(__file__).parent / "cache"
 
 BATCH = 64
 N_CTX = 64
@@ -59,8 +58,9 @@ def _load_model(AttentionLM, config_dict, ckpt_path):
 
 @torch.no_grad()
 def main():
+    CACHE.mkdir(parents=True, exist_ok=True)
     config = json.loads((INPUT_DIR / "config.json").read_text(encoding="utf-8"))
-    picked = json.loads((CACHE / "metadata.json").read_text(encoding="utf-8"))["steps"]
+    picked = json.loads((CANONICAL / "metadata.json").read_text(encoding="utf-8"))["steps"]
     AttentionLM = _bundled_attention_lm()
 
     torch.manual_seed(SEED)

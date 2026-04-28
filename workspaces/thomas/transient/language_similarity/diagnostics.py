@@ -9,7 +9,7 @@ Q2. Are the fp32 numbers trustworthy at vocab scale?
 Q3. Was the cos(a,b) vs cos(b,a) asymmetry I observed before reproducible?
     → 3 pairs from the basin region, both orderings, fp32.
 
-Outputs to `artifacts/cache/checkpoint_similarity/`:
+Outputs (under this script's local `cache/`):
     trajectory_fp32.feather   step, cos_to_final
     trajectory_fp64.feather   step, cos_to_final  (sparse anchors)
     symmetry_check.feather    step_a, step_b, cos_ab, cos_ba, diff
@@ -17,6 +17,7 @@ Outputs to `artifacts/cache/checkpoint_similarity/`:
 Each phase saves immediately so a partial result survives an OOM mid-fp64.
 """
 import json
+from pathlib import Path
 
 import polars as pl
 import torch
@@ -27,11 +28,11 @@ import src.components.similarity as similarity_module
 from src.components.similarity import (
     _precompile_mode, _propagate, precompile, similarity_parts,
 )
-from src.figures import CACHE_DIR, cosine_from_parts
-from src.figures.checkpoint_similarity.prepare import INPUT_DIR, N_CTX
+from src.figures import cosine_from_parts
+from src.figures.language_similarity.prepare import CACHE as CANONICAL, INPUT_DIR, N_CTX
 from src.models.checkpoint_transformer import load_config, load_pt
 
-CACHE = CACHE_DIR / "checkpoint_similarity"
+CACHE = Path(__file__).parent / "cache"
 FP64_ANCHOR_STEPS = (0, 298, 1454, 3247, 5947, 13354, 20000)
 SYMMETRY_PAIRS = ((298, 20000), (1454, 20000), (3247, 20000))
 
@@ -90,11 +91,12 @@ def fp64_phase(config):
 
 
 def main():
+    CACHE.mkdir(parents=True, exist_ok=True)
     config = load_config(INPUT_DIR / "config.json")
-    picked = json.loads((CACHE / "metadata.json").read_text(encoding="utf-8"))["steps"]
+    picked = json.loads((CANONICAL / "metadata.json").read_text(encoding="utf-8"))["steps"]
     fp32_phase(picked, config)
     fp64_phase(config)
-    logger.info("done. results in artifacts/cache/checkpoint_similarity/")
+    logger.info(f"done. results in {CACHE}")
 
 
 if __name__ == "__main__":
