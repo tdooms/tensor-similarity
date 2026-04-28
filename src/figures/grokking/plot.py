@@ -1,4 +1,12 @@
-"""Grokking summary: train/val accuracy + loss + pairwise TN-similarity heatmap."""
+"""Grokking summary: train/val accuracy + loss + TN similarity + frequency marginals.
+
+Six DP-optimal phases (start → memorize start → memorize end → grok start →
+grok end → consolidate) are rendered as subtle background fills on the line
+plots and as dotted vertical lines through the heatmaps. Train/val are drawn
+in a single dark hue, distinguished by line style (solid / dashed). The
+heatmaps use a neutral grayscale to keep attention on the phase structure
+rather than a rainbow gradient.
+"""
 import json
 import math
 
@@ -7,56 +15,129 @@ import polars as pl
 from plotly.subplots import make_subplots
 
 from src.figures.grokking.prepare import CACHE
-from src.figures.style import COLORWAY, apply_style, save_figure
+from src.figures.style import apply_style, save_figure
 
-ACC_TRACES = (("train_acc", "train", COLORWAY[1]), ("val_acc", "val", COLORWAY[5]))
-LOSS_TRACES = (("train_loss", "train", COLORWAY[1]), ("val_loss", "val", COLORWAY[5]))
+LINE_COLOR = "#0F172A"
+
+PHASE_FILLS_LINE = ("rgba(241,245,249,0.7)",   # slate-100  — start
+                    "rgba(219,234,254,0.65)",  # blue-100   — memorize
+                    "rgba(254,215,170,0.6)",   # orange-200 — grok
+                    "rgba(204,251,241,0.65)")  # teal-100   — consolidate
+PHASE_FILLS_HEAT = ("rgba(100,116,139,0.18)",  # slate-500
+                    "rgba(59,130,246,0.18)",   # blue-500
+                    "rgba(249,115,22,0.18)",   # orange-500
+                    "rgba(20,184,166,0.18)")   # teal-500
 
 
 def main():
     meta = json.loads((CACHE / "metadata.json").read_text(encoding="utf-8"))
     steps = [s for s in meta["steps"] if s > 0]
+    n = len(steps)
+    phases = meta["phases"]
+
     history = pl.read_ipc(CACHE / "history.feather").filter(pl.col("step") > 0)
     matrix = (pl.read_ipc(CACHE / "similarity.feather")
                 .filter((pl.col("metric") == "tn_similarity")
                         & (pl.col("step_i") > 0) & (pl.col("step_j") > 0))
                 .sort(["step_i", "step_j"])["value"]
-                .to_numpy().reshape(len(steps), len(steps)).tolist())
+                .to_numpy().reshape(n, n).tolist())
+    freq = (pl.read_ipc(CACHE / "freq_marginals.feather")
+              .filter(pl.col("step") > 0)
+              .with_columns(value=pl.col("value") / pl.col("value").sum().over("step"))
+              .sort(["freq_idx", "step"]))
+    n_freqs = freq["freq_idx"].n_unique()
+    freq_z = freq["value"].to_numpy().reshape(n_freqs, n).tolist()
 
     log_x = [math.log10(s) for s in steps]
     log_range = [log_x[0] - (log_x[1] - log_x[0]) / 2,
                  log_x[-1] + (log_x[-1] - log_x[-2]) / 2]
 
-    fig = make_subplots(rows=3, cols=1, shared_xaxes=True,
-                        row_heights=[0.18, 0.18, 0.64], vertical_spacing=0.04)
+    fig = make_subplots(rows=4, cols=1, shared_xaxes=True,
+                        row_heights=[0.13, 0.13, 0.50, 0.24],
+                        vertical_spacing=0.04)
 
-    for metric, label, color in ACC_TRACES:
-        s = history.filter(pl.col("metric") == metric).sort("step")
-        fig.add_trace(go.Scatter(x=s["step"], y=s["value"], mode="lines+markers",
-                                 name=f"{label} acc", legendgroup="acc",
-                                 line=dict(color=color, width=2.5), marker=dict(size=5)),
-                      row=1, col=1)
+    # Per-phase shapes: opaque-ish fills behind the line panels (so the label
+    # sits inside the colored band between row 1 and row 2), and lower-opacity
+    # tints over each individual heatmap (no fill in the gap between row 3
+    # and row 4).
+    for phase, line_fill, heat_fill in zip(phases, PHASE_FILLS_LINE, PHASE_FILLS_HEAT):
+        x0 = max(phase["start_step"], steps[0])
+        x1 = max(phase["end_step"], steps[0])
+        fig.add_shape(type="rect", xref="x", yref="paper",
+                      x0=x0, x1=x1, y0=0.62, y1=0.91,
+                      fillcolor=line_fill, line_width=0, layer="below")
+        for ax in ("3", "4"):
+            fig.add_shape(type="rect", xref=f"x{ax}", yref=f"y{ax} domain",
+                          x0=x0, x1=x1, y0=0, y1=1,
+                          fillcolor=heat_fill, line_width=0, layer="above")
+    train_acc = history.filter(pl.col("metric") == "train_acc").sort("step")
+    val_acc = history.filter(pl.col("metric") == "val_acc").sort("step")
+    fig.add_trace(go.Scatter(x=train_acc["step"], y=train_acc["value"], mode="lines+markers",
+                             name="Train", legendgroup="train",
+                             line=dict(color=LINE_COLOR, width=2.5),
+                             marker=dict(size=5, color=LINE_COLOR)),
+                  row=1, col=1)
+    fig.add_trace(go.Scatter(x=val_acc["step"], y=val_acc["value"], mode="lines+markers",
+                             name="Validation", legendgroup="val",
+                             line=dict(color=LINE_COLOR, width=2.5, dash="dash"),
+                             marker=dict(size=5, color=LINE_COLOR, symbol="diamond-open")),
+                  row=1, col=1)
 
-    for metric, label, color in LOSS_TRACES:
-        s = history.filter(pl.col("metric") == metric).sort("step")
-        fig.add_trace(go.Scatter(x=s["step"], y=s["value"], mode="lines+markers",
-                                 name=f"{label} loss", legendgroup="loss",
-                                 line=dict(color=color, width=2.5, dash="dot"), marker=dict(size=5)),
-                      row=2, col=1)
+    train_loss = history.filter(pl.col("metric") == "train_loss").sort("step")
+    val_loss = history.filter(pl.col("metric") == "val_loss").sort("step")
+    fig.add_trace(go.Scatter(x=train_loss["step"], y=train_loss["value"], mode="lines+markers",
+                             name="Train", legendgroup="train", showlegend=False,
+                             line=dict(color=LINE_COLOR, width=2.5),
+                             marker=dict(size=5, color=LINE_COLOR)),
+                  row=2, col=1)
+    fig.add_trace(go.Scatter(x=val_loss["step"], y=val_loss["value"], mode="lines+markers",
+                             name="Validation", legendgroup="val", showlegend=False,
+                             line=dict(color=LINE_COLOR, width=2.5, dash="dash"),
+                             marker=dict(size=5, color=LINE_COLOR, symbol="diamond-open")),
+                  row=2, col=1)
 
     fig.add_trace(go.Heatmap(z=matrix, x=steps, y=steps, zmin=0, zmax=1,
-                             colorscale="Viridis",
-                             colorbar=dict(title="<b>TN cosine</b>", y=0.32, len=0.55)),
+                             colorscale="Greys",
+                             colorbar=dict(y=0.385, len=0.4, thickness=12, xpad=10)),
                   row=3, col=1)
 
-    fig.update_xaxes(type="log", range=log_range, row=1, col=1)
-    fig.update_xaxes(type="log", range=log_range, row=2, col=1)
-    fig.update_xaxes(type="log", range=log_range, title="<b>Training step</b>", row=3, col=1)
-    fig.update_yaxes(title="<b>Accuracy</b>", range=[0, 1.05], row=1, col=1)
-    fig.update_yaxes(type="log", title="<b>Loss</b>", row=2, col=1)
-    fig.update_yaxes(type="log", range=log_range, title="<b>Training step</b>", row=3, col=1)
+    fig.add_trace(go.Heatmap(z=freq_z, x=steps, y=list(range(n_freqs)),
+                             colorscale="Greys",
+                             colorbar=dict(y=0.085, len=0.18, thickness=12, xpad=10)),
+                  row=4, col=1)
+
+    plot_left = 90 / 900
+    plot_right = 1 - 120 / 900
+    span = plot_right - plot_left
+    log_span = log_range[1] - log_range[0]
+    for phase in phases:
+        log_mid = (math.log10(max(phase["start_step"], steps[0])) +
+                   math.log10(phase["end_step"])) / 2
+        x_paper = plot_left + (log_mid - log_range[0]) / log_span * span
+        fig.add_annotation(x=x_paper, y=0.766, xref="paper", yref="paper",
+                           xanchor="center", yanchor="middle",
+                           text=phase["name"], showarrow=False,
+                           font=dict(size=12, color="#334155", style="italic"))
+
+    for row in (1, 2, 3, 4):
+        fig.update_xaxes(type="log", range=log_range, row=row, col=1)
+    fig.update_xaxes(title="<b>Training step</b>", row=4, col=1)
+    fig.update_yaxes(automargin=False, title_standoff=14)
+    fig.update_yaxes(title="<b>Accuracy</b>", range=[0, 1.05],
+                     domain=[0.80, 0.91], row=1, col=1)
+    fig.update_yaxes(type="log", title="<b>Loss</b>",
+                     domain=[0.62, 0.73], row=2, col=1)
+    fig.update_yaxes(type="log", range=log_range, title="<b>Step</b>",
+                     domain=[0.18, 0.58], row=3, col=1)
+    fig.update_yaxes(title="<b>Frequency</b>",
+                     domain=[0.00, 0.16], row=4, col=1)
+
     apply_style(fig, title=f"Grokking on modular addition (P={meta['config']['P']})",
-                width=900, height=1100)
-    fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.0,
-                                  xanchor="right", x=1.0, bgcolor="rgba(255,255,255,0.85)"))
+                width=900, height=1620)
+    fig.update_layout(
+        margin=dict(l=90, r=120, t=160, b=60),
+        legend=dict(orientation="h", yanchor="bottom", y=0.985,
+                    xanchor="center", x=0.5,
+                    bgcolor="rgba(255,255,255,0.85)"),
+    )
     save_figure(fig, "grokking")
