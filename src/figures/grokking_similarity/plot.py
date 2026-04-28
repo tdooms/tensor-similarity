@@ -37,7 +37,13 @@ PHASE_LABEL_COLOR = {
     "consolidate": "#0d9488",  # teal-600
 }
 PHASE_FILLS_LINE = {k: f"rgba({rgb},0.35)" for k, rgb in PHASE_RGB.items()}
-PHASE_FILLS_HEAT = {k: f"rgba({rgb},0.30)" for k, rgb in PHASE_RGB.items()}
+PHASE_FILLS_HEAT = {k: f"rgba({rgb},0.45)" for k, rgb in PHASE_RGB.items()}
+
+# Heatmap colorscale: transparent at value 0, opaque black at value 1.
+# The tinted phase rectangles sit BEHIND the heatmap and show through
+# wherever cell value is low. High-similarity cells render as solid
+# black with no phase tint mixing in — so the diagonal stays pure 1.
+HEAT_COLORSCALE = [[0, "rgba(15,23,42,0)"], [1, "rgba(15,23,42,1)"]]
 
 # Sparse decade ticks. Each target is snapped to the nearest actual
 # checkpoint index, but labeled with the clean decade value (so the
@@ -100,7 +106,7 @@ def main():
         for ax in ("3", "4"):
             fig.add_shape(type="rect", xref=f"x{ax}", yref=f"y{ax} domain",
                           x0=x0, x1=x1, y0=0, y1=1,
-                          fillcolor=heat_fill, line_width=0, layer="above")
+                          fillcolor=heat_fill, line_width=0, layer="below")
 
     for metric, name, dash, show in (("train_acc", "Train", None, True),
                                      ("val_acc",   "Validation", "dot", True)):
@@ -123,11 +129,11 @@ def main():
                       row=2, col=1)
 
     fig.add_trace(go.Heatmap(z=matrix, x=indices, y=indices, zmin=0, zmax=1,
-                             colorscale="Greys", showscale=False),
+                             colorscale=HEAT_COLORSCALE, showscale=False),
                   row=3, col=1)
 
     fig.add_trace(go.Heatmap(z=freq_z, x=indices, y=indices_freq,
-                             colorscale="Greys", showscale=False),
+                             colorscale=HEAT_COLORSCALE, showscale=False),
                   row=4, col=1)
 
     # Phase labels above row 1 — paper x = (mid_idx + 0.5) / n since the
@@ -150,17 +156,21 @@ def main():
     fig.update_xaxes(tickmode="array", tickvals=tick_indices, ticktext=list(TICK_LABELS),
                      title="<b>Training step</b>", row=4, col=1)
 
-    fig.update_yaxes(automargin=False, title=None)
+    fig.update_xaxes(showline=False, zeroline=False, mirror=False)
+    fig.update_yaxes(automargin=False, title=None,
+                     showline=False, zeroline=False, mirror=False)
     fig.update_yaxes(range=[0, 1.05], domain=[0.762, 0.91], row=1, col=1)
     fig.update_yaxes(type="log", domain=[0.602, 0.75], row=2, col=1)
     fig.update_yaxes(range=[-0.5, n - 0.5], domain=[0.249, 0.59],
-                     showticklabels=False, ticks="", row=3, col=1)
-    fig.update_yaxes(domain=[0.01, 0.237], row=4, col=1)
+                     showticklabels=False, ticks="", showgrid=False, row=3, col=1)
+    fig.update_yaxes(domain=[0.01, 0.237], showgrid=False, row=4, col=1)
+    fig.update_xaxes(ticks="", showgrid=False, row=3, col=1)
+    fig.update_xaxes(ticks="", showgrid=False, row=4, col=1)
 
-    for label, mid_y in (("Accuracy",  0.836),
-                         ("Loss",      0.676),
-                         ("Step",      0.4195),
-                         ("Frequency", 0.1235)):
+    for label, mid_y in (("Accuracy",   0.836),
+                         ("Loss",       0.676),
+                         ("Similarity", 0.4195),
+                         ("Frequency",  0.1235)):
         fig.add_annotation(text=f"<b>{label}</b>", xref="paper", yref="paper",
                            x=-0.07, y=mid_y, xanchor="center", yanchor="middle",
                            textangle=-90, showarrow=False,
