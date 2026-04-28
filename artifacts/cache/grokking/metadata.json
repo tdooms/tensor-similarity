@@ -48,23 +48,28 @@
   "phases": [
     {
       "name": "start",
-      "start_step": 0,
-      "end_step": 159
+      "first_step": 0,
+      "last_step": 81
     },
     {
       "name": "memorize",
-      "start_step": 159,
-      "end_step": 5112
+      "first_step": 159,
+      "last_step": 1213
+    },
+    {
+      "name": "",
+      "first_step": 1810,
+      "last_step": 6922
     },
     {
       "name": "grok",
-      "start_step": 5112,
-      "end_step": 19911
+      "first_step": 9212,
+      "last_step": 19911
     },
     {
       "name": "consolidate",
-      "start_step": 19911,
-      "end_step": 100000
+      "first_step": 25126,
+      "last_step": 100000
     }
   ]
 }

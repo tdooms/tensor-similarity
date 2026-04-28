@@ -25,7 +25,7 @@ CACHE = CACHE_DIR / "grokking"
 
 SIMILARITY_NAMES = ("tn_similarity", "act_similarity", "js_divergence")
 TUCKER_MODES = ("output", "input_a", "input_b")
-PHASE_NAMES = ("start", "memorize", "grok", "consolidate")
+PHASE_NAMES = ("start", "memorize", "", "grok", "consolidate")
 
 
 def _optimal_segments(similarity, k):
@@ -93,9 +93,9 @@ def main():
     ]).write_ipc(CACHE / "freq_marginals.feather")
 
     segments = _optimal_segments(tn_matrix, k=len(PHASE_NAMES))
-    edges = [steps[0]] + [int(steps[seg[0]]) for seg in segments[1:]] + [steps[-1]]
-    phases = [{"name": name, "start_step": edges[i], "end_step": edges[i + 1]}
-              for i, name in enumerate(PHASE_NAMES)]
+    phases = [{"name": name,
+               "first_step": int(steps[a]), "last_step": int(steps[b])}
+              for name, (a, b) in zip(PHASE_NAMES, segments)]
 
     (CACHE / "metadata.json").write_text(
         json.dumps({"steps": steps, "config": config, "phases": phases}, indent=2),
