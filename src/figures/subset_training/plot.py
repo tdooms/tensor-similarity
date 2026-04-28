@@ -24,15 +24,15 @@ def main():
             x=sub["batch"], y=sub["similarity"], mode="lines",
             name=f"{config.replace('_', ' ')} - seed {seed}",
             legendgroup=config, showlegend=False,
-            line=dict(color=SUBSET_COLORS[config], width=1.8, dash="dash"),
-            opacity=0.45,
+            line=dict(color=SUBSET_COLORS[config], width=1.5),
+            opacity=0.35,
         ))
     for (config,), sub in ref_only.partition_by("config", as_dict=True, maintain_order=True).items():
         fig.add_trace(go.Scatter(
             x=sub["batch"], y=sub["similarity"], mode="lines",
             name=config.replace("_", " "),
             legendgroup=config,
-            line=dict(color=SUBSET_COLORS[config], width=3, dash="solid"),
+            line=dict(color=SUBSET_COLORS[config], width=3),
         ))
     apply_style(fig, title="MNIST subset training across random seeds")
     style_xy_axes(fig, x_title="Batch steps", y_title="Tensor similarity")
