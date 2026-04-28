@@ -19,14 +19,20 @@ from src.figures.style import apply_style, save_figure
 
 LINE_COLOR = "#0F172A"
 
-# One base color per phase; same RGB used in both contexts (line panel
-# background AND heatmap tint), just different alpha — so the colors
-# read as identical across panels.
+# One base color per phase; the SAME RGB carries through every panel
+# (line panel background, heatmap tint, label text) — only the alpha /
+# tone shifts so it reads as the same hue everywhere.
 PHASE_RGB = {
-    "start":       "148,163,184",  # slate-400
+    "start":       "148,163,184",  # slate-400  — fills
     "memorize":    "96,165,250",   # blue-400
     "grok":        "251,146,60",   # orange-400
     "consolidate": "45,212,191",   # teal-400
+}
+PHASE_LABEL_COLOR = {
+    "start":       "#475569",  # slate-600 — readable on cream
+    "memorize":    "#2563eb",  # blue-600
+    "grok":        "#ea580c",  # orange-600
+    "consolidate": "#0d9488",  # teal-600
 }
 PHASE_FILLS_LINE = {k: f"rgba({rgb},0.35)" for k, rgb in PHASE_RGB.items()}
 PHASE_FILLS_HEAT = {k: f"rgba({rgb},0.30)" for k, rgb in PHASE_RGB.items()}
@@ -116,13 +122,11 @@ def main():
                   row=2, col=1)
 
     fig.add_trace(go.Heatmap(z=matrix, x=steps, y=steps, zmin=0, zmax=1,
-                             colorscale="Greys",
-                             colorbar=dict(y=0.435, len=0.45, thickness=12, xpad=10)),
+                             colorscale="Greys", showscale=False),
                   row=3, col=1)
 
     fig.add_trace(go.Heatmap(z=freq_z, x=steps, y=list(range(n_freqs)),
-                             colorscale="Greys",
-                             colorbar=dict(y=0.10, len=0.16, thickness=12, xpad=10)),
+                             colorscale="Greys", showscale=False),
                   row=4, col=1)
 
     # Plotly "paper" x runs 0..1 across the plot area (between margins), and
@@ -135,35 +139,35 @@ def main():
         log_mid = (math.log10(max(phase["first_step"], steps[0])) +
                    math.log10(phase["last_step"])) / 2
         x_paper = (log_mid - log_range[0]) / log_span
-        fig.add_annotation(x=x_paper, y=0.84, xref="paper", yref="paper",
+        fig.add_annotation(x=x_paper, y=0.945, xref="paper", yref="paper",
                            xanchor="center", yanchor="middle",
                            text=f"<b>{phase['name']}</b>", showarrow=False,
-                           font=dict(size=12, color="#334155"))
+                           font=dict(size=12, color=PHASE_LABEL_COLOR[phase["name"]]))
 
     for row in (1, 2, 3, 4):
         fig.update_xaxes(type="log", range=log_range, row=row, col=1)
     fig.update_xaxes(title="<b>Training step</b>", row=4, col=1)
     fig.update_yaxes(automargin=False, title=None)
-    fig.update_yaxes(range=[0, 1.05], domain=[0.85, 0.95], row=1, col=1)
-    fig.update_yaxes(type="log", domain=[0.71, 0.81], row=2, col=1)
-    fig.update_yaxes(type="log", range=log_range, domain=[0.22, 0.68], row=3, col=1)
-    fig.update_yaxes(domain=[0.03, 0.19], row=4, col=1)
+    fig.update_yaxes(range=[0, 1.05], domain=[0.84, 0.93], row=1, col=1)
+    fig.update_yaxes(type="log", domain=[0.73, 0.82], row=2, col=1)
+    fig.update_yaxes(type="log", range=log_range, domain=[0.22, 0.71], row=3, col=1)
+    fig.update_yaxes(domain=[0.04, 0.20], row=4, col=1)
 
     # Y-axis titles as fixed paper-x annotations so they align across rows
     # regardless of tick-label widths.
-    for label, mid_y in (("Accuracy",  0.90),
-                         ("Loss",      0.76),
-                         ("Step",      0.45),
-                         ("Frequency", 0.11)):
+    for label, mid_y in (("Accuracy",  0.885),
+                         ("Loss",      0.775),
+                         ("Step",      0.465),
+                         ("Frequency", 0.12)):
         fig.add_annotation(text=f"<b>{label}</b>", xref="paper", yref="paper",
-                           x=-0.06, y=mid_y, xanchor="center", yanchor="middle",
+                           x=-0.085, y=mid_y, xanchor="center", yanchor="middle",
                            textangle=-90, showarrow=False,
-                           font=dict(size=14, color="#0F172A"))
+                           font=dict(size=16, color="#0F172A"))
 
     apply_style(fig, title=f"Grokking on modular addition (P={meta['config']['P']})",
                 width=900, height=1620, legend=False)
     fig.update_layout(
-        margin=dict(l=90, r=120, t=50, b=60),
-        title=dict(y=0.985),
+        margin=dict(l=90, r=60, t=70, b=60),
+        title=dict(y=0.99),
     )
     save_figure(fig, "grokking")
