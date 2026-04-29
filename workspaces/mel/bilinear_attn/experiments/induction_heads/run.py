@@ -149,12 +149,25 @@ def main():
     model_cfg = cfg["model"]
     train_cfg = cfg.get("train", {})
     loss_cfg = cfg.get("loss", {})
+    data_cfg = cfg.get("data", {})
 
     n_ctx = model_cfg["n_ctx"]
+
+    # ── BOS token ────────────────────────────────────────────────────────
+    # When use_bos=True, position 0 is always bos_token_id. This makes the
+    # tok0 normalization a deterministic scalar function of the BOS embedding.
+    use_bos = data_cfg.get("use_bos", False)
+    bos_token_id = data_cfg.get("bos_token_id", None)
+    if use_bos and bos_token_id is None:
+        bos_token_id = model_cfg["vocab_size"] - 1
+    if not use_bos:
+        bos_token_id = None
 
     # ── data ─────────────────────────────────────────────────────────────
     print(f"Generating variable-gap repeated-token data (n_ctx={n_ctx}) ...")
     print(f"  Subsequences with variable lengths and gaps to prevent RoPE shortcuts")
+    if bos_token_id is not None:
+        print(f"  Prepending BOS token id={bos_token_id} at position 0")
     train_dl, val_dl = create_repeated_token_dataloaders(
         vocab_size=model_cfg["vocab_size"],
         n_ctx=n_ctx,
@@ -162,6 +175,7 @@ def main():
         n_train=args.n_train,
         n_val=args.n_val,
         seed=cfg.get("seed", 42),
+        bos_token_id=bos_token_id,
     )
 
     # ── model ────────────────────────────────────────────────────────────

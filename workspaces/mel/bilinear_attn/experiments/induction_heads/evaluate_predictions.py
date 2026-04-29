@@ -63,6 +63,14 @@ def evaluate_predictions(checkpoint_path: str, config_path: str, n_samples: int 
     print(f"  Context: {cfg['model']['n_ctx']}")
     print(f"  Vocab: {cfg['model']['vocab_size']}")
     
+    # Resolve BOS from config so data matches training distribution.
+    data_cfg = cfg.get('data', {})
+    bos_token_id = None
+    if data_cfg.get('use_bos', False):
+        bos_token_id = data_cfg.get('bos_token_id', cfg['model']['vocab_size'] - 1)
+    if bos_token_id is not None:
+        print(f"  BOS token id={bos_token_id} (position 0 in every sequence)")
+
     # Create validation dataloader
     _, val_dl = create_repeated_token_dataloaders(
         vocab_size=cfg['model']['vocab_size'],
@@ -71,6 +79,7 @@ def evaluate_predictions(checkpoint_path: str, config_path: str, n_samples: int 
         n_train=100,
         n_val=n_samples,
         seed=42,
+        bos_token_id=bos_token_id,
     )
     
     print(f"\n{'=' * 80}")

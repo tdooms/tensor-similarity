@@ -92,81 +92,104 @@ class AttentionCapture:
         return self.patterns.get((layer_idx, head_idx, circuit))
 
 
-def generate_fixed_length_sequences(vocab_size: int, n_ctx: int, n_samples: int = 16) -> Tuple[torch.Tensor, torch.Tensor]:
+def generate_fixed_length_sequences(
+    vocab_size: int,
+    n_ctx: int,
+    n_samples: int = 16,
+    bos_token_id: int | None = None,
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """Generate fixed-length repeated sequences for inspection.
-    
-    For inspection, use simple [seq][seq] format with fixed length n_ctx//2.
-    This makes it easier to visualize and analyze attention patterns.
-    
+
+    Produces a ``[BOS?][subseq][subseq][pad?]`` layout where ``subseq`` has
+    length ``(n_ctx - bos_offset) // 2``. The first ``bos_offset`` positions
+    are reserved for a BOS token (id=``bos_token_id``) when provided. The
+    subseq tokens are drawn from the content vocab (excluding BOS) so that
+    the pattern visible to the model is identical to training.
+
     Args:
-        vocab_size: Size of vocabulary
-        n_ctx: Context length
-        n_samples: Number of sequences to generate
-    
+        vocab_size: Size of vocabulary (includes BOS if used).
+        n_ctx: Full context length.
+        n_samples: Number of sequences to generate.
+        bos_token_id: If set, reserve position 0 for this id.
+
     Returns:
-        tokens: (n_samples, n_ctx) sequences of form [seq][seq]
-        repeat_masks: (n_samples, n_ctx) bool masks for second half (excluding first token)
+        tokens: (n_samples, n_ctx) sequences.
+        repeat_masks: (n_samples, n_ctx) bool masks for second-half repeats
+            (excluding the first token of the repeat).
     """
-    seq_len = n_ctx // 2
+    bos_offset = 1 if bos_token_id is not None else 0
+    content_len = n_ctx - bos_offset
+    seq_len = content_len // 2
     tokens = torch.zeros((n_samples, n_ctx), dtype=torch.long)
     repeat_masks = torch.zeros((n_samples, n_ctx), dtype=torch.bool)
-    
+
+    content_vocab = vocab_size - bos_offset
+    assert seq_len <= content_vocab, (
+        f"seq_len={seq_len} exceeds content vocab={content_vocab} "
+        f"(vocab_size={vocab_size}, bos={bos_token_id})"
+    )
+
     for i in range(n_samples):
-        # Generate random subsequence
-        subseq = torch.randint(0, vocab_size, (seq_len,))
-        # Repeat it: [subseq][subseq]
-        tokens[i, :seq_len] = subseq
-        tokens[i, seq_len:2*seq_len] = subseq
-        
-        # Mark second half for evaluation (excluding first token of repeat)
-        repeat_masks[i, seq_len+1:2*seq_len] = True
-    
+        # Sample subsequence from content vocab (excluding BOS if reserved).
+        subseq = torch.randint(0, content_vocab, (seq_len,))
+        if bos_token_id is not None:
+            subseq = torch.where(subseq >= bos_token_id, subseq + 1, subseq)
+        if bos_offset:
+            tokens[i, 0] = bos_token_id
+        tokens[i, bos_offset:bos_offset + seq_len] = subseq
+        tokens[i, bos_offset + seq_len:bos_offset + 2 * seq_len] = subseq
+
+        # Mark second-half repeat (excluding its first token).
+        start = bos_offset + seq_len + 1
+        end = bos_offset + 2 * seq_len
+        repeat_masks[i, start:end] = True
+
     return tokens, repeat_masks
 
 
-def compute_prefix_matching_score(pattern: torch.Tensor, repeat_masks: torch.Tensor, 
-                                 tokens: torch.Tensor) -> float:
-    """Compute prefix matching score for fixed-length [seq][seq] sequences.
-    
-    For each position in second half, measure attention to matching position in first half.
+def compute_prefix_matching_score(pattern: torch.Tensor, repeat_masks: torch.Tensor,
+                                 tokens: torch.Tensor, bos_offset: int = 0) -> float:
+    """Compute prefix matching score for fixed-length [BOS?][seq][seq] sequences.
+
+    For each position in the second half, measure attention to the matching
+    position in the first half. ``bos_offset`` shifts both halves.
     """
     batch, n_ctx, _ = pattern.shape
-    seq_len = n_ctx // 2
+    content_len = n_ctx - bos_offset
+    seq_len = content_len // 2
     score = 0.0
     count = 0
-    
+
     for b in range(batch):
-        # For each position in second half, check attention to matching position in first half
-        for q in range(seq_len, n_ctx):
-            k = q - seq_len  # Matching position in first half
+        for q in range(bos_offset + seq_len, bos_offset + 2 * seq_len):
+            k = q - seq_len  # matching position in first half
             score += pattern[b, q, k].item()
             count += 1
-    
+
     return score / count if count > 0 else 0.0
 
 
 def compute_induction_score(pattern: torch.Tensor, repeat_masks: torch.Tensor,
-                           tokens: torch.Tensor) -> float:
+                           tokens: torch.Tensor, bos_offset: int = 0) -> float:
     """Compute induction score: attention to token AFTER previous occurrence.
-    
-    For fixed [seq][seq] format, this is attention to position k+1 where k is the
-    matching position in the first half.
+
+    For fixed ``[BOS?][seq][seq]`` format, this is attention to position
+    k+1 where k is the matching position in the first half.
     """
     batch, n_ctx, _ = pattern.shape
-    seq_len = n_ctx // 2
+    content_len = n_ctx - bos_offset
+    seq_len = content_len // 2
     score = 0.0
     count = 0
-    
+
     for b in range(batch):
-        # For each position in second half (except last)
-        for q in range(seq_len, n_ctx - 1):
-            k_match = q - seq_len  # Matching position in first half
-            k_induct = k_match + 1  # Position after match
-            
-            if k_induct < seq_len:
+        for q in range(bos_offset + seq_len, bos_offset + 2 * seq_len - 1):
+            k_match = q - seq_len
+            k_induct = k_match + 1
+            if k_induct < bos_offset + seq_len:
                 score += pattern[b, q, k_induct].item()
                 count += 1
-    
+
     return score / count if count > 0 else 0.0
 
 
@@ -183,22 +206,23 @@ def compute_copying_score(pattern: torch.Tensor) -> float:
     return score / count if count > 0 else 0.0
 
 
-def analyze_all_heads(patterns: Dict, repeat_masks: torch.Tensor, tokens: torch.Tensor) -> Dict:
+def analyze_all_heads(patterns: Dict, repeat_masks: torch.Tensor, tokens: torch.Tensor,
+                      bos_offset: int = 0) -> Dict:
     """Compute all metrics for all heads."""
     results = {}
-    
+
     for (layer_idx, head_idx, circuit), pattern in patterns.items():
         if circuit != 'combined':
             continue
-        
+
         key = (layer_idx, head_idx)
-        
+
         results[key] = {
-            'prefix_matching': compute_prefix_matching_score(pattern, repeat_masks, tokens),
-            'induction': compute_induction_score(pattern, repeat_masks, tokens),
+            'prefix_matching': compute_prefix_matching_score(pattern, repeat_masks, tokens, bos_offset),
+            'induction': compute_induction_score(pattern, repeat_masks, tokens, bos_offset),
             'copying': compute_copying_score(pattern),
         }
-    
+
     return results
 
 
@@ -316,23 +340,37 @@ def main():
     
     print(f"Model loaded successfully")
     
+    # Resolve BOS from config.
+    data_cfg = cfg.get('data', {})
+    bos_token_id = None
+    if data_cfg.get('use_bos', False):
+        bos_token_id = data_cfg.get('bos_token_id', cfg['model']['vocab_size'] - 1)
+    bos_offset = 1 if bos_token_id is not None else 0
+
     # Generate fixed-length repeated sequences for inspection
     n_ctx = cfg['model']['n_ctx']
-    seq_len = n_ctx // 2
+    content_len = n_ctx - bos_offset
+    seq_len = content_len // 2
     print(f"\nGenerating {args.n_samples} fixed-length repeated sequences...")
-    print(f"  Format: [seq][seq] with seq_len={seq_len}")
-    
+    if bos_token_id is not None:
+        print(f"  Format: [BOS={bos_token_id}][seq][seq] with seq_len={seq_len}")
+    else:
+        print(f"  Format: [seq][seq] with seq_len={seq_len}")
+
     tokens, repeat_masks = generate_fixed_length_sequences(
         vocab_size=cfg['model']['vocab_size'],
         n_ctx=n_ctx,
         n_samples=args.n_samples,
+        bos_token_id=bos_token_id,
     )
-    
+
     print(f"\nExample sequences:")
     for i in range(min(3, args.n_samples)):
         print(f"  Sample {i}:")
-        print(f"    First half:  {tokens[i, :seq_len].tolist()}")
-        print(f"    Second half: {tokens[i, seq_len:].tolist()}")
+        if bos_offset:
+            print(f"    BOS:         {tokens[i, 0].item()}")
+        print(f"    First half:  {tokens[i, bos_offset:bos_offset + seq_len].tolist()}")
+        print(f"    Second half: {tokens[i, bos_offset + seq_len:bos_offset + 2 * seq_len].tolist()}")
     
     # Capture attention patterns
     print(f"\nCapturing attention patterns...")
@@ -357,7 +395,7 @@ def main():
     print("  - Copying: Attention to immediately previous token")
     print()
     
-    metrics = analyze_all_heads(capture.patterns, repeat_masks, tokens)
+    metrics = analyze_all_heads(capture.patterns, repeat_masks, tokens, bos_offset)
     
     print(f"{'Layer':<8} {'Head':<6} {'Prefix':<10} {'Induction':<12} {'Copying':<10}")
     print("-" * 70)

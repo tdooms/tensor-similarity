@@ -62,194 +62,215 @@ class AttentionCapture:
         self.hooks = []
 
 
-def generate_format_sequences(format_type: str, vocab_size: int, n_ctx: int, n_samples: int = 100):
+def generate_format_sequences(format_type: str, vocab_size: int, n_ctx: int, n_samples: int = 100,
+                              bos_token_id: int | None = None):
     """Generate sequences of a specific format.
-    
+
     Args:
         format_type: One of 'ABCABC', 'ABCDAB', 'ABABAB', 'ABCDBC'
-        vocab_size: Size of vocabulary
+        vocab_size: Size of vocabulary (includes BOS if used)
         n_ctx: Context length
         n_samples: Number of samples to generate
-    
+        bos_token_id: If set, reserve position 0 for this BOS token and
+            generate content over the remaining ``n_ctx - 1`` positions
+            using ``vocab_size - 1`` non-BOS ids.
+
     Returns:
         tokens: (n_samples, n_ctx) tensor
         description: String describing the format
     """
+    bos_offset = 1 if bos_token_id is not None else 0
+    # Operate on a "content" view of length n_ctx - bos_offset, then prepend BOS.
+    content_len = n_ctx - bos_offset
+    content_vocab = vocab_size - bos_offset
     tokens = torch.zeros((n_samples, n_ctx), dtype=torch.long)
-    
+    if bos_offset:
+        tokens[:, 0] = bos_token_id
+
+    def _permute_content(size: int) -> torch.Tensor:
+        """Random permutation of non-BOS content vocab, truncated to ``size``."""
+        perm = torch.randperm(content_vocab)[:size]
+        if bos_token_id is not None:
+            perm = torch.where(perm >= bos_token_id, perm + 1, perm)
+        return perm
+
+    def _place(i: int, start: int, values: torch.Tensor) -> None:
+        """Place ``values`` into sample ``i`` at content-index ``start`` (past BOS)."""
+        s = bos_offset + start
+        tokens[i, s:s + values.numel()] = values
+
+    def _fillers(subseq_ids) -> list[int]:
+        used = set(int(t) for t in subseq_ids)
+        return [t for t in range(vocab_size) if t not in used and t != bos_token_id]
+
+    # Use ``n`` to denote the content length inside each format branch below.
+    n = content_len
+
     if format_type == 'ABCABC':
         # Simple repeat: [ABC][ABC]
-        seq_len = n_ctx // 2
+        seq_len = n // 2
         desc = f"Simple repeat [ABC][ABC] with seq_len={seq_len}"
-        
+
         for i in range(n_samples):
-            # Generate unique tokens for subsequence
-            subseq = torch.randperm(vocab_size)[:seq_len]
-            tokens[i, :seq_len] = subseq
-            tokens[i, seq_len:2*seq_len] = subseq
-            
-            # Fill any remaining with unique tokens
-            if 2*seq_len < n_ctx:
-                remaining = n_ctx - 2*seq_len
-                used = set(subseq.tolist())
-                available = [t for t in range(vocab_size) if t not in used]
-                tokens[i, 2*seq_len:] = torch.tensor(available[:remaining])
-    
+            subseq = _permute_content(seq_len)
+            _place(i, 0, subseq)
+            _place(i, seq_len, subseq)
+
+            if 2 * seq_len < n:
+                remaining = n - 2 * seq_len
+                available = _fillers(subseq.tolist())
+                _place(i, 2 * seq_len, torch.tensor(available[:remaining]))
+
     elif format_type == 'ABCDAB':
         # Partial repeat at end: [ABCD][AB]
-        full_len = n_ctx // 2
-        partial_len = n_ctx // 4
+        full_len = n // 2
+        partial_len = n // 4
         desc = f"Partial repeat [ABCD][AB] with full={full_len}, partial={partial_len}"
-        
+
         for i in range(n_samples):
-            # Generate unique tokens
-            subseq = torch.randperm(vocab_size)[:full_len]
-            tokens[i, :full_len] = subseq
-            tokens[i, full_len:full_len+partial_len] = subseq[:partial_len]
-            
-            # Fill remaining with unique tokens
-            if full_len + partial_len < n_ctx:
-                remaining = n_ctx - full_len - partial_len
-                used = set(subseq.tolist())
-                available = [t for t in range(vocab_size) if t not in used]
-                tokens[i, full_len+partial_len:] = torch.tensor(available[:remaining])
-    
+            subseq = _permute_content(full_len)
+            _place(i, 0, subseq)
+            _place(i, full_len, subseq[:partial_len])
+
+            if full_len + partial_len < n:
+                remaining = n - full_len - partial_len
+                available = _fillers(subseq.tolist())
+                _place(i, full_len + partial_len, torch.tensor(available[:remaining]))
+
     elif format_type == 'ABABAB':
         # Alternating pattern: [AB][AB][AB]
         pair_len = 2
-        n_repeats = n_ctx // pair_len
+        n_repeats = n // pair_len
         desc = f"Alternating [AB][AB][AB] with {n_repeats} repeats"
-        
+
         for i in range(n_samples):
-            # Generate unique pair
-            pair = torch.randperm(vocab_size)[:pair_len]
+            pair = _permute_content(pair_len)
             for j in range(n_repeats):
-                tokens[i, j*pair_len:(j+1)*pair_len] = pair
-            
-            # Fill any remaining
-            if n_repeats * pair_len < n_ctx:
-                remaining = n_ctx - n_repeats * pair_len
-                used = set(pair.tolist())
-                available = [t for t in range(vocab_size) if t not in used]
-                tokens[i, n_repeats*pair_len:] = torch.tensor(available[:remaining])
-    
+                _place(i, j * pair_len, pair)
+
+            if n_repeats * pair_len < n:
+                remaining = n - n_repeats * pair_len
+                available = _fillers(pair.tolist())
+                _place(i, n_repeats * pair_len, torch.tensor(available[:remaining]))
+
     elif format_type == 'ABCDBC':
         # Middle subsequence repeat: [ABCD][BC]
-        full_len = n_ctx // 2
+        full_len = n // 2
         middle_start = full_len // 4
         middle_len = full_len // 2
         desc = f"Middle repeat [ABCD][BC] with full={full_len}, middle={middle_len}"
-        
+
         for i in range(n_samples):
-            # Generate unique tokens for full sequence
-            subseq = torch.randperm(vocab_size)[:full_len]
-            tokens[i, :full_len] = subseq
-            
-            # Repeat middle portion
-            tokens[i, full_len:full_len+middle_len] = subseq[middle_start:middle_start+middle_len]
-            
-            # Fill remaining with unique tokens
-            if full_len + middle_len < n_ctx:
-                remaining = n_ctx - full_len - middle_len
-                used = set(subseq.tolist())
-                available = [t for t in range(vocab_size) if t not in used]
-                tokens[i, full_len+middle_len:] = torch.tensor(available[:remaining])
-    
+            subseq = _permute_content(full_len)
+            _place(i, 0, subseq)
+            _place(i, full_len, subseq[middle_start:middle_start + middle_len])
+
+            if full_len + middle_len < n:
+                remaining = n - full_len - middle_len
+                available = _fillers(subseq.tolist())
+                _place(i, full_len + middle_len, torch.tensor(available[:remaining]))
+
     else:
         raise ValueError(f"Unknown format type: {format_type}")
-    
+
     return tokens, desc
 
 
-def compute_induction_score_for_format(pattern: torch.Tensor, format_type: str, n_ctx: int) -> float:
+def compute_induction_score_for_format(pattern: torch.Tensor, format_type: str, n_ctx: int,
+                                       bos_offset: int = 0) -> float:
     """Compute induction score for a specific format.
-    
+
+    All content indices below are in the ``content`` frame (0-based within
+    the non-BOS region) and are translated to absolute positions by adding
+    ``bos_offset`` before indexing ``pattern``.
+
     Args:
-        pattern: (batch, n_ctx, n_ctx) attention pattern
-        format_type: Type of sequence format
-        n_ctx: Context length
-    
+        pattern: (batch, n_ctx, n_ctx) attention pattern.
+        format_type: Type of sequence format.
+        n_ctx: Full context length.
+        bos_offset: Number of reserved BOS positions at the start (0 or 1).
+
     Returns:
-        Average induction score
+        Average induction score.
     """
     batch = pattern.shape[0]
+    n = n_ctx - bos_offset
     score = 0.0
     count = 0
-    
+
     if format_type == 'ABCABC':
-        # For [ABC][ABC], check attention from second half to token after match in first half
-        seq_len = n_ctx // 2
+        seq_len = n // 2
         for b in range(batch):
-            for q in range(seq_len, min(2*seq_len, n_ctx) - 1):
-                k_match = q - seq_len
-                k_induct = k_match + 1
-                if k_induct < seq_len:
-                    score += pattern[b, q, k_induct].item()
+            for q_c in range(seq_len, min(2 * seq_len, n) - 1):
+                k_match_c = q_c - seq_len
+                k_induct_c = k_match_c + 1
+                if k_induct_c < seq_len:
+                    score += pattern[b, bos_offset + q_c, bos_offset + k_induct_c].item()
                     count += 1
-    
+
     elif format_type == 'ABCDAB':
-        # For [ABCD][AB], check attention from partial repeat to token after match
-        full_len = n_ctx // 2
-        partial_len = n_ctx // 4
+        full_len = n // 2
+        partial_len = n // 4
         for b in range(batch):
-            for q in range(full_len, min(full_len + partial_len, n_ctx) - 1):
-                k_match = q - full_len
-                k_induct = k_match + 1
-                if k_induct < full_len:
-                    score += pattern[b, q, k_induct].item()
+            for q_c in range(full_len, min(full_len + partial_len, n) - 1):
+                k_match_c = q_c - full_len
+                k_induct_c = k_match_c + 1
+                if k_induct_c < full_len:
+                    score += pattern[b, bos_offset + q_c, bos_offset + k_induct_c].item()
                     count += 1
-    
+
     elif format_type == 'ABABAB':
-        # For [AB][AB][AB], check attention from each repeat to next token after previous
         pair_len = 2
-        n_repeats = n_ctx // pair_len
+        n_repeats = n // pair_len
         for b in range(batch):
             for repeat_idx in range(1, n_repeats):
                 for offset in range(pair_len):
-                    q = repeat_idx * pair_len + offset
-                    if q >= n_ctx - 1:
+                    q_c = repeat_idx * pair_len + offset
+                    if q_c >= n - 1:
                         continue
-                    # Previous occurrence
-                    k_match = (repeat_idx - 1) * pair_len + offset
-                    k_induct = k_match + 1
-                    if k_induct < n_ctx:
-                        score += pattern[b, q, k_induct].item()
+                    k_match_c = (repeat_idx - 1) * pair_len + offset
+                    k_induct_c = k_match_c + 1
+                    if k_induct_c < n:
+                        score += pattern[b, bos_offset + q_c, bos_offset + k_induct_c].item()
                         count += 1
-    
+
     elif format_type == 'ABCDBC':
-        # For [ABCD][BC], check attention from middle repeat to token after match
-        full_len = n_ctx // 2
+        full_len = n // 2
         middle_start = full_len // 4
         middle_len = full_len // 2
         for b in range(batch):
-            for q in range(full_len, min(full_len + middle_len, n_ctx) - 1):
-                offset = q - full_len
-                k_match = middle_start + offset
-                k_induct = k_match + 1
-                if k_induct < full_len:
-                    score += pattern[b, q, k_induct].item()
+            for q_c in range(full_len, min(full_len + middle_len, n) - 1):
+                offset = q_c - full_len
+                k_match_c = middle_start + offset
+                k_induct_c = k_match_c + 1
+                if k_induct_c < full_len:
+                    score += pattern[b, bos_offset + q_c, bos_offset + k_induct_c].item()
                     count += 1
-    
+
     return score / count if count > 0 else 0.0
 
 
-def analyze_format(model, attn_type: str, format_type: str, vocab_size: int, n_ctx: int, 
-                   n_samples: int = 100):
+def analyze_format(model, attn_type: str, format_type: str, vocab_size: int, n_ctx: int,
+                   n_samples: int = 100, bos_token_id: int | None = None):
     """Analyze induction behavior on a specific sequence format.
-    
+
     Args:
         model: The attention model
         attn_type: 'bilinear' or 'quadratic'
         format_type: Sequence format to test
-        vocab_size: Vocabulary size
+        vocab_size: Vocabulary size (includes BOS if used)
         n_ctx: Context length
         n_samples: Number of samples
-    
+        bos_token_id: If set, position 0 is BOS and scoring shifts by 1.
+
     Returns:
         Dictionary of metrics per head
     """
+    bos_offset = 1 if bos_token_id is not None else 0
     # Generate sequences
-    tokens, desc = generate_format_sequences(format_type, vocab_size, n_ctx, n_samples)
+    tokens, desc = generate_format_sequences(
+        format_type, vocab_size, n_ctx, n_samples, bos_token_id=bos_token_id,
+    )
     
     print(f"\n{'=' * 80}")
     print(f"FORMAT: {format_type}")
@@ -277,7 +298,9 @@ def analyze_format(model, attn_type: str, format_type: str, vocab_size: int, n_c
         if circuit != 'combined':
             continue
         
-        induction_score = compute_induction_score_for_format(pattern, format_type, n_ctx)
+        induction_score = compute_induction_score_for_format(
+            pattern, format_type, n_ctx, bos_offset=bos_offset,
+        )
         results[(layer_idx, head_idx)] = induction_score
     
     # Print results
@@ -361,13 +384,24 @@ def main():
     vocab_size = cfg['model']['vocab_size']
     n_ctx = cfg['model']['n_ctx']
     attn_type = cfg['model']['attn_type']
-    
+
+    # Resolve BOS from config so analysis matches training distribution.
+    data_cfg = cfg.get('data', {})
+    bos_token_id = None
+    if data_cfg.get('use_bos', False):
+        bos_token_id = data_cfg.get('bos_token_id', vocab_size - 1)
+    if bos_token_id is not None:
+        print(f"  BOS token id={bos_token_id} (position 0 in every sequence)")
+
     # Test all formats
     formats = ['ABCABC', 'ABCDAB', 'ABABAB', 'ABCDBC']
     all_results = {}
-    
+
     for format_type in formats:
-        results = analyze_format(model, attn_type, format_type, vocab_size, n_ctx, args.n_samples)
+        results = analyze_format(
+            model, attn_type, format_type, vocab_size, n_ctx, args.n_samples,
+            bos_token_id=bos_token_id,
+        )
         all_results[format_type] = results
     
     # Summary comparison

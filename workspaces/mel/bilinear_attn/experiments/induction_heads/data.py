@@ -23,27 +23,50 @@ class RepeatedTokenDataset(Dataset):
         n_ctx: int,
         n_samples: int = 10_000,
         seed: int = 42,
+        bos_token_id: int | None = None,
     ):
         super().__init__()
         self.vocab_size = vocab_size
         self.n_ctx = n_ctx
         self.n_samples = n_samples
-        
+        self.bos_token_id = bos_token_id
+
+        if bos_token_id is not None:
+            if not (0 <= bos_token_id < vocab_size):
+                raise ValueError(
+                    f"bos_token_id={bos_token_id} must be in [0, vocab_size={vocab_size})"
+                )
+            if n_ctx < 2:
+                raise ValueError("n_ctx must be >= 2 when using BOS")
+
         rng = np.random.RandomState(seed)
         self.data = []
         self.repeat_masks = []
-        
+
         for _ in range(n_samples):
             seq, mask = self._generate_sequence(rng)
+            if bos_token_id is not None:
+                bos_tok = torch.tensor([bos_token_id], dtype=seq.dtype)
+                seq = torch.cat([bos_tok, seq], dim=0)
+                mask = torch.cat([torch.zeros(1, dtype=mask.dtype), mask], dim=0)
             self.data.append(seq)
             self.repeat_masks.append(mask)
-        
+
         self.data = torch.stack(self.data)
         self.repeat_masks = torch.stack(self.repeat_masks)
-    
+
     def _generate_sequence(self, rng: np.random.RandomState):
-        """Generate a single sequence with repeated subsequence."""
-        n = self.n_ctx
+        """Generate a single sequence with repeated subsequence.
+
+        Generates content of length ``n_ctx`` (or ``n_ctx - 1`` when a BOS
+        token is reserved, so the caller can prepend it). Tokens equal to
+        ``self.bos_token_id`` (if set) are excluded from both subseq and
+        filler pools.
+        """
+        bos = self.bos_token_id
+        n = self.n_ctx - 1 if bos is not None else self.n_ctx
+        # Effective vocab for content tokens (excludes BOS).
+        content_vocab_size = self.vocab_size - (1 if bos is not None else 0)
         
         # 1. Pick subsequence length l from [2, n-2]
         # Ensure we can fit at least original + one full repeat
@@ -71,10 +94,16 @@ class RepeatedTokenDataset(Dataset):
         first_repeat_start = rng.randint(min_repeat_start, max(min_repeat_start + 1, max_repeat_start + 1))
         
         # Generate subsequence tokens - ALL MUST BE UNIQUE
-        # Use random sampling without replacement
-        if l > self.vocab_size:
-            raise ValueError(f"Subsequence length {l} exceeds vocab size {self.vocab_size}")
-        subseq = rng.choice(self.vocab_size, size=l, replace=False)
+        # Use random sampling without replacement, from content vocab (excluding BOS).
+        if l > content_vocab_size:
+            raise ValueError(
+                f"Subsequence length {l} exceeds content vocab size {content_vocab_size}"
+                f" (vocab_size={self.vocab_size}, bos_reserved={bos is not None})"
+            )
+        subseq = rng.choice(content_vocab_size, size=l, replace=False)
+        if bos is not None:
+            # Shift ids >= bos by +1 so BOS is never sampled.
+            subseq = np.where(subseq >= bos, subseq + 1, subseq)
         subseq_set = set(subseq.tolist())
         
         # Initialize sequence
@@ -115,19 +144,24 @@ class RepeatedTokenDataset(Dataset):
             for offset in range(1, remaining):
                 repeat_positions.append(pos + offset)
         
-        # 5. Fill gaps with UNIQUE tokens DISJOINT from subsequence
-        # Get available filler tokens (disjoint from subsequence)
-        available = [t for t in range(self.vocab_size) if t not in subseq_set]
+        # 5. Fill gaps with UNIQUE tokens DISJOINT from subsequence (and BOS).
+        available = [
+            t for t in range(self.vocab_size)
+            if t not in subseq_set and t != bos
+        ]
         rng.shuffle(available)
-        
+
         # Fill all gaps
         gap_indices = np.where(seq == -1)[0]
         for idx, pos in enumerate(gap_indices):
             if idx < len(available):
                 seq[pos] = available[idx]
             else:
-                # Should not happen with reasonable vocab, but fallback
-                seq[pos] = rng.randint(0, self.vocab_size)
+                # Fallback: sample uniformly from content vocab (excl. BOS).
+                t = rng.randint(0, content_vocab_size)
+                if bos is not None and t >= bos:
+                    t += 1
+                seq[pos] = t
         
         # Create mask
         mask = torch.zeros(n, dtype=torch.bool)
@@ -153,10 +187,15 @@ def create_repeated_token_dataloaders(
     n_train: int = 50_000,
     n_val: int = 2_000,
     seed: int = 42,
+    bos_token_id: int | None = None,
 ):
     """Create train and validation dataloaders."""
-    train_ds = RepeatedTokenDataset(vocab_size, n_ctx, n_samples=n_train, seed=seed)
-    val_ds = RepeatedTokenDataset(vocab_size, n_ctx, n_samples=n_val, seed=seed + 1)
+    train_ds = RepeatedTokenDataset(
+        vocab_size, n_ctx, n_samples=n_train, seed=seed, bos_token_id=bos_token_id,
+    )
+    val_ds = RepeatedTokenDataset(
+        vocab_size, n_ctx, n_samples=n_val, seed=seed + 1, bos_token_id=bos_token_id,
+    )
 
     train_dl = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
     val_dl = DataLoader(val_ds, batch_size=batch_size, shuffle=False)
