@@ -2,7 +2,7 @@ data:
   use_bos: true
 init:
   init_gain: 0.33
-  init_type: normal
+  init_type: mup
   std_embed: 0.03
   std_o: 0.08
   std_qkv: 0.04
@@ -10,11 +10,11 @@ loss:
   label_smoothing: 0.0
   type: next_token_ce
 model:
-  attn_scale: 0.5
+  attn_scale: 0.34
   attn_type: quadratic
-  d_model: 32
+  d_model: 8
   n_ctx: 9
-  n_head: 4
+  n_head: 2
   n_layers: 2
   norm_places:
   - pre_unembed
@@ -22,7 +22,7 @@ model:
   rope_base: 1000
   use_bias_qk: false
   use_rmsnorm_qk: false
-  vocab_size: 16
+  vocab_size: 8
 name: big_experiment
 seed: 42
 train:
