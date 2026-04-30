@@ -1,0 +1,12 @@
+{
+  "d_hidden": 64,
+  "lr": 0.001,
+  "weight_decay": 0.001,
+  "batch_size": 512,
+  "phase_a_steps": 8000,
+  "phase_b_steps": 2000,
+  "poison_rate": 0.1,
+  "checkpoint_every": 250,
+  "noise_std": 0.05,
+  "seed": 1337
+}
