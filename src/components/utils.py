@@ -1,5 +1,6 @@
 """Generic helpers — TN contraction with parametric bridges, combinatorics,
 group-theoretic orbit finding, CUDA-graph capture, and term utilities."""
+import os
 from functools import cache
 from pathlib import Path
 
@@ -10,7 +11,12 @@ from quimb.tensor import Tensor
 from src.components.base import Term
 
 
-_CACHE_DIR = Path.home() / '.cache' / 'tensor-mars' / 'ctg-paths'
+_CACHE_DIR = Path(
+    os.environ.get(
+        "TENSOR_MARS_CTG_CACHE_DIR",
+        Path.home() / ".cache" / "tensor-mars" / "ctg-paths",
+    )
+)
 _CACHE_DIR.mkdir(parents=True, exist_ok=True)
 _OPT = ctg.ReusableHyperOptimizer(
     directory=str(_CACHE_DIR), minimize='size',

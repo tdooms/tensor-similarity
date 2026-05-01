@@ -25,6 +25,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from models import AttentionLM
 from models.attention_kernels.bilinear import BilinearAttention, QuadraticAttention
+from experiments.induction_heads.analyze_sequence_formats import (
+    compute_induction_score_for_format,
+    generate_format_sequences,
+)
+
+
+FORMAT_CHOICES = ("ABCABC", "ABCDAB", "ABABAB", "ABCDBC")
 
 
 class AttentionCapture:
@@ -226,8 +233,28 @@ def analyze_all_heads(patterns: Dict, repeat_masks: torch.Tensor, tokens: torch.
     return results
 
 
+def analyze_format_heads(patterns: Dict, format_type: str, n_ctx: int,
+                         bos_offset: int = 0) -> Dict:
+    """Compute format-specific induction scores for all heads."""
+    results = {}
+
+    for (layer_idx, head_idx, circuit), pattern in patterns.items():
+        if circuit != 'combined':
+            continue
+
+        results[(layer_idx, head_idx)] = {
+            'induction': compute_induction_score_for_format(
+                pattern, format_type, n_ctx, bos_offset=bos_offset,
+            ),
+            'copying': compute_copying_score(pattern),
+        }
+
+    return results
+
+
 def visualize_attention_heads(patterns: Dict, n_layers: int, n_heads: int,
-                              save_path: Path = None, step: Optional[int] = None):
+                              save_path: Path = None, step: Optional[int] = None,
+                              format_type: Optional[str] = None):
     """Visualize attention patterns for all heads."""
     fig, axes = plt.subplots(n_layers, n_heads, figsize=(6 * n_heads, 6 * n_layers))
     if n_layers == 1 and n_heads == 1:
@@ -257,6 +284,8 @@ def visualize_attention_heads(patterns: Dict, n_layers: int, n_heads: int,
             ax.grid(False)
     
     title = 'Attention Patterns'
+    if format_type is not None:
+        title += f' - {format_type}'
     if step is not None:
         title += f' - Step {step}'
     fig.suptitle(title, fontsize=16, y=0.995)
@@ -270,6 +299,91 @@ def visualize_attention_heads(patterns: Dict, n_layers: int, n_heads: int,
     plt.close()
 
 
+def inspect_tokens(model, cfg: Dict, tokens: torch.Tensor) -> Dict:
+    """Run model once on tokens and return captured attention patterns."""
+    capture = AttentionCapture(model, cfg['model']['attn_type'])
+    capture.register_hooks()
+
+    with torch.no_grad():
+        _ = model(tokens)
+
+    capture.remove_hooks()
+    return capture.patterns
+
+
+def print_metric_table(metrics: Dict, include_prefix: bool = True) -> None:
+    if include_prefix:
+        print(f"{'Layer':<8} {'Head':<6} {'Prefix':<10} {'Induction':<12} {'Copying':<10}")
+        print("-" * 70)
+        for (layer_idx, head_idx), scores in sorted(metrics.items()):
+            print(f"{layer_idx:<8} {head_idx:<6} {scores['prefix_matching']:>8.4f}   "
+                  f"{scores['induction']:>10.4f}   {scores['copying']:>8.4f}")
+    else:
+        print(f"{'Layer':<8} {'Head':<6} {'Induction':<12} {'Copying':<10}")
+        print("-" * 55)
+        for (layer_idx, head_idx), scores in sorted(metrics.items()):
+            print(f"{layer_idx:<8} {head_idx:<6} {scores['induction']:>10.4f}   "
+                  f"{scores['copying']:>8.4f}")
+
+    if metrics:
+        best_head = max(metrics.items(), key=lambda x: x[1]['induction'])
+        print(f"\nStrongest induction head: Layer {best_head[0][0]}, Head {best_head[0][1]}")
+        print(f"  Induction score: {best_head[1]['induction']:.4f}")
+
+
+def inspect_one_format(model, cfg: Dict, format_type: str, n_samples: int,
+                       output_dir: Path, step_label, bos_token_id: int | None,
+                       bos_offset: int) -> None:
+    """Inspect attention heads on one named sequence format."""
+    n_ctx = cfg['model']['n_ctx']
+    tokens, desc = generate_format_sequences(
+        format_type,
+        cfg['model']['vocab_size'],
+        n_ctx,
+        n_samples,
+        bos_token_id=bos_token_id,
+    )
+
+    print(f"\n{'=' * 70}")
+    print(f"INPUT FORMAT: {format_type}")
+    print(f"{'=' * 70}")
+    print(f"Description: {desc}")
+    print(f"Samples: {n_samples}")
+
+    print(f"\nExample sequences:")
+    for i in range(min(3, n_samples)):
+        print(f"  Sample {i}: {tokens[i].tolist()}")
+
+    print(f"\nCapturing attention patterns...")
+    patterns = inspect_tokens(model, cfg, tokens)
+    n_heads = cfg['model']['n_layers'] * cfg['model']['n_head']
+    print(f"Captured patterns for {n_heads} heads")
+
+    print(f"\n{'=' * 70}")
+    print("FORMAT-SPECIFIC INDUCTION METRICS")
+    print("=" * 70)
+    print("  - Induction: attention to token AFTER previous matching occurrence")
+    print("  - Copying: attention to immediately previous token")
+    print()
+
+    metrics = analyze_format_heads(patterns, format_type, n_ctx, bos_offset)
+    print_metric_table(metrics, include_prefix=False)
+
+    format_dir = output_dir / format_type
+    format_dir.mkdir(parents=True, exist_ok=True)
+
+    print(f"\nVisualizing attention patterns...")
+    save_path = format_dir / f"attention_heads_{step_label}.png"
+    visualize_attention_heads(
+        patterns,
+        n_layers=cfg['model']['n_layers'],
+        n_heads=cfg['model']['n_head'],
+        save_path=save_path,
+        step=None if step_label == "final" else int(step_label),
+        format_type=format_type,
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description='Inspect attention heads on repeated sequences')
     parser.add_argument('--checkpoint_dir', type=str, required=True,
@@ -280,6 +394,9 @@ def main():
                        help='Number of sequences to generate')
     parser.add_argument('--output_dir', type=str, default='attention_visualizations',
                        help='Directory to save visualizations')
+    parser.add_argument('--format', type=str, default='all',
+                       choices=('all', *FORMAT_CHOICES),
+                       help='Input sequence format to inspect, or all formats')
     
     args = parser.parse_args()
     
@@ -347,82 +464,26 @@ def main():
         bos_token_id = data_cfg.get('bos_token_id', cfg['model']['vocab_size'] - 1)
     bos_offset = 1 if bos_token_id is not None else 0
 
-    # Generate fixed-length repeated sequences for inspection
     n_ctx = cfg['model']['n_ctx']
-    content_len = n_ctx - bos_offset
-    seq_len = content_len // 2
-    print(f"\nGenerating {args.n_samples} fixed-length repeated sequences...")
-    if bos_token_id is not None:
-        print(f"  Format: [BOS={bos_token_id}][seq][seq] with seq_len={seq_len}")
-    else:
-        print(f"  Format: [seq][seq] with seq_len={seq_len}")
-
-    tokens, repeat_masks = generate_fixed_length_sequences(
-        vocab_size=cfg['model']['vocab_size'],
-        n_ctx=n_ctx,
-        n_samples=args.n_samples,
-        bos_token_id=bos_token_id,
-    )
-
-    print(f"\nExample sequences:")
-    for i in range(min(3, args.n_samples)):
-        print(f"  Sample {i}:")
-        if bos_offset:
-            print(f"    BOS:         {tokens[i, 0].item()}")
-        print(f"    First half:  {tokens[i, bos_offset:bos_offset + seq_len].tolist()}")
-        print(f"    Second half: {tokens[i, bos_offset + seq_len:bos_offset + 2 * seq_len].tolist()}")
-    
-    # Capture attention patterns
-    print(f"\nCapturing attention patterns...")
-    capture = AttentionCapture(model, cfg['model']['attn_type'])
-    capture.register_hooks()
-    
-    with torch.no_grad():
-        _ = model(tokens)
-    
-    capture.remove_hooks()
-    
-    n_heads = cfg['model']['n_layers'] * cfg['model']['n_head']
-    print(f"Captured patterns for {n_heads} heads")
-    
-    # Compute metrics
-    print(f"\n{'=' * 70}")
-    print("INDUCTION HEAD METRICS")
-    print("=" * 70)
-    print(f"\nMetrics (from Anthropic paper):")
-    print("  - Prefix matching: Attention to matching position in first half")
-    print("  - Induction: Attention to token AFTER matching position")
-    print("  - Copying: Attention to immediately previous token")
-    print()
-    
-    metrics = analyze_all_heads(capture.patterns, repeat_masks, tokens, bos_offset)
-    
-    print(f"{'Layer':<8} {'Head':<6} {'Prefix':<10} {'Induction':<12} {'Copying':<10}")
-    print("-" * 70)
-    for (layer_idx, head_idx), scores in sorted(metrics.items()):
-        print(f"{layer_idx:<8} {head_idx:<6} {scores['prefix_matching']:>8.4f}   "
-              f"{scores['induction']:>10.4f}   {scores['copying']:>8.4f}")
-    
-    # Identify strongest induction head
-    if metrics:
-        best_head = max(metrics.items(), key=lambda x: x[1]['induction'])
-        print(f"\nStrongest induction head: Layer {best_head[0][0]}, Head {best_head[0][1]}")
-        print(f"  Induction score: {best_head[1]['induction']:.4f}")
-    
-    # Create output directory
     output_dir = Path(__file__).parent / args.output_dir
-    output_dir.mkdir(exist_ok=True)
-    
-    # Visualize all heads
-    print(f"\nVisualizing attention patterns...")
-    save_path = output_dir / f"attention_heads_{step_label}.png"
-    visualize_attention_heads(
-        capture.patterns,
-        n_layers=cfg['model']['n_layers'],
-        n_heads=cfg['model']['n_head'],
-        save_path=save_path,
-        step=args.step,
-    )
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    formats = FORMAT_CHOICES if args.format == 'all' else (args.format,)
+    print(f"\nInspecting input formats: {', '.join(formats)}")
+    if bos_token_id is not None:
+        print(f"  BOS token id={bos_token_id} (position 0 in every sequence)")
+
+    for format_type in formats:
+        inspect_one_format(
+            model=model,
+            cfg=cfg,
+            format_type=format_type,
+            n_samples=args.n_samples,
+            output_dir=output_dir,
+            step_label=step_label,
+            bos_token_id=bos_token_id,
+            bos_offset=bos_offset,
+        )
     
     print(f"\n{'=' * 70}")
     print("DONE")

@@ -17,12 +17,15 @@ __pycache__/
 
 # Pytest
 .pytest_cache/
+pytest-cache-files-*/
 
 # Training outputs / experiment artifacts
 checkpoints/
 logs/
 *.ckpt
 wandb/
+.cache/
+experiments/path_decomp/ablation_runs/
 
 # Data artifacts (if generated locally)
 *.pt
@@ -44,6 +47,8 @@ Thumbs.db
 
 # UV / build artifacts (keep lockfile tracked)
 __pypackages__/
+.uv-cache/
+.uv-python/
 build/
 dist/
 
