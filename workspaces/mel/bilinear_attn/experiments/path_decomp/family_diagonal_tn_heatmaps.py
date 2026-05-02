@@ -21,6 +21,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+from tqdm import tqdm
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -270,25 +271,32 @@ def main() -> None:
     print(f"cache_dir={cache_dir}", flush=True)
     print(f"steps={args.steps}", flush=True)
     print(f"window={args.window}", flush=True)
-    for i, j in pair_indices(len(args.steps), args.window):
-        if not np.isnan(values[0, i, j]):
-            continue
-        step_i = args.steps[i]
-        step_j = args.steps[j]
-        if step_i not in components:
-            components[step_i] = load_component(run_dir, step_i, dtype, device)
-        if step_j not in components:
-            components[step_j] = load_component(run_dir, step_j, dtype, device)
-        print(f"computing step {step_i} vs {step_j}", flush=True)
-        start = time.perf_counter()
-        diag_values = family_diagonal_inner_products_component(components[step_i], components[step_j])
-        elapsed = time.perf_counter() - start
-        for f, fam in enumerate(CANONICAL_FAMILIES):
-            values[f, i, j] = diag_values[fam]
-            values[f, j, i] = diag_values[fam]
-        sims = local_normalize(values)
-        save_data(data_path, args.steps, values, sims)
-        print(f"step {step_i} vs {step_j}: family diagonal time={elapsed:.2f}s", flush=True)
+
+    pending_pairs = [
+        (i, j)
+        for i, j in pair_indices(len(args.steps), args.window)
+        if np.isnan(values[0, i, j])
+    ]
+
+    with tqdm(total=len(pending_pairs), desc="Family TN pairs", unit="pair") as pbar:
+        for i, j in pending_pairs:
+            step_i = args.steps[i]
+            step_j = args.steps[j]
+            if step_i not in components:
+                components[step_i] = load_component(run_dir, step_i, dtype, device)
+            if step_j not in components:
+                components[step_j] = load_component(run_dir, step_j, dtype, device)
+            tqdm.write(f"computing step {step_i} vs {step_j}")
+            start = time.perf_counter()
+            diag_values = family_diagonal_inner_products_component(components[step_i], components[step_j])
+            elapsed = time.perf_counter() - start
+            for f, fam in enumerate(CANONICAL_FAMILIES):
+                values[f, i, j] = diag_values[fam]
+                values[f, j, i] = diag_values[fam]
+            sims = local_normalize(values)
+            save_data(data_path, args.steps, values, sims)
+            tqdm.write(f"step {step_i} vs {step_j}: family diagonal time={elapsed:.2f}s")
+            pbar.update(1)
 
     sims = local_normalize(values)
     save_data(data_path, args.steps, values, sims)
