@@ -92,7 +92,16 @@ def main():
         for i in range(marginals.shape[0]) for j in range(marginals.shape[1])
     ]).write_ipc(CACHE / "freq_marginals.feather")
 
-    segments = _optimal_segments(tn_matrix, k=len(PHASE_NAMES))
+    segments = list(_optimal_segments(tn_matrix, k=len(PHASE_NAMES)))
+    # Manual nudge: pull the grok-phase start one checkpoint earlier (and
+    # extend the preceding plateau's end by one) to match the val-loss
+    # actually leaving its plateau, which the unsupervised segmentation
+    # places one tick late.
+    grok_pos = PHASE_NAMES.index("grok")
+    a, b = segments[grok_pos]
+    segments[grok_pos] = (a - 1, b)
+    pa, pb = segments[grok_pos - 1]
+    segments[grok_pos - 1] = (pa, max(pb - 1, pa))
     phases = [{"name": name,
                "first_step": int(steps[a]), "last_step": int(steps[b])}
               for name, (a, b) in zip(PHASE_NAMES, segments)]
