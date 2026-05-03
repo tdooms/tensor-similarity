@@ -57,12 +57,12 @@
   "phases": [
     {
       "name": "clean",
-      "first_step": 0,
-      "last_step": 7750
+      "first_step": 250,
+      "last_step": 8000
     },
     {
       "name": "poisoned",
-      "first_step": 8000,
+      "first_step": 8250,
       "last_step": 10000
     }
   ]

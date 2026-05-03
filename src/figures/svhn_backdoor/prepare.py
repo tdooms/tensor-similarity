@@ -65,12 +65,17 @@ def main():
         for i in range(n) for j in range(n)
     ]).write_ipc(CACHE / "slice_similarity.feather")
 
-    phase_a = config["phase_a_steps"]
-    clean_steps = [s for s in steps if s < phase_a]
-    poisoned_steps = [s for s in steps if s >= phase_a]
+    # Use the per-checkpoint phase tag from logan's history rather than
+    # `step < phase_a_steps` — the checkpoint at step==phase_a_steps is
+    # taken AFTER the last clean update (so it's still phase A); phase B
+    # starts at the next checkpoint.
+    clean_steps = [int(s) for s, v in history.items()
+                   if v.get("phase", "").startswith("A")]
+    poisoned_steps = [int(s) for s, v in history.items()
+                      if v.get("phase", "").startswith("B")]
     phases = [
-        {"name": "clean",    "first_step": clean_steps[0],    "last_step": clean_steps[-1]},
-        {"name": "poisoned", "first_step": poisoned_steps[0], "last_step": poisoned_steps[-1]},
+        {"name": "clean",    "first_step": min(clean_steps),    "last_step": max(clean_steps)},
+        {"name": "poisoned", "first_step": min(poisoned_steps), "last_step": max(poisoned_steps)},
     ]
 
     (CACHE / "metadata.json").write_text(
