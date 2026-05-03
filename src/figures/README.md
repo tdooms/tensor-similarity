@@ -19,6 +19,8 @@ Available figure families:
 - `seed-convergence`
 - `curriculum-shift`
 - `language-similarity`
+- `grokking-similarity`
+- `svhn-backdoor`
 - `subset-training`
 
 Shared design + export helpers live in `style.py`. Per-experiment logic lives

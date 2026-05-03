@@ -32,6 +32,11 @@ FIGURES = {
         "prepare": "src.figures.grokking_similarity.prepare",
         "plot": "src.figures.grokking_similarity.plot",
     },
+    "svhn-backdoor": {
+        "description": "Mid-training backdoor on bilinear SVHN: weight vs functional similarity.",
+        "prepare": "src.figures.svhn_backdoor.prepare",
+        "plot": "src.figures.svhn_backdoor.plot",
+    },
     "subset-training": {
         "description": "Laurence-derived MNIST subset training across seeds.",
         "train": "src.figures.subset_training.train",
