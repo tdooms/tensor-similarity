@@ -68,7 +68,7 @@ def _save_paths():
     whole dict for a typical model is ~kB."""
     tmp = _PATHS_FILE.with_suffix('.pkl.tmp')
     tmp.write_bytes(pickle.dumps(_PATHS))
-    tmp.rename(_PATHS_FILE)
+    tmp.replace(_PATHS_FILE)
 
 
 class _precompile_mode:

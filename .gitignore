@@ -1,7 +1,6 @@
 # Data and checkpoints
 checkpoints/
 checkpoints_continual/
-data/
 _downloads/
 
 # macOS
