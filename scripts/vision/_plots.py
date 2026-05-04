@@ -155,6 +155,7 @@ def slice_heatmap_plot(slice_heatmaps, heatmap_cps, label='Tensor slice similari
     return fig
 
 
-def save_show(fig, path, dpi=150):
-    fig.savefig(path, dpi=dpi, bbox_inches='tight')
+def save_show(fig, path, dpi=150, save=True):
+    if save:
+        fig.savefig(path, dpi=dpi, bbox_inches='tight')
     plt.show()

@@ -16,7 +16,7 @@ import torch
 from tqdm import tqdm
 
 from _common import (
-    FIGURES_DIR, load_mnist, load_svhn, new_model, slice_sim, fit,
+    FIGURES_DIR, DATA_DIR, load_mnist, load_svhn, new_model, slice_sim, fit,
     get_interaction_matrix, fit_progressive, build_cumulative_history, get_stage_spans,
 )
 from _plots import line_plot, heatmap_plot, save_show
@@ -36,6 +36,8 @@ EPOCH_SETUP    = 20
 D_MODEL, D_HIDDEN = 128, 256
 RECORD_EVERY   = 50
 SEED           = 123
+SAVE_DATA    = True
+SAVE_FIGURES = True
 
 digit_curriculum = [
     {'name': 'base',     'digits': list(range(5)),  'epochs': EPOCH_SETUP},
@@ -156,6 +158,32 @@ for i in tqdm(range(N_HEATMAP)):
         heatmap_slice[i, j] = heatmap_slice[j, i] = slice_sim(
             heatmap_models[i], heatmap_models[j], digit=TARGET_DIGIT)
 
+#%% SAVE DATA
+if SAVE_DATA:
+    import json
+    cum_batch, tr_acc, vl_acc, tr_loss, vl_loss = build_cumulative_history(prog_hist, digit_curriculum)
+    spans_tmp = get_stage_spans(prog_hist, digit_curriculum)
+    np.savez_compressed(DATA_DIR / f"diffing_{DATASET}.npz",
+        heatmap_slice=heatmap_slice,
+        slice_vals=slice_vals,
+        global_vals=global_vals,
+        diff_batches=diff_batches,
+        cum_batch=cum_batch,
+        train_acc=tr_acc, val_acc=vl_acc,
+        train_loss=tr_loss, val_loss=vl_loss,
+    )
+    meta = {
+        'heatmap_cps': [{'batch': int(cp['batch']), 'stage': cp['stage']} for cp in heatmap_cps],
+        'spans': [[int(x0), int(x1), name] for x0, x1, name in spans_tmp],
+        'xlim': [0, int(cum_batch[-1])],
+        'diff_xlim': [int(diff_batches[0]), int(diff_batches[-1])],
+        'dataset': DATASET,
+        'target_digit': TARGET_DIGIT,
+    }
+    with open(DATA_DIR / f"diffing_{DATASET}_meta.json", 'w') as f:
+        json.dump(meta, f, indent=2)
+    print(f"Data saved to {DATA_DIR}")
+
 #%% PLOT — accuracy
 spans = get_stage_spans(prog_hist, digit_curriculum)
 cum_batch, tr_acc, vl_acc, tr_loss, vl_loss = build_cumulative_history(prog_hist, digit_curriculum)
@@ -168,7 +196,7 @@ fig, _ = line_plot(
     [(cum_batch, tr_acc, dict(color='steelblue', alpha=0.8)),
      (cum_batch, vl_acc, dict(color='tomato',    alpha=0.8))],
     spans, "Cumulative batch", "Accuracy", ylim=(0, 1), xlim=xlim, legend=acc_legend)
-save_show(fig, FIGURES_DIR / f"vision_diffing2_accuracy_{DATASET}.png")
+save_show(fig, FIGURES_DIR / f"vision_diffing2_accuracy_{DATASET}.png", save=SAVE_FIGURES)
 
 #%% PLOT — diff similarity over training
 fig, _ = line_plot(
@@ -178,11 +206,11 @@ fig, _ = line_plot(
     ylim=(-1.05, 1.05), xlim=xlim,
     legend=[plt.Line2D([0], [0], color='red',       label=f'Slice (digit {TARGET_DIGIT})'),
             plt.Line2D([0], [0], color='steelblue', label='Global')])
-save_show(fig, FIGURES_DIR / f"vision_diffing2_diff_sim_{DATASET}.png")
+save_show(fig, FIGURES_DIR / f"vision_diffing2_diff_sim_{DATASET}.png", save=SAVE_FIGURES)
 
 #%% PLOT — slice similarity heatmap
 fig, _ = heatmap_plot(heatmap_slice, heatmap_cps, f"Slice similarity (digit {TARGET_DIGIT})", vmin=-1)
-save_show(fig, FIGURES_DIR / f"vision_diffing2_heatmap_slice_{DATASET}.png")
+save_show(fig, FIGURES_DIR / f"vision_diffing2_heatmap_slice_{DATASET}.png", save=SAVE_FIGURES)
 
 print("Done.")
 

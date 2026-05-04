@@ -16,7 +16,7 @@ from tqdm import tqdm
 
 from src.components.similarity import precompile
 from _common import (
-    FIGURES_DIR, load_mnist, load_svhn, new_model, tn_sim, linear_cka,
+    FIGURES_DIR, DATA_DIR, load_mnist, load_svhn, new_model, tn_sim, linear_cka,
     slice_sim, naive_weight_cosine, weight_slice_cosine,
     fit_progressive, build_cumulative_history, get_stage_spans,
 )
@@ -28,6 +28,8 @@ plt.rcParams['lines.linewidth'] = 2.5
 device = 'cpu'
 device = 'mps'
 HeatMapSize = 80
+SAVE_DATA    = True
+SAVE_FIGURES = True
 
 #%% CONFIG
 DATASET  = 'svhn'  # 'mnist' or 'svhn'
@@ -155,6 +157,36 @@ for i in tqdm(range(N_HEATMAP)):
             slice_heatmaps[d][i, j]        = slice_heatmaps[d][j, i]        = slice_sim(heatmap_models[i], heatmap_models[j], digit=d)
             slice_heatmaps_weight[d][i, j] = slice_heatmaps_weight[d][j, i] = weight_slice_cosine(heatmap_models[i], heatmap_models[j], digit=d)
 
+#%% SAVE DATA
+if SAVE_DATA:
+    import json
+    hists_ref = build_cumulative_history(progressive_histories[reference_seed], digit_curriculum)
+    np.savez_compressed(DATA_DIR / f"forgetting_{DATASET}.npz",
+        heatmap_tn=heatmap_tn, heatmap_cka_l=heatmap_cka_l, heatmap_weight=heatmap_weight,
+        cum_batch=hists_ref[0], train_acc=hists_ref[1], val_acc=hists_ref[2],
+        train_loss=hists_ref[3], val_loss=hists_ref[4],
+        sim_batch=np.array(sim_results['batch']),
+        sim_functional=np.array(sim_results['functional']),
+        sim_cka_logits=np.array(sim_results['cka_logits']),
+        sim_weight_cosine=np.array(sim_results['weight_cosine']),
+        **{f'slice_heatmap_{d}':        slice_heatmaps[d]        for d in range(10)},
+        **{f'slice_heatmap_weight_{d}': slice_heatmaps_weight[d] for d in range(10)},
+        **{f'sim_slice_{d}':  np.array(sim_results[f'slice_{d}']) for d in range(10)},
+        **{f'sim_acc_{d}':    np.array(sim_results[f'acc_{d}'])   for d in range(10)},
+    )
+    spans_tmp = get_stage_spans(progressive_histories[reference_seed], digit_curriculum)
+    sim_batch_tmp = np.array(sim_results['batch'])
+    meta = {
+        'heatmap_cps': [{'batch': int(cp['batch']), 'stage': cp['stage']} for cp in heatmap_cps],
+        'spans': [[int(x0), int(x1), name] for x0, x1, name in spans_tmp],
+        'xlim': [0, int(hists_ref[0][-1])],
+        'sim_xlim': [int(sim_batch_tmp[0]), int(sim_batch_tmp[-1])],
+        'dataset': DATASET,
+    }
+    with open(DATA_DIR / f"forgetting_{DATASET}_meta.json", 'w') as f:
+        json.dump(meta, f, indent=2)
+    print(f"Data saved to {DATA_DIR}")
+
 #%% STAGE ACCURACY SUMMARY
 print(f"\n{'stage':<12} {'train_start':>11} {'val_start':>9} {'train_end':>9} {'val_end':>7}")
 print("-" * 52)
@@ -185,31 +217,31 @@ vl_series   = [(hists[s][0], hists[s][4], dict(color='tomato',    linestyle=seed
 
 fig, _ = line_plot(acc_series + val_series, spans,
                    "Cumulative batch", "Accuracy", ylim=(0, 1), xlim=xlim, legend=acc_legend)
-save_show(fig, FIGURES_DIR / f"vision_forgetting2_accuracy_{DATASET}.png")
+save_show(fig, FIGURES_DIR / f"vision_forgetting2_accuracy_{DATASET}.png", save=SAVE_FIGURES)
 
 fig, _ = line_plot(loss_series + vl_series, spans,
                    "Cumulative batch", "Loss (log scale)", xlim=xlim, log_y=True, legend=acc_legend)
-save_show(fig, FIGURES_DIR / f"vision_forgetting2_loss_{DATASET}.png")
+save_show(fig, FIGURES_DIR / f"vision_forgetting2_loss_{DATASET}.png", save=SAVE_FIGURES)
 
 #%% PLOT — heatmaps
 fig, _ = heatmap_plot(heatmap_tn,    heatmap_cps, "Tensor similarity")
-save_show(fig, FIGURES_DIR / f"vision_forgetting2_heatmap_tn_{DATASET}.png")
+save_show(fig, FIGURES_DIR / f"vision_forgetting2_heatmap_tn_{DATASET}.png", save=SAVE_FIGURES)
 
 fig, _ = heatmap_plot(heatmap_cka_l,  heatmap_cps, "CKA similarity")
-save_show(fig, FIGURES_DIR / f"vision_forgetting2_heatmap_cka_{DATASET}.png")
+save_show(fig, FIGURES_DIR / f"vision_forgetting2_heatmap_cka_{DATASET}.png", save=SAVE_FIGURES)
 
 fig, _ = heatmap_plot(heatmap_weight, heatmap_cps, "Weight cosine similarity")
-save_show(fig, FIGURES_DIR / f"vision_forgetting2_heatmap_weight_{DATASET}.png")
+save_show(fig, FIGURES_DIR / f"vision_forgetting2_heatmap_weight_{DATASET}.png", save=SAVE_FIGURES)
 
 fig, _ = heatmap_plot(slice_heatmaps[9], heatmap_cps, "Slice similarity (digit 9)")
-save_show(fig, FIGURES_DIR / f"vision_forgetting2_heatmap_slice9_{DATASET}.png")
+save_show(fig, FIGURES_DIR / f"vision_forgetting2_heatmap_slice9_{DATASET}.png", save=SAVE_FIGURES)
 
 #%% PLOT — 2×5 slice similarity heatmaps
 fig = slice_heatmap_plot(slice_heatmaps, heatmap_cps, label='Tensor slice similarity')
-save_show(fig, FIGURES_DIR / f"vision_forgetting2_heatmap_slice_{DATASET}.png")
+save_show(fig, FIGURES_DIR / f"vision_forgetting2_heatmap_slice_{DATASET}.png", save=SAVE_FIGURES)
 
 fig = slice_heatmap_plot(slice_heatmaps_weight, heatmap_cps, label='Weight slice cosine')
-save_show(fig, FIGURES_DIR / f"vision_forgetting2_heatmap_slice_weight_{DATASET}.png")
+save_show(fig, FIGURES_DIR / f"vision_forgetting2_heatmap_slice_weight_{DATASET}.png", save=SAVE_FIGURES)
 
 #%% PLOT — total similarity line plots (vs reference)
 sim_batch = np.array(sim_results['batch'])
@@ -224,19 +256,19 @@ fig, _ = line_plot(
     legend=[plt.Line2D([0], [0], color='red',    label='Tensor sim'),
             plt.Line2D([0], [0], color='green',  label='CKA logits'),
             plt.Line2D([0], [0], color='purple', label='Weight cosine')])
-save_show(fig, FIGURES_DIR / f"vision_forgetting2_sim_line_{DATASET}.png")
+save_show(fig, FIGURES_DIR / f"vision_forgetting2_sim_line_{DATASET}.png", save=SAVE_FIGURES)
 
 #%% PLOT — per-digit slice similarity line plots (vs reference)
 fig = per_digit_line_plot(
     {d: np.array(sim_results[f'slice_{d}']) for d in range(10)},
     sim_batch, sim_spans, "Slice sim to reference", ylim=(-0.15, 1.05))
-save_show(fig, FIGURES_DIR / f"vision_forgetting2_slice_line_{DATASET}.png")
+save_show(fig, FIGURES_DIR / f"vision_forgetting2_slice_line_{DATASET}.png", save=SAVE_FIGURES)
 
 #%% PLOT — per-digit val accuracy line plots
 fig = per_digit_line_plot(
     {d: np.array(sim_results[f'acc_{d}']) for d in range(10)},
     sim_batch, sim_spans, "Val accuracy", ylim=(0, 1))
-save_show(fig, FIGURES_DIR / f"vision_forgetting2_acc_digit_{DATASET}.png")
+save_show(fig, FIGURES_DIR / f"vision_forgetting2_acc_digit_{DATASET}.png", save=SAVE_FIGURES)
 
 print("Done.")
 

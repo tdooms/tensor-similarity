@@ -131,9 +131,11 @@ def fit(model, train, val, epochs=10, lr=1e-3, wd=0.5, batch_size=248,
     return (df, checkpoints) if save_checkpoints else df
 
 _REPO       = Path(__file__).resolve().parents[2]
-_WORKSPACE  = _REPO / "scripts" / "vision" 
+_WORKSPACE  = _REPO / "scripts" / "vision"
 FIGURES_DIR = _WORKSPACE / "figures"
+DATA_DIR    = _WORKSPACE / "data"
 FIGURES_DIR.mkdir(exist_ok=True)
+DATA_DIR.mkdir(exist_ok=True)
 
 
 # ── Dataset loaders ────────────────────────────────────────────────────────
