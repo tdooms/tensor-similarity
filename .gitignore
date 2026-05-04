@@ -2,6 +2,7 @@
 checkpoints/
 checkpoints_continual/
 data/
+!scripts/vision/data/
 _downloads/
 
 # macOS

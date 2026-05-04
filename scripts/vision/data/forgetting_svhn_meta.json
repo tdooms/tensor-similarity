@@ -1,0 +1,380 @@
+{
+  "heatmap_cps": [
+    {
+      "batch": 0,
+      "stage": "base"
+    },
+    {
+      "batch": 550,
+      "stage": "base"
+    },
+    {
+      "batch": 1150,
+      "stage": "base"
+    },
+    {
+      "batch": 1750,
+      "stage": "base"
+    },
+    {
+      "batch": 2350,
+      "stage": "base"
+    },
+    {
+      "batch": 2950,
+      "stage": "base"
+    },
+    {
+      "batch": 3500,
+      "stage": "base"
+    },
+    {
+      "batch": 4050,
+      "stage": "add 5"
+    },
+    {
+      "batch": 4650,
+      "stage": "add 5"
+    },
+    {
+      "batch": 5250,
+      "stage": "add 5"
+    },
+    {
+      "batch": 5850,
+      "stage": "add 5"
+    },
+    {
+      "batch": 6400,
+      "stage": "add 5"
+    },
+    {
+      "batch": 7000,
+      "stage": "add 5"
+    },
+    {
+      "batch": 7600,
+      "stage": "add 5"
+    },
+    {
+      "batch": 8150,
+      "stage": "add 6"
+    },
+    {
+      "batch": 8750,
+      "stage": "add 6"
+    },
+    {
+      "batch": 9300,
+      "stage": "add 6"
+    },
+    {
+      "batch": 9900,
+      "stage": "add 6"
+    },
+    {
+      "batch": 10500,
+      "stage": "add 6"
+    },
+    {
+      "batch": 11100,
+      "stage": "add 6"
+    },
+    {
+      "batch": 11700,
+      "stage": "add 6"
+    },
+    {
+      "batch": 12300,
+      "stage": "add 6"
+    },
+    {
+      "batch": 12800,
+      "stage": "add 7"
+    },
+    {
+      "batch": 13400,
+      "stage": "add 7"
+    },
+    {
+      "batch": 14000,
+      "stage": "add 7"
+    },
+    {
+      "batch": 14600,
+      "stage": "add 7"
+    },
+    {
+      "batch": 15200,
+      "stage": "add 7"
+    },
+    {
+      "batch": 15750,
+      "stage": "add 7"
+    },
+    {
+      "batch": 16350,
+      "stage": "add 7"
+    },
+    {
+      "batch": 16950,
+      "stage": "add 7"
+    },
+    {
+      "batch": 17550,
+      "stage": "add 7"
+    },
+    {
+      "batch": 18100,
+      "stage": "add 8"
+    },
+    {
+      "batch": 18650,
+      "stage": "add 8"
+    },
+    {
+      "batch": 19250,
+      "stage": "add 8"
+    },
+    {
+      "batch": 19850,
+      "stage": "add 8"
+    },
+    {
+      "batch": 20450,
+      "stage": "add 8"
+    },
+    {
+      "batch": 21050,
+      "stage": "add 8"
+    },
+    {
+      "batch": 21600,
+      "stage": "add 8"
+    },
+    {
+      "batch": 22200,
+      "stage": "add 8"
+    },
+    {
+      "batch": 22800,
+      "stage": "add 8"
+    },
+    {
+      "batch": 23350,
+      "stage": "add 9"
+    },
+    {
+      "batch": 23950,
+      "stage": "add 9"
+    },
+    {
+      "batch": 24550,
+      "stage": "add 9"
+    },
+    {
+      "batch": 25100,
+      "stage": "add 9"
+    },
+    {
+      "batch": 25700,
+      "stage": "add 9"
+    },
+    {
+      "batch": 26300,
+      "stage": "add 9"
+    },
+    {
+      "batch": 26900,
+      "stage": "add 9"
+    },
+    {
+      "batch": 27500,
+      "stage": "add 9"
+    },
+    {
+      "batch": 28050,
+      "stage": "add 9"
+    },
+    {
+      "batch": 28650,
+      "stage": "add 9"
+    },
+    {
+      "batch": 29200,
+      "stage": "repeat"
+    },
+    {
+      "batch": 29800,
+      "stage": "repeat"
+    },
+    {
+      "batch": 30400,
+      "stage": "repeat"
+    },
+    {
+      "batch": 30950,
+      "stage": "repeat"
+    },
+    {
+      "batch": 31550,
+      "stage": "repeat"
+    },
+    {
+      "batch": 32150,
+      "stage": "repeat"
+    },
+    {
+      "batch": 32750,
+      "stage": "repeat"
+    },
+    {
+      "batch": 33350,
+      "stage": "repeat"
+    },
+    {
+      "batch": 33900,
+      "stage": "repeat"
+    },
+    {
+      "batch": 34500,
+      "stage": "repeat"
+    },
+    {
+      "batch": 35050,
+      "stage": "remove 9"
+    },
+    {
+      "batch": 35650,
+      "stage": "remove 9"
+    },
+    {
+      "batch": 36250,
+      "stage": "remove 9"
+    },
+    {
+      "batch": 36850,
+      "stage": "remove 9"
+    },
+    {
+      "batch": 37400,
+      "stage": "remove 9"
+    },
+    {
+      "batch": 38000,
+      "stage": "remove 9"
+    },
+    {
+      "batch": 38600,
+      "stage": "remove 9"
+    },
+    {
+      "batch": 39200,
+      "stage": "remove 9"
+    },
+    {
+      "batch": 39800,
+      "stage": "remove 9"
+    },
+    {
+      "batch": 40350,
+      "stage": "remove 9"
+    },
+    {
+      "batch": 40900,
+      "stage": "re-add 9"
+    },
+    {
+      "batch": 41500,
+      "stage": "re-add 9"
+    },
+    {
+      "batch": 42100,
+      "stage": "re-add 9"
+    },
+    {
+      "batch": 42700,
+      "stage": "re-add 9"
+    },
+    {
+      "batch": 43250,
+      "stage": "re-add 9"
+    },
+    {
+      "batch": 43850,
+      "stage": "re-add 9"
+    },
+    {
+      "batch": 44450,
+      "stage": "re-add 9"
+    },
+    {
+      "batch": 45050,
+      "stage": "re-add 9"
+    },
+    {
+      "batch": 45650,
+      "stage": "re-add 9"
+    },
+    {
+      "batch": 46250,
+      "stage": "re-add 9"
+    }
+  ],
+  "spans": [
+    [
+      0,
+      3600,
+      "base"
+    ],
+    [
+      3600,
+      7800,
+      "add 5"
+    ],
+    [
+      7800,
+      12450,
+      "add 6"
+    ],
+    [
+      12450,
+      17550,
+      "add 7"
+    ],
+    [
+      17550,
+      23050,
+      "add 8"
+    ],
+    [
+      23050,
+      28950,
+      "add 9"
+    ],
+    [
+      28950,
+      34850,
+      "repeat"
+    ],
+    [
+      34850,
+      40350,
+      "remove 9"
+    ],
+    [
+      40350,
+      46250,
+      "re-add 9"
+    ]
+  ],
+  "xlim": [
+    0,
+    46250
+  ],
+  "sim_xlim": [
+    0,
+    46250
+  ],
+  "dataset": "svhn"
+}
