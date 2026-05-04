@@ -1,0 +1,12 @@
+name: icl_bilinear_smoke
+seed: 0
+data: {D: 4, K: 8, noise_variance: 0.125, ood_log10_grid: [0.0, 1.0]}
+model: {d_model: 32, n_layers: 2, n_head: 4, d_mlp: 32, attn_scale: 0.35, mlp_scale: 0.35, bos_norm_eps: 1.0e-6}
+train: {batch_size: 16, max_steps: 2000, warmup_frac: 0.125, lr_decay_frac: 0.2,
+        muon_lr: 0.02, adamw_lr: 1.0e-3, weight_decay: 0.02, betas: [0.9, 0.95],
+        grad_clip: 1.0, dtype: float32, device: cpu, allow_adamw_fallback: true}
+eval: {episodes: 64, fixed_seed: 1234}
+checkpoint: {n_log: 5, n_linear: 5}
+figures: {run_at_end: true}
+wandb: {enabled: true, project: icl-bilinear-smoke-manual, entity: melwina-albuquerque-flame-university}
+hf: {enabled: true, repo_id: melephant/bilinear-icl-smoke-manual, private: true}

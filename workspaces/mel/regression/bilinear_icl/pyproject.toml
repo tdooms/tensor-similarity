@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bilinear-icl"
+version = "0.1.0"
+description = "In-context linear regression with bilinear attention"
+requires-python = ">=3.10,<3.13"
+dependencies = [
+  "torch>=2.3",
+  "einops",
+  "numpy",
+  "pyyaml",
+  "tqdm",
+  "pandas",
+  "pyarrow",
+  "matplotlib",
+  "wandb",
+  "huggingface_hub",
+  "muon-optimizer @ git+https://github.com/KellerJordan/Muon",
+  "pytest",
+]
+
+[[tool.uv.index]]
+url = "https://download.pytorch.org/whl/cu121"
+default = false
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

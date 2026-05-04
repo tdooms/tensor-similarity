@@ -1,0 +1,52 @@
+name: icl_bilinear_main
+seed: 0
+
+data:
+  D: 4
+  K: 8
+  noise_variance: 0.125
+  ood_log10_grid: [-1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0, 2.5]
+
+model:
+  d_model: 64
+  n_layers: 2
+  n_head: 4
+  d_mlp: 64
+  attn_scale: 0.35
+  mlp_scale: 0.35
+  bos_norm_eps: 1.0e-6
+
+train:
+  batch_size: 256
+  max_steps: 500000
+  warmup_frac: 0.01
+  lr_decay_frac: 0.2
+  muon_lr: 0.25
+  adamw_lr: 3.0e-3
+  weight_decay: 0.02
+  betas: [0.9, 0.95]
+  grad_clip: 1.0
+  dtype: bfloat16
+  device: cuda
+
+eval:
+  episodes: 2048
+  fixed_seed: 1234
+  dtype: float32
+
+checkpoint:
+  n_log: 100
+  n_linear: 100
+
+figures:
+  run_at_end: true
+
+wandb:
+  enabled: true
+  project: icl-bilinear-regression
+  entity: melwina-albuquerque-flame-university
+
+hf:
+  enabled: true
+  repo_id: melephant/linear_regression
+  private: true
