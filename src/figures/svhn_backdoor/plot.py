@@ -56,7 +56,7 @@ CELLS = (
     # row 1
     (("image", "clean",                "Uncorrupted",                LABEL),
      ("line",  None,                   "Accuracy & attack success",  LABEL),
-     ("main",  "act_clean_full",       "Behavioural (test)",         LABEL),
+     ("main",  "matrix_cosine",        "Matrix cosine",              LABEL),
      ("main",  "tn_sim",               "Tensor",                     LABEL)),
     # row 2
     (("image", "stamped",              "Corrupted",                  TARGET_COLOR),
@@ -74,10 +74,10 @@ STORY_SPANS = (
     (1, "The backdoor is learned;<br>"
         "behaviour shifts<br>"
         "on corrupted samples."),
-    (2, "Yet behavioural similarity<br>"
-        "on clean data is blind<br>"
-        "to the attack."),
-    (3, "Tensor similarity is not;<br>"
+    (2, "Yet existing methods<br>"
+        "barely register<br>"
+        "the attack."),
+    (3, "Tensor similarity does;<br>"
         "it localizes the issue<br>"
         "to the attacked class."),
 )

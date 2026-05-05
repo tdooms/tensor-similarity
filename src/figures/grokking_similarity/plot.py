@@ -22,6 +22,7 @@ from src.figures.style import apply_style, save_figure
 
 BG    = "#FFFFFF"
 LABEL = "#0f172a"
+MUTED = "#94a3b8"
 
 # Neutral train/val (medium-gray vs near-black) — the line carries the
 # information, the legend pulls them apart by name not by hue.
@@ -97,41 +98,34 @@ def main():
 
     fig = make_subplots(rows=4, cols=1, shared_xaxes=True, vertical_spacing=0.018)
 
-    marker = lambda color: dict(size=8, color=color, line=dict(color=BG, width=1.8))
-
     for metric, name, color in (("train_acc", "Train",      TRAIN),
                                 ("val_acc",   "Validation", VAL)):
         s = history.filter(pl.col("metric") == metric).sort("step")
         x = [step_to_idx[step] for step in s["step"].to_list()]
-        fig.add_trace(go.Scatter(x=x, y=s["value"].to_list(), mode="lines+markers",
+        fig.add_trace(go.Scatter(x=x, y=s["value"].to_list(), mode="lines",
                                  name=name, legendgroup=name.lower(),
-                                 line=dict(color=color, width=2.2),
-                                 marker=marker(color)),
+                                 line=dict(color=color, width=2.6)),
                       row=1, col=1)
 
     for metric, name, color in (("train_loss", "Train",      TRAIN),
                                 ("val_loss",   "Validation", VAL)):
         s = history.filter(pl.col("metric") == metric).sort("step")
         x = [step_to_idx[step] for step in s["step"].to_list()]
-        fig.add_trace(go.Scatter(x=x, y=s["value"].to_list(), mode="lines+markers",
+        fig.add_trace(go.Scatter(x=x, y=s["value"].to_list(), mode="lines",
                                  name=name, legendgroup=name.lower(), showlegend=False,
-                                 line=dict(color=color, width=2.2),
-                                 marker=marker(color)),
+                                 line=dict(color=color, width=2.6)),
                       row=2, col=1)
+
+    # Frequency above similarity — row 3 (top) gets freq, row 4 (bottom)
+    # gets the bigger similarity heatmap.
+    fig.add_trace(go.Heatmap(z=freq_z, x=indices, y=indices_freq,
+                             colorscale=FREQ_COLORSCALE, showscale=False),
+                  row=3, col=1)
 
     fig.add_trace(go.Heatmap(z=matrix, x=indices, y=indices,
                              zmin=sim_zmin, zmax=sim_zmax, zmid=0,
                              colorscale=HEAT_COLORSCALE, showscale=False),
-                  row=3, col=1)
-
-    fig.add_trace(go.Heatmap(z=freq_z, x=indices, y=indices_freq,
-                             colorscale=FREQ_COLORSCALE, showscale=False),
                   row=4, col=1)
-
-    # Two boundary vlines: 4 cells from start, 8 cells from end.
-    for x_b in (3.5, n - 8.5):
-        for r in (1, 2, 3, 4):
-            fig.add_vline(x=x_b, row=r, col=1, **BOUNDARY_LINE_KW)
 
     tick_indices = [min(range(n), key=lambda i: abs(steps[i] - t)) for t in TICK_TARGETS]
 
@@ -146,10 +140,16 @@ def main():
     fig.update_yaxes(automargin=False, title=None,
                      showline=False, zeroline=False, mirror=False, showgrid=False,
                      showticklabels=False, ticks="")
-    fig.update_yaxes(range=[-0.04, 1.07], domain=[0.755, 0.905], row=1, col=1)
-    fig.update_yaxes(type="log", range=[-6.7, 1.3], domain=[0.585, 0.735], row=2, col=1)
-    fig.update_yaxes(range=[-0.5, n - 0.5], domain=[0.295, 0.565], row=3, col=1)
-    fig.update_yaxes(domain=[0.015, 0.275], row=4, col=1)
+    # Subtle baselines on the line panels: y=0 on accuracy, y=log10(1)=0
+    # on the log-loss (loss=1 reference).
+    fig.update_yaxes(range=[-0.04, 1.07], domain=[0.755, 0.905],
+                     zeroline=True, zerolinecolor=MUTED, zerolinewidth=1,
+                     row=1, col=1)
+    fig.update_yaxes(type="log", range=[-6.7, 1.3], domain=[0.585, 0.735],
+                     zeroline=True, zerolinecolor=MUTED, zerolinewidth=1,
+                     row=2, col=1)
+    fig.update_yaxes(domain=[0.295, 0.575], row=3, col=1)  # frequency
+    fig.update_yaxes(range=[-0.5, n - 0.5], domain=[0.020, 0.275], row=4, col=1)  # similarity
 
     # Endpoint labels: color-matched annotations at the right edge of each
     # line panel, showing where the curve actually lands. Replaces the
@@ -185,8 +185,8 @@ def main():
 
     for label, mid_y in (("Accuracy",   0.830),
                           ("Loss (log)", 0.660),
-                          ("Similarity", 0.430),
-                          ("Frequency",  0.145)):
+                          ("Frequency",  0.435),
+                          ("Similarity", 0.147)):
         fig.add_annotation(text=f"<b>{label}</b>", xref="paper", yref="paper",
                            x=-0.012, y=mid_y, xanchor="center", yanchor="middle",
                            textangle=-90, showarrow=False,

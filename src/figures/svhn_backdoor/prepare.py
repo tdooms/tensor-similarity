@@ -49,13 +49,23 @@ def main():
         if isinstance(value, (int, float))
     ]).write_ipc(CACHE / "history.feather")
 
-    pl.DataFrame([
+    rows = [
         {"step_i": steps[i], "step_j": steps[j],
          "metric": name, "value": float(matrix[i, j])}
         for name in SIMILARITY_NAMES
         for matrix in [sims[name]]
         for i in range(n) for j in range(n)
-    ]).write_ipc(CACHE / "similarity.feather")
+    ]
+    # Matrix cosine: naive Frobenius cosine of flattened bilinear
+    # weights (data-free baseline). Computed offline once and cached
+    # as a separate feather; merged into the canonical schema here.
+    weight_cos = CACHE / "weight_cosine_matrix.feather"
+    if weight_cos.exists():
+        wc = pl.read_ipc(weight_cos)
+        rows.extend({"step_i": int(r["step_i"]), "step_j": int(r["step_j"]),
+                     "metric": "matrix_cosine", "value": float(r["similarity"])}
+                    for r in wc.iter_rows(named=True))
+    pl.DataFrame(rows).write_ipc(CACHE / "similarity.feather")
 
     slice_sim = sims["slice_sim"]
     n_classes = slice_sim.shape[0]
