@@ -37,6 +37,11 @@ FIGURES = {
         "prepare": "src.figures.svhn_backdoor.prepare",
         "plot": "src.figures.svhn_backdoor.plot",
     },
+    "svhn-backdoor-focused": {
+        "description": "SVHN backdoor — 1-row focused view: full-eval similarities + class-9 slice.",
+        "prepare": "src.figures.svhn_backdoor.prepare",
+        "plot": "src.figures.svhn_backdoor.plot_focused",
+    },
     "subset-training": {
         "description": "Laurence-derived MNIST subset training across seeds.",
         "train": "src.figures.subset_training.train",
