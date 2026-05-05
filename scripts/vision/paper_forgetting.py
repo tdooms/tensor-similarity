@@ -10,20 +10,26 @@ for p in [str(_REPO), str(_VISION)]:
 
 import copy
 import numpy as np
+import matplotlib.pyplot as plt
 import torch
 from tqdm import tqdm
 
 from src.components.similarity import precompile
 from _common import (
-    DATA_DIR, load_mnist, load_svhn, new_model, tn_sim, linear_cka,
+    FIGURES_DIR, DATA_DIR, load_mnist, load_svhn, new_model, tn_sim, linear_cka,
     slice_sim, naive_weight_cosine, weight_slice_cosine,
     fit_progressive, build_cumulative_history, get_stage_spans,
 )
+from _plots import line_plot, heatmap_plot, slice_heatmap_plot, per_digit_line_plot, save_show
+
+plt.rcParams.update({'font.size': 16})
+plt.rcParams['lines.linewidth'] = 2.5
 
 device = 'cpu'
 device = 'mps'
 HeatMapSize = 80
-SAVE_DATA = True
+SAVE_DATA    = True
+SAVE_FIGURES = True
 
 #%% CONFIG
 DATASET  = 'svhn'  # 'mnist' or 'svhn'
@@ -194,4 +200,76 @@ for stage in digit_curriculum:
           f"{h['train/acc'].iloc[-1]:>9.4f} "
           f"{h['val/acc'].iloc[-1]:>7.4f}")
 
-print("\nDone. Render figures with: uv run prepare svhn-forgetting && uv run plot svhn-forgetting")
+#%% PLOT — line plots
+spans      = get_stage_spans(progressive_histories[reference_seed], digit_curriculum)
+acc_legend = [plt.Line2D([0], [0], color='steelblue', label='Train'),
+              plt.Line2D([0], [0], color='tomato',    label='Val')]
+seed_ls    = {42: '-', 123: '--', 456: ':'}
+
+hists = {s: build_cumulative_history(progressive_histories[s], digit_curriculum) for s in seeds}
+cb    = hists[reference_seed][0]
+xlim  = (0, cb[-1])
+
+acc_series  = [(hists[s][0], hists[s][1], dict(color='steelblue', linestyle=seed_ls[s], alpha=0.8)) for s in seeds]
+val_series  = [(hists[s][0], hists[s][2], dict(color='tomato',    linestyle=seed_ls[s], alpha=0.8)) for s in seeds]
+loss_series = [(hists[s][0], hists[s][3], dict(color='steelblue', linestyle=seed_ls[s], alpha=0.8)) for s in seeds]
+vl_series   = [(hists[s][0], hists[s][4], dict(color='tomato',    linestyle=seed_ls[s], alpha=0.8)) for s in seeds]
+
+fig, _ = line_plot(acc_series + val_series, spans,
+                   "Cumulative batch", "Accuracy", ylim=(0, 1), xlim=xlim, legend=acc_legend)
+save_show(fig, FIGURES_DIR / f"vision_forgetting2_accuracy_{DATASET}.png", save=SAVE_FIGURES)
+
+fig, _ = line_plot(loss_series + vl_series, spans,
+                   "Cumulative batch", "Loss (log scale)", xlim=xlim, log_y=True, legend=acc_legend)
+save_show(fig, FIGURES_DIR / f"vision_forgetting2_loss_{DATASET}.png", save=SAVE_FIGURES)
+
+#%% PLOT — heatmaps
+fig, _ = heatmap_plot(heatmap_tn,    heatmap_cps, "Tensor similarity")
+save_show(fig, FIGURES_DIR / f"vision_forgetting2_heatmap_tn_{DATASET}.png", save=SAVE_FIGURES)
+
+fig, _ = heatmap_plot(heatmap_cka_l,  heatmap_cps, "CKA similarity")
+save_show(fig, FIGURES_DIR / f"vision_forgetting2_heatmap_cka_{DATASET}.png", save=SAVE_FIGURES)
+
+fig, _ = heatmap_plot(heatmap_weight, heatmap_cps, "Weight cosine similarity")
+save_show(fig, FIGURES_DIR / f"vision_forgetting2_heatmap_weight_{DATASET}.png", save=SAVE_FIGURES)
+
+fig, _ = heatmap_plot(slice_heatmaps[9], heatmap_cps, "Slice similarity (digit 9)")
+save_show(fig, FIGURES_DIR / f"vision_forgetting2_heatmap_slice9_{DATASET}.png", save=SAVE_FIGURES)
+
+#%% PLOT — 2×5 slice similarity heatmaps
+fig = slice_heatmap_plot(slice_heatmaps, heatmap_cps, label='Tensor slice similarity')
+save_show(fig, FIGURES_DIR / f"vision_forgetting2_heatmap_slice_{DATASET}.png", save=SAVE_FIGURES)
+
+fig = slice_heatmap_plot(slice_heatmaps_weight, heatmap_cps, label='Weight slice cosine')
+save_show(fig, FIGURES_DIR / f"vision_forgetting2_heatmap_slice_weight_{DATASET}.png", save=SAVE_FIGURES)
+
+#%% PLOT — total similarity line plots (vs reference)
+sim_batch = np.array(sim_results['batch'])
+sim_xlim  = (sim_batch[0], sim_batch[-1])
+sim_spans = get_stage_spans(progressive_histories[reference_seed], digit_curriculum)
+
+fig, _ = line_plot(
+    [(sim_batch, np.array(sim_results['functional']),    dict(color='red',    label='Tensor sim')),
+     (sim_batch, np.array(sim_results['cka_logits']),    dict(color='green',  label='CKA logits')),
+     (sim_batch, np.array(sim_results['weight_cosine']), dict(color='purple', label='Weight cosine'))],
+    sim_spans, "Cumulative batch", "Similarity to reference", ylim=(-0.05, 1.05), xlim=sim_xlim,
+    legend=[plt.Line2D([0], [0], color='red',    label='Tensor sim'),
+            plt.Line2D([0], [0], color='green',  label='CKA logits'),
+            plt.Line2D([0], [0], color='purple', label='Weight cosine')])
+save_show(fig, FIGURES_DIR / f"vision_forgetting2_sim_line_{DATASET}.png", save=SAVE_FIGURES)
+
+#%% PLOT — per-digit slice similarity line plots (vs reference)
+fig = per_digit_line_plot(
+    {d: np.array(sim_results[f'slice_{d}']) for d in range(10)},
+    sim_batch, sim_spans, "Slice sim to reference", ylim=(-0.15, 1.05))
+save_show(fig, FIGURES_DIR / f"vision_forgetting2_slice_line_{DATASET}.png", save=SAVE_FIGURES)
+
+#%% PLOT — per-digit val accuracy line plots
+fig = per_digit_line_plot(
+    {d: np.array(sim_results[f'acc_{d}']) for d in range(10)},
+    sim_batch, sim_spans, "Val accuracy", ylim=(0, 1))
+save_show(fig, FIGURES_DIR / f"vision_forgetting2_acc_digit_{DATASET}.png", save=SAVE_FIGURES)
+
+print("Done.")
+
+# %%

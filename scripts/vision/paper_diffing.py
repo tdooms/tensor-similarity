@@ -11,13 +11,18 @@ for p in [str(_REPO), str(_VISION)]:
 import copy
 from functools import partial
 import numpy as np
+import matplotlib.pyplot as plt
 import torch
 from tqdm import tqdm
 
 from _common import (
-    DATA_DIR, load_mnist, load_svhn, new_model, slice_sim, fit,
+    FIGURES_DIR, DATA_DIR, load_mnist, load_svhn, new_model, slice_sim, fit,
     get_interaction_matrix, fit_progressive, build_cumulative_history, get_stage_spans,
 )
+from _plots import line_plot, heatmap_plot, save_show
+
+plt.rcParams.update({'font.size': 16})
+plt.rcParams['lines.linewidth'] = 2.5
 
 device = 'cpu'
 device = 'mps'
@@ -31,7 +36,8 @@ EPOCH_SETUP    = 20
 D_MODEL, D_HIDDEN = 128, 256
 RECORD_EVERY   = 50
 SEED           = 123
-SAVE_DATA      = True
+SAVE_DATA    = True
+SAVE_FIGURES = True
 
 digit_curriculum = [
     {'name': 'base',     'digits': list(range(5)),  'epochs': EPOCH_SETUP},
@@ -178,4 +184,34 @@ if SAVE_DATA:
         json.dump(meta, f, indent=2)
     print(f"Data saved to {DATA_DIR}")
 
-print("\nDone. Render figures with: uv run prepare svhn-diffing && uv run plot svhn-diffing")
+#%% PLOT — accuracy
+spans = get_stage_spans(prog_hist, digit_curriculum)
+cum_batch, tr_acc, vl_acc, tr_loss, vl_loss = build_cumulative_history(prog_hist, digit_curriculum)
+xlim = (0, cum_batch[-1])
+
+acc_legend = [plt.Line2D([0], [0], color='steelblue', label='Train'),
+              plt.Line2D([0], [0], color='tomato',    label='Val')]
+
+fig, _ = line_plot(
+    [(cum_batch, tr_acc, dict(color='steelblue', alpha=0.8)),
+     (cum_batch, vl_acc, dict(color='tomato',    alpha=0.8))],
+    spans, "Cumulative batch", "Accuracy", ylim=(0, 1), xlim=xlim, legend=acc_legend)
+save_show(fig, FIGURES_DIR / f"vision_diffing2_accuracy_{DATASET}.png", save=SAVE_FIGURES)
+
+#%% PLOT — diff similarity over training
+fig, _ = line_plot(
+    [(diff_batches, slice_vals,  dict(color='red',      label=f'Slice (digit {TARGET_DIGIT})', alpha=0.9)),
+     (diff_batches, global_vals, dict(color='steelblue', label='Global',                       alpha=0.9))],
+    spans, "Cumulative batch", "Similarity to diff",
+    ylim=(-1.05, 1.05), xlim=xlim,
+    legend=[plt.Line2D([0], [0], color='red',       label=f'Slice (digit {TARGET_DIGIT})'),
+            plt.Line2D([0], [0], color='steelblue', label='Global')])
+save_show(fig, FIGURES_DIR / f"vision_diffing2_diff_sim_{DATASET}.png", save=SAVE_FIGURES)
+
+#%% PLOT — slice similarity heatmap
+fig, _ = heatmap_plot(heatmap_slice, heatmap_cps, f"Slice similarity (digit {TARGET_DIGIT})", vmin=-1)
+save_show(fig, FIGURES_DIR / f"vision_diffing2_heatmap_slice_{DATASET}.png", save=SAVE_FIGURES)
+
+print("Done.")
+
+# %%
