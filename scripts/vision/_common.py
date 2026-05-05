@@ -10,7 +10,6 @@ from pathlib import Path
 import numpy as np
 import torch
 from kornia.color import RgbToGrayscale
-from matplotlib.transforms import blended_transform_factory
 from tqdm import tqdm
 
 import torch.nn as nn
@@ -132,9 +131,7 @@ def fit(model, train, val, epochs=10, lr=1e-3, wd=0.5, batch_size=248,
 
 _REPO       = Path(__file__).resolve().parents[2]
 _WORKSPACE  = _REPO / "scripts" / "vision"
-FIGURES_DIR = _WORKSPACE / "figures"
 DATA_DIR    = _WORKSPACE / "data"
-FIGURES_DIR.mkdir(exist_ok=True)
 DATA_DIR.mkdir(exist_ok=True)
 
 
@@ -321,9 +318,3 @@ def get_stage_spans(hist_by_stage, digit_curriculum):
     return spans
 
 
-def add_stage_vlines(ax, boundaries):
-    transform = blended_transform_factory(ax.transData, ax.transAxes)
-    for x, name in boundaries:
-        ax.axvline(x, color='black', linestyle=':', linewidth=2, alpha=0.6)
-        ax.text(x, 0.7, name, fontsize=16, rotation=90, va='top', ha='right',
-                color='black', fontstyle='italic', transform=transform)

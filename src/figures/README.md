@@ -20,7 +20,9 @@ Available figure families:
 - `curriculum-shift`
 - `language-similarity`
 - `grokking-similarity`
-- `svhn-backdoor`
+- `svhn-backdoor` (`-focused` for the 1-row variant)
+- `svhn-forgetting`
+- `svhn-diffing`
 - `subset-training`
 
 Shared design + export helpers live in `style.py`. Per-experiment logic lives

@@ -42,6 +42,16 @@ FIGURES = {
         "prepare": "src.figures.svhn_backdoor.prepare",
         "plot": "src.figures.svhn_backdoor.plot_focused",
     },
+    "svhn-forgetting": {
+        "description": "Catastrophic forgetting on SVHN: 9-stage curriculum (add 5..9, remove/re-add 9).",
+        "prepare": "src.figures.svhn_forgetting.prepare",
+        "plot": "src.figures.svhn_forgetting.plot",
+    },
+    "svhn-diffing": {
+        "description": "Diff-vector similarity on SVHN: tracking digit-9 fine-tune direction across training.",
+        "prepare": "src.figures.svhn_diffing.prepare",
+        "plot": "src.figures.svhn_diffing.plot",
+    },
     "subset-training": {
         "description": "Laurence-derived MNIST subset training across seeds.",
         "train": "src.figures.subset_training.train",
