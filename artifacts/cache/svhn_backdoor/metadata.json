@@ -65,5 +65,9 @@
       "first_step": 8250,
       "last_step": 10000
     }
-  ]
+  ],
+  "sample_predictions": {
+    "clean": 2,
+    "stamped": 9
+  }
 }

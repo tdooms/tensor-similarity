@@ -27,6 +27,7 @@ SIMILARITY_NAMES = (
     "act_clean_full",
     "act_poisoned_full",
     "act_clean_2s",
+    "act_clean_9s",
     "act_clean_plus_poisoned",
 )
 
@@ -78,7 +79,34 @@ def main():
         {"name": "poisoned", "first_step": min(poisoned_steps), "last_step": max(poisoned_steps)},
     ]
 
+    # Sample inputs (clean + diamond-stamped) for the figure's input-demo
+    # column. Min/max-stretched here so plot.py can render directly via
+    # polars without touching numpy.
+    sample_meta = {}
+    samples_npz = BUNDLE / "sample_images.npz"
+    if samples_npz.exists():
+        samples = np.load(samples_npz)
+        rows = []
+        # Pin both clean and stamped to the CLEAN image's range so the
+        # backgrounds match. Per-image min/max gave the stamped image a
+        # lighter-looking background (its min was 0 from the diamond
+        # pixels, shifting the rest of the image up the grayscale).
+        # Stamped diamond pixels (≈0) end up below 0 after normalization
+        # and clamp to black on the heatmap.
+        clean_arr = samples["clean"].reshape(32, 32)
+        lo, hi = float(clean_arr.min()), float(clean_arr.max())
+        for key in ("clean", "stamped"):
+            arr = samples[key].reshape(32, 32)
+            norm = (arr - lo) / max(hi - lo, 1e-6)
+            rows.extend({"image": key, "row": i, "col": j, "value": float(norm[i, j])}
+                        for i in range(32) for j in range(32))
+        pl.DataFrame(rows).write_ipc(CACHE / "samples.feather")
+        sample_meta = {"sample_predictions": {
+            "clean":   int(samples["pred_clean"]),
+            "stamped": int(samples["pred_stamped"]),
+        }}
+
     (CACHE / "metadata.json").write_text(
-        json.dumps({"steps": steps, "config": config, "phases": phases}, indent=2),
+        json.dumps({"steps": steps, "config": config, "phases": phases, **sample_meta}, indent=2),
         encoding="utf-8",
     )

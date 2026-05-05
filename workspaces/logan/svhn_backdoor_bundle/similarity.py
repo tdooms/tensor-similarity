@@ -122,26 +122,28 @@ def main() -> None:
     all_x = torch.cat([data.train_x, data.test_x], dim=0)
     all_y = torch.cat([data.train_y, data.test_y], dim=0)
     all_x_poison = stamp_diamond(all_x)
-    mask_2 = all_y == 2
-    all_x_2 = all_x[mask_2]
+    all_x_2 = all_x[all_y == 2]
+    all_x_9 = all_x[all_y == 9]
     all_x_full = torch.cat([all_x, all_x_poison], dim=0)
 
     logger.info(
         f"eval-set sizes: clean={all_x.shape[0]} "
         f"poisoned={all_x_poison.shape[0]} "
-        f"2s-only={all_x_2.shape[0]} "
+        f"2s-only={all_x_2.shape[0]} 9s-only={all_x_9.shape[0]} "
         f"clean+poisoned={all_x_full.shape[0]}"
     )
 
     logits_clean = compute_logits_per_checkpoint(checkpoints, d_hidden, all_x, device)
     logits_poison = compute_logits_per_checkpoint(checkpoints, d_hidden, all_x_poison, device)
     logits_2 = compute_logits_per_checkpoint(checkpoints, d_hidden, all_x_2, device)
+    logits_9 = compute_logits_per_checkpoint(checkpoints, d_hidden, all_x_9, device)
     logits_full = compute_logits_per_checkpoint(checkpoints, d_hidden, all_x_full, device)
 
     logger.info("computing cosine matrices")
     act_clean = cosine_matrix(logits_clean, steps)
     act_poison = cosine_matrix(logits_poison, steps)
     act_2 = cosine_matrix(logits_2, steps)
+    act_9 = cosine_matrix(logits_9, steps)
     act_full = cosine_matrix(logits_full, steps)
 
     logger.info("computing TN-similarity matrix")
@@ -170,6 +172,7 @@ def main() -> None:
         act_clean_full=act_clean,
         act_poisoned_full=act_poison,
         act_clean_2s=act_2,
+        act_clean_9s=act_9,
         act_clean_plus_poisoned=act_full,
         slice_sim=slice_sim,
     )
