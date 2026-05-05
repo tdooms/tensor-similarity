@@ -4,14 +4,14 @@ Each checkpoint occupies one unit on the x axis, so the heatmap cells are
 uniform 1×1 squares. The bottom axis labels show step values at hand-picked
 sparse indices instead of plotly's automatic log ticks.
 
-Five DP-optimal phases (`start → memorize → [stuck plateau] → grok →
-consolidate`); the unnamed middle segment gets a subtle slate wash on the
-line plots (no label) — visual marker for "stuck" without competing with
-the rest of the figure. Train traces in deep blue, validation in warm
-amber, both solid; the dotted-vs-solid distinction was redundant once the
-two curves got distinct colors. Heatmap on a diverging palette
-(red ↔ paper-bg ↔ navy) so cosine sign is visible without contaminating
-the diagonal at value 1.
+Five DP-optimal phases (`start → memorize → [plateau] → grok → consolidate`);
+phase names ride the similarity heatmap's y-axis as left-side tick labels,
+matching the svhn-{forgetting,diffing} template — one label set per row,
+horizontal text in the figure margin. Memorize and grok additionally get a
+subtle warm-gray wash on the line panels as a visual cue for the two
+canonical "events" of grokking. Train in muted slate-400, validation in
+slate-800. Heatmap on the brick↔slate diverging palette anchored to the
+paper bg (matches svhn-backdoor, svhn-forgetting, svhn-diffing).
 """
 import json
 import math
@@ -23,34 +23,36 @@ from plotly.subplots import make_subplots
 from src.figures.grokking_similarity.prepare import CACHE
 from src.figures.style import apply_style, save_figure
 
-# Modern palette — indigo + rose, off-white centered, dark slate accents.
-BG          = "#FAFAF7"   # warm-white
-TRAIN       = "#4f46e5"   # indigo-600
-VAL         = "#e11d48"   # rose-600
-LABEL       = "#0f172a"   # slate-900 (annotation text)
-BOUNDARY    = "#0f172a"   # slate-900 vlines
+BG          = "#FAFAF7"
+LABEL       = "#0f172a"
+MUTED       = "#64748b"
+BOUNDARY    = "#0f172a"
 
-# Subtle warm-gray wash on memorize and grok line panels only. The
-# differentiation between phases comes from the dark vlines, not from
-# colored fills.
+# Neutral train/val (medium-gray vs near-black) — the line carries the
+# information, the legend pulls them apart by name not by hue.
+TRAIN = "#94a3b8"   # slate-400
+VAL   = "#1e293b"   # slate-800
+
+# Subtle warm-gray wash on memorize and grok line panels only.
 PHASE_WASH = {
     "memorize": "#EDEAE2",
     "grok":     "#EDEAE2",
 }
 
-# Diverging colorscale anchored to the paper bg. Heatmap goes deeper
-# than the line traces (indigo-900 / rose-800 vs indigo-600 / rose-600)
-# — the relationship is "darker cousin in the same hue family", not
-# pixel-match. Reads richer at full saturation.
+# Diverging palette: brick ↔ slate-navy through the paper bg, matching the
+# svhn family. Saturated extremes for paper rendering, warmer/cooler hues
+# than primary R/B.
 HEAT_COLORSCALE = [
-    [0.0,  "#b2182b"],   # softened ColorBrewer RdBu, easy on eyes
-    [0.25, "#f4a582"],
-    [0.5,  BG],
-    [0.75, "#92c5de"],
-    [1.0,  "#2166ac"],
+    [0.000, "#7c2d2d"],
+    [0.150, "#a8453a"],
+    [0.300, "#cf7f70"],
+    [0.500, BG],
+    [0.700, "#6b8ec0"],
+    [0.850, "#33588f"],
+    [1.000, "#1c3a72"],
 ]
-FREQ_COLORSCALE = [[0.0, BG], [1.0, "#2166ac"]]   # matches heatmap max
-BOUNDARY_LINE_KW = dict(line_color=BOUNDARY, line_width=2.5)
+FREQ_COLORSCALE = [[0.0, BG], [1.0, "#1c3a72"]]   # matches heatmap deep slate
+BOUNDARY_LINE_KW = dict(line_color=BOUNDARY, line_width=1.0)
 
 TICK_TARGETS = (1, 10, 100, 1_000, 10_000, 100_000)
 TICK_LABELS  = ("1", "10", "100", "1k", "10k", "100k")
@@ -64,11 +66,18 @@ def main():
     phases = meta["phases"]
 
     history = pl.read_ipc(CACHE / "history.feather").filter(pl.col("step") > 0)
-    matrix = (pl.read_ipc(CACHE / "similarity.feather")
-                .filter((pl.col("metric") == "tn_similarity")
-                        & (pl.col("step_i") > 0) & (pl.col("step_j") > 0))
-                .sort(["step_i", "step_j"])["value"]
-                .to_numpy().reshape(n, n).tolist())
+    sim_long = (pl.read_ipc(CACHE / "similarity.feather")
+                  .filter((pl.col("metric") == "tn_similarity")
+                          & (pl.col("step_i") > 0) & (pl.col("step_j") > 0)))
+    matrix = (sim_long.sort(["step_i", "step_j"])["value"]
+                      .to_numpy().reshape(n, n).tolist())
+    # Asymmetric data-range bounds with zmid=0 — same trick the svhn heatmaps
+    # use: keeps white at true 0 (sign is honest) but stretches the palette
+    # over where the data actually lives, instead of leaving half the colormap
+    # unused for [-1, 0] when grokking similarities sit mostly in [0, 1].
+    sim_off_diag = sim_long.filter(pl.col("step_i") != pl.col("step_j"))["value"]
+    sim_zmin = min(float(sim_off_diag.quantile(0.01)), -0.01)
+    sim_zmax = max(float(sim_off_diag.quantile(0.99)),  0.01)
     freq = (pl.read_ipc(CACHE / "freq_marginals.feather")
               .filter(pl.col("step") > 0)
               .with_columns(value=pl.col("value") / pl.col("value").sum().over("step"))
@@ -129,26 +138,13 @@ def main():
                       row=2, col=1)
 
     fig.add_trace(go.Heatmap(z=matrix, x=indices, y=indices,
-                             zmin=-1, zmax=1, zmid=0,
+                             zmin=sim_zmin, zmax=sim_zmax, zmid=0,
                              colorscale=HEAT_COLORSCALE, showscale=False),
                   row=3, col=1)
 
     fig.add_trace(go.Heatmap(z=freq_z, x=indices, y=indices_freq,
                              colorscale=FREQ_COLORSCALE, showscale=False),
                   row=4, col=1)
-
-    for x in boundary_x:
-        for row in (1, 2, 3, 4):
-            fig.add_vline(x=x, row=row, col=1, **BOUNDARY_LINE_KW)
-
-    for first, last, name in phase_idx:
-        if name not in ("memorize", "grok"):
-            continue
-        x_paper = ((first + last) / 2 + 0.5) / n
-        fig.add_annotation(x=x_paper, y=0.922, xref="paper", yref="paper",
-                           xanchor="center", yanchor="middle",
-                           text=f"<b>{name}</b>", showarrow=False,
-                           font=dict(size=14, color=LABEL))
 
     tick_indices = [min(range(n), key=lambda i: abs(steps[i] - t)) for t in TICK_TARGETS]
 
@@ -165,8 +161,8 @@ def main():
                      showticklabels=False, ticks="")
     fig.update_yaxes(range=[-0.04, 1.07], domain=[0.755, 0.905], row=1, col=1)
     fig.update_yaxes(type="log", range=[-6.7, 1.3], domain=[0.585, 0.735], row=2, col=1)
-    fig.update_yaxes(range=[-0.5, n - 0.5], domain=[0.235, 0.565], row=3, col=1)
-    fig.update_yaxes(domain=[0.015, 0.215], row=4, col=1)
+    fig.update_yaxes(range=[-0.5, n - 0.5], domain=[0.295, 0.565], row=3, col=1)
+    fig.update_yaxes(domain=[0.015, 0.275], row=4, col=1)
 
     # Endpoint labels: color-matched annotations at the right edge of each
     # line panel, showing where the curve actually lands. Replaces the
@@ -200,23 +196,21 @@ def main():
                            xanchor="left", yanchor="middle", xshift=5,
                            showarrow=False, font=dict(size=12, color=color))
 
-    for label, mid_y in (("Accuracy",     0.83),
-                         ("Loss (log)",   0.66),
-                         ("Similarity",   0.40),
-                         ("Frequency",    0.115)):
+    for label, mid_y in (("Accuracy",   0.830),
+                          ("Loss (log)", 0.660),
+                          ("Similarity", 0.430),
+                          ("Frequency",  0.145)):
         fig.add_annotation(text=f"<b>{label}</b>", xref="paper", yref="paper",
-                           x=-0.038, y=mid_y, xanchor="center", yanchor="middle",
+                           x=-0.012, y=mid_y, xanchor="center", yanchor="middle",
                            textangle=-90, showarrow=False,
-                           font=dict(size=16, color=LABEL))
+                           font=dict(size=14, color=LABEL))
 
-    apply_style(fig, title=f"Grokking on modular addition (P={meta['config']['P']})",
-                width=900, height=900)
+    apply_style(fig, title=None, width=920, height=900, legend=True)
     fig.update_layout(
-        margin=dict(l=85, r=70, t=38, b=10),
-        title=dict(y=0.985, font=dict(size=18, color=LABEL)),
+        margin=dict(l=46, r=64, t=36, b=12),
         paper_bgcolor=BG,
         plot_bgcolor=BG,
-        legend=dict(orientation="h", yanchor="middle", y=0.965,
+        legend=dict(orientation="h", yanchor="bottom", y=0.965,
                     xanchor="center", x=0.5,
                     bgcolor="rgba(0,0,0,0)",
                     font=dict(size=13, color=LABEL)),

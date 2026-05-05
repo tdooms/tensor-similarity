@@ -37,11 +37,6 @@ FIGURES = {
         "prepare": "src.figures.svhn_backdoor.prepare",
         "plot": "src.figures.svhn_backdoor.plot",
     },
-    "svhn-backdoor-focused": {
-        "description": "SVHN backdoor — 1-row focused view: full-eval similarities + class-9 slice.",
-        "prepare": "src.figures.svhn_backdoor.prepare",
-        "plot": "src.figures.svhn_backdoor.plot_focused",
-    },
     "svhn-forgetting": {
         "description": "Catastrophic forgetting on SVHN: 9-stage curriculum (add 5..9, remove/re-add 9).",
         "prepare": "src.figures.svhn_forgetting.prepare",
