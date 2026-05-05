@@ -49,15 +49,18 @@ MAIN_HEATMAPS = (
     ("weight", "Weight cosine"),
 )
 
-# Layout: 1200 × 1240 figure (matches svhn_backdoor's 3+2×5 blueprint with
-# extra header room for stage labels rendered as top-side x-axis tick text).
+# Layout: 1240 × 920 figure → plot area 1172 × 896 with margin l=66 (room
+# for stage tick labels on the leftmost panel of each row), r=2, t=22, b=2.
+# Main panels: 0.30 × 1172 = 351 px wide → matched by y span 0.392 × 896 ≈
+# 351 px tall (square). Digit panels: 0.18 × 1172 = 211 px wide → matched by
+# y span 0.235 × 896 ≈ 211 px tall (square).
 MAIN_X = ((0.000, 0.300), (0.350, 0.650), (0.700, 1.000))
-MAIN_Y = (0.546, 0.882)
+MAIN_Y = (0.580, 0.972)
 
 DIGIT_X = ((0.000, 0.180), (0.205, 0.385), (0.410, 0.590),
            (0.615, 0.795), (0.820, 1.000))
-DIGIT_Y_TOP = (0.270, 0.474)
-DIGIT_Y_BOT = (0.018, 0.222)
+DIGIT_Y_TOP = (0.305, 0.540)
+DIGIT_Y_BOT = (0.020, 0.255)
 
 
 def _bounds(values):
@@ -127,12 +130,13 @@ def main():
         panels.append((4 + digit, DIGIT_X[col], y, f"class {digit}", color,
                        z, slice_bounds))
 
-    # Stage labels are rendered via plotly's xaxis tickvals/ticktext on the
-    # top side of each main heatmap panel — that lets plotly position them
-    # exactly at the right heatmap-index midpoints automatically, no
-    # paper-coord arithmetic required.
+    # Stage labels ride the y-axis of each row's leftmost panel (axes 1, 4, 9).
+    # All panels in a row share y_dom and the same checkpoint range, so a
+    # single yaxis tick set serves the whole row. tickvals are heatmap-index
+    # midpoints; tick labels render horizontally in the figure left margin.
     stage_tickvals = [(left_x + right_x) / 2 for left_x, right_x, _ in span_blocks]
     stage_ticktext = [name for _, _, name in span_blocks]
+    LEFT_OF_ROW = {1, 4, 9}
 
     fig = go.Figure()
     layout_axes = {}
@@ -143,27 +147,26 @@ def main():
                                  zmin=zmin, zmax=zmax, zmid=0,
                                  colorscale=HEAT_COLORSCALE, showscale=False,
                                  xaxis=x_id, yaxis=y_id))
-
-        is_main_panel = axis_num <= 3
-        x_axis_kw = dict(
+        layout_axes[f"xaxis{suffix}"] = dict(
             domain=list(x_dom), anchor=y_id, range=[-0.5, n - 0.5],
-            showline=False, zeroline=False, mirror=False, showgrid=False,
-        )
-        if is_main_panel:
-            x_axis_kw |= dict(
-                side="top",
-                tickmode="array", tickvals=stage_tickvals, ticktext=stage_ticktext,
-                ticks="", tickangle=-90,
-                tickfont=dict(color=LABEL, size=12),
-            )
-        else:
-            x_axis_kw |= dict(showticklabels=False, ticks="")
-        layout_axes[f"xaxis{suffix}"] = x_axis_kw
-        layout_axes[f"yaxis{suffix}"] = dict(
-            domain=list(y_dom), anchor=x_id, range=[-0.5, n - 0.5],
             showticklabels=False, ticks="",
             showline=False, zeroline=False, mirror=False, showgrid=False,
         )
+
+        y_axis_kw = dict(
+            domain=list(y_dom), anchor=x_id, range=[-0.5, n - 0.5],
+            showline=False, zeroline=False, mirror=False, showgrid=False,
+        )
+        if axis_num in LEFT_OF_ROW:
+            y_axis_kw |= dict(
+                tickmode="array", tickvals=stage_tickvals, ticktext=stage_ticktext,
+                ticks="", tickfont=dict(color=LABEL, size=11),
+                showticklabels=True,
+            )
+        else:
+            y_axis_kw |= dict(showticklabels=False, ticks="")
+        layout_axes[f"yaxis{suffix}"] = y_axis_kw
+
         for x in bounds_x:
             fig.add_shape(type="line", xref=f"x{suffix}", yref=f"y{suffix}",
                           x0=x, x1=x, y0=-0.5, y1=n - 0.5, **BOUNDARY_KW)
@@ -173,18 +176,15 @@ def main():
     for axis_num, x_dom, y_dom, title, color, _, _ in panels:
         x_paper = (x_dom[0] + x_dom[1]) / 2
         title_size = 16 if axis_num <= 3 else 13
-        # Main-panel titles sit above the stage tick labels; class titles
-        # (axis_num >= 4) sit just above their panels with no tick labels.
-        title_y = (0.973 if axis_num <= 3 else y_dom[1] + 0.005)
-        fig.add_annotation(x=x_paper, y=title_y, xref="paper", yref="paper",
+        fig.add_annotation(x=x_paper, y=y_dom[1] + 0.005, xref="paper", yref="paper",
                            text=f"<b>{title}</b>", showarrow=False,
                            xanchor="center", yanchor="bottom",
                            font=dict(size=title_size, color=color))
 
-    apply_style(fig, title=None, width=1200, height=1240, legend=False)
+    apply_style(fig, title=None, width=1240, height=920, legend=False)
     fig.update_layout(
         layout_axes,
-        margin=dict(l=2, r=2, t=2, b=2),
+        margin=dict(l=66, r=2, t=22, b=2),
         paper_bgcolor=BG, plot_bgcolor=BG,
     )
     save_figure(fig, "svhn_forgetting")

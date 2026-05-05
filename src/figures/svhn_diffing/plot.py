@@ -111,26 +111,27 @@ def main():
                       x0=xb, x1=xb, y0=0, y1=1,
                       line_color=BOUNDARY, line_width=1.0)
 
-    # Single shared x_dom keeps the two panels aligned. Heatmap top-axis
-    # carries the stage names; line-plot bottom-axis carries the cum_batch
-    # tick labels — same range, same paper-x extent, no double-labeling.
-    SHARED_X = [0.06, 0.985]
+    # Single shared x_dom keeps the two panels aligned. The heatmap's left
+    # y-axis carries the stage names (horizontal text, in the figure margin),
+    # and the line plot's bottom x-axis carries cum_batch ticks. No labels
+    # at the top of either panel — pulled tight against the figure edge.
+    SHARED_X = [0.075, 0.985]
     layout_axes = dict(
         xaxis=dict(domain=SHARED_X, anchor="y", range=cum_lim,
-                   side="top",
+                   showticklabels=False, ticks="",
+                   showline=False, zeroline=False, mirror=False, showgrid=False),
+        yaxis=dict(domain=[0.435, 0.985], anchor="x", range=cum_lim,
                    tickmode="array", tickvals=stage_midpoints_batch,
                    ticktext=stage_names,
                    ticks="", tickfont=dict(color=LABEL, size=12),
-                   showline=False, zeroline=False, mirror=False, showgrid=False),
-        yaxis=dict(domain=[0.435, 0.895], anchor="x", range=cum_lim,
-                   showticklabels=False, ticks="",
-                   showline=False, zeroline=False, mirror=False, showgrid=False),
+                   showline=False, zeroline=False, mirror=False, showgrid=False,
+                   showticklabels=True),
         xaxis2=dict(domain=SHARED_X, anchor="y2", range=cum_lim,
                     showline=False, zeroline=False, showgrid=False, ticks="",
                     tickfont=dict(color=MUTED, size=12),
                     title=dict(text="<b>Cumulative batch</b>",
                                font=dict(size=15, color=LABEL))),
-        yaxis2=dict(domain=[0.075, 0.345], anchor="x2", range=[-1.05, 1.05],
+        yaxis2=dict(domain=[0.080, 0.345], anchor="x2", range=[-1.05, 1.05],
                     showline=False, zeroline=True,
                     zerolinecolor=MUTED, zerolinewidth=1,
                     showgrid=True, gridcolor="#e2e8f0",
@@ -141,20 +142,19 @@ def main():
                     showticklabels=True),
     )
 
-    # Y-axis labels — one per panel, in the left margin.
-    for label, mid_y in ((f"<b>Slice similarity (class {target_digit})</b>", 0.665),
-                         ("<b>Similarity to diff</b>",                       0.210)):
-        fig.add_annotation(text=label, xref="paper", yref="paper",
-                           x=-0.005, y=mid_y,
-                           xanchor="right", yanchor="middle",
-                           textangle=-90,
-                           showarrow=False,
-                           font=dict(size=13, color=LABEL))
+    # Line-plot left annotation labels what the curves represent. The
+    # heatmap's row labels are the stages on its y-axis — no extra
+    # paper-coord title needed for that panel.
+    fig.add_annotation(text="<b>Similarity to diff</b>", xref="paper", yref="paper",
+                       x=-0.005, y=0.213,
+                       xanchor="right", yanchor="middle",
+                       textangle=-90, showarrow=False,
+                       font=dict(size=13, color=LABEL))
 
     apply_style(fig, title=None, width=1300, height=820, legend=True)
     fig.update_layout(
         layout_axes,
-        margin=dict(l=46, r=18, t=44, b=58),
+        margin=dict(l=82, r=18, t=12, b=58),
         paper_bgcolor=BG, plot_bgcolor=BG,
         legend=dict(orientation="h", yanchor="middle", y=0.395,
                     xanchor="center", x=0.5,
