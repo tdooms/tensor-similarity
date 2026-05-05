@@ -299,4 +299,4 @@ def _plot_progress(meta):
                     bgcolor="rgba(0,0,0,0)",
                     font=dict(size=13, color=LABEL)),
     )
-    save_figure(fig, "svhn_forgetting_progress")
+    save_figure(fig, "svhn_progress")

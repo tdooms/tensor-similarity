@@ -10,20 +10,8 @@ EXPERIMENT_DIR = ARTIFACT_DIR / "experiments"
 FIGURE_DIR = ARTIFACT_DIR / "figures"
 
 FIGURES = {
-    "seed-convergence": {
-        "description": "Cross-seed similarity and accuracy during MNIST training.",
-        "train": "src.figures.seed_convergence.train",
-        "prepare": "src.figures.seed_convergence.prepare",
-        "plot": "src.figures.seed_convergence.plot",
-    },
-    "curriculum-shift": {
-        "description": "Curriculum-stage trajectory and pairwise similarity heatmap.",
-        "train": "src.figures.curriculum_shift.train",
-        "prepare": "src.figures.curriculum_shift.prepare",
-        "plot": "src.figures.curriculum_shift.plot",
-    },
     "language-similarity": {
-        "description": "Pairwise functional similarity across language model checkpoints.",
+        "description": "Spectrum of similarity definitions on language-model checkpoints (2×3).",
         "prepare": "src.figures.language_similarity.prepare",
         "plot": "src.figures.language_similarity.plot",
     },
@@ -46,12 +34,6 @@ FIGURES = {
         "description": "Diff-vector similarity on SVHN: tracking digit-9 fine-tune direction across training.",
         "prepare": "src.figures.svhn_diffing.prepare",
         "plot": "src.figures.svhn_diffing.plot",
-    },
-    "subset-training": {
-        "description": "Laurence-derived MNIST subset training across seeds.",
-        "train": "src.figures.subset_training.train",
-        "prepare": "src.figures.subset_training.prepare",
-        "plot": "src.figures.subset_training.plot",
     },
 }
 

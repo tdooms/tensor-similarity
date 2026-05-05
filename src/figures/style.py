@@ -6,12 +6,6 @@ for _d in ("pdf", "png"):
 COLORWAY = ("#0F172A", "#0EA5E9", "#14B8A6", "#84CC16", "#F59E0B",
             "#F97316", "#E11D48", "#8B5CF6")
 
-CURRICULUM_STAGES = ("base", "add_5", "add_6", "add_7", "add_8", "add_9", "remove_9", "readd_9")
-CURRICULUM_COLORS = dict(zip(CURRICULUM_STAGES, COLORWAY))
-
-SUBSET_CONFIGS = ("all", "drop_9_8_7_6_5_4_3_2")
-SUBSET_COLORS = dict(zip(SUBSET_CONFIGS, COLORWAY))
-
 
 def apply_style(fig, title=None, width=1100, height=620, legend=True):
     fig.update_layout(

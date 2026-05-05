@@ -16,14 +16,11 @@ uv run plot    <family>   # render figures from prepared cache
 
 Available figure families:
 
-- `seed-convergence`
-- `curriculum-shift`
 - `language-similarity`
 - `grokking-similarity`
-- `svhn-backdoor` (`-focused` for the 1-row variant)
-- `svhn-forgetting`
+- `svhn-backdoor`
+- `svhn-forgetting` (also renders the `svhn-progress` companion line plot)
 - `svhn-diffing`
-- `subset-training`
 
 Shared design + export helpers live in `style.py`. Per-experiment logic lives
 in `src/figures/<family>/{train,prepare,plot}.py`.

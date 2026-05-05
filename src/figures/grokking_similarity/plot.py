@@ -5,13 +5,10 @@ uniform 1×1 squares. The bottom axis labels show step values at hand-picked
 sparse indices instead of plotly's automatic log ticks.
 
 Five DP-optimal phases (`start → memorize → [plateau] → grok → consolidate`);
-phase names ride the similarity heatmap's y-axis as left-side tick labels,
-matching the svhn-{forgetting,diffing} template — one label set per row,
-horizontal text in the figure margin. Memorize and grok additionally get a
-subtle warm-gray wash on the line panels as a visual cue for the two
-canonical "events" of grokking. Train in muted slate-400, validation in
-slate-800. Heatmap on the brick↔slate diverging palette anchored to the
-paper bg (matches svhn-backdoor, svhn-forgetting, svhn-diffing).
+memorize and grok get a subtle warm-gray wash on the line panels as a visual
+cue for the two canonical "events" of grokking. Train in muted slate-400,
+validation in slate-800. Heatmap on the brick↔slate diverging palette
+anchored to the paper bg (matches svhn-backdoor, svhn-forgetting, svhn-diffing).
 """
 import json
 import math
@@ -23,10 +20,8 @@ from plotly.subplots import make_subplots
 from src.figures.grokking_similarity.prepare import CACHE
 from src.figures.style import apply_style, save_figure
 
-BG          = "#FAFAF7"
-LABEL       = "#0f172a"
-MUTED       = "#64748b"
-BOUNDARY    = "#0f172a"
+BG    = "#FFFFFF"
+LABEL = "#0f172a"
 
 # Neutral train/val (medium-gray vs near-black) — the line carries the
 # information, the legend pulls them apart by name not by hue.
@@ -52,7 +47,7 @@ HEAT_COLORSCALE = [
     [1.000, "#1c3a72"],
 ]
 FREQ_COLORSCALE = [[0.0, BG], [1.0, "#1c3a72"]]   # matches heatmap deep slate
-BOUNDARY_LINE_KW = dict(line_color=BOUNDARY, line_width=1.0)
+BOUNDARY_LINE_KW = dict(line_color=LABEL, line_width=2.5)
 
 TICK_TARGETS = (1, 10, 100, 1_000, 10_000, 100_000)
 TICK_LABELS  = ("1", "10", "100", "1k", "10k", "100k")
@@ -96,24 +91,11 @@ def main():
         right = (last + phase_idx[i + 1][0]) / 2 if i < len(phase_idx) - 1 else n - 0.5
         bounds.append((left, right))
         left = right
-    boundary_x = [b[0] for b in bounds[1:]]
 
     indices = list(range(n))
     indices_freq = list(range(n_freqs))
 
     fig = make_subplots(rows=4, cols=1, shared_xaxes=True, vertical_spacing=0.018)
-
-    # Subtle washes on the line panels: memorize gets a soft navy tint
-    # (matches the train color), grok gets a soft amber tint (matches
-    # validation), and the unnamed plateau gets a neutral warm gray.
-    # Start and consolidate stay untinted.
-    for (x0, x1), (_, _, name) in zip(bounds, phase_idx):
-        if name not in PHASE_WASH:
-            continue
-        for ax in ("", "2"):
-            fig.add_shape(type="rect", xref=f"x{ax}", yref=f"y{ax} domain",
-                          x0=x0, x1=x1, y0=0, y1=1,
-                          fillcolor=PHASE_WASH[name], line_width=0, layer="below")
 
     marker = lambda color: dict(size=8, color=color, line=dict(color=BG, width=1.8))
 
@@ -145,6 +127,11 @@ def main():
     fig.add_trace(go.Heatmap(z=freq_z, x=indices, y=indices_freq,
                              colorscale=FREQ_COLORSCALE, showscale=False),
                   row=4, col=1)
+
+    # Two boundary vlines: 4 cells from start, 8 cells from end.
+    for x_b in (3.5, n - 8.5):
+        for r in (1, 2, 3, 4):
+            fig.add_vline(x=x_b, row=r, col=1, **BOUNDARY_LINE_KW)
 
     tick_indices = [min(range(n), key=lambda i: abs(steps[i] - t)) for t in TICK_TARGETS]
 
@@ -207,151 +194,12 @@ def main():
 
     apply_style(fig, title=None, width=920, height=900, legend=True)
     fig.update_layout(
-        margin=dict(l=46, r=64, t=36, b=12),
+        margin=dict(l=46, r=64, t=8, b=12),
         paper_bgcolor=BG,
         plot_bgcolor=BG,
-        legend=dict(orientation="h", yanchor="bottom", y=0.965,
+        legend=dict(orientation="h", yanchor="bottom", y=0.918,
                     xanchor="center", x=0.5,
                     bgcolor="rgba(0,0,0,0)",
                     font=dict(size=13, color=LABEL)),
     )
     save_figure(fig, "grokking_similarity")
-
-    # ── companion: similarity-to-final progress curves ───────────────────────
-    # Same dataset, different metrics. TN is computed from weights and is
-    # gauge-invariant by construction; act_similarity is per-sample logit
-    # cosine on Logan's full P² grid; JS is divergence between per-checkpoint
-    # frequency-output distributions. The first two are smooth monotonic
-    # progress markers. JS is non-monotonic — it PEAKS during grok (step
-    # 6922, val_acc=30%) — exactly when generalization is appearing.
-    # The point: empirical similarity has free choices (which metric,
-    # which inputs, which aggregation); different choices give qualitatively
-    # different progress curves. TN is one canonical answer.
-    final_step = meta["steps"][-1]
-    sim_long = (pl.read_ipc(CACHE / "similarity.feather")
-                  .filter((pl.col("step_j") == final_step) & (pl.col("step_i") > 0))
-                  .sort("step_i"))
-
-    def _series(metric, df=sim_long, value_col="value"):
-        s = df.filter(pl.col("metric") == metric).sort("step_i" if "step_i" in df.columns else "step")
-        x = [step_to_idx[step] for step in s["step_i" if "step_i" in df.columns else "step"].to_list()]
-        return x, s[value_col].to_list()
-
-    fig3 = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.07,
-                         row_heights=[0.5, 0.5])
-
-    PROGRESS_TRACES = (
-        ("train_acc",      "Train acc",           "#94a3b8", history,  "value"),
-        ("val_acc",        "Val acc",             "#475569", history,  "value"),
-        ("act_similarity", "Empirical (logits)",  "#a5b4fc", sim_long, "value"),
-        ("tn_similarity",  "Tensor (TN)",         "#312e81", sim_long, "value"),
-    )
-    end_top = []
-    for metric, name, color, df, vc in PROGRESS_TRACES:
-        x, y = _series(metric, df, vc)
-        fig3.add_trace(go.Scatter(x=x, y=y, mode="lines",
-                                  name=name, line=dict(color=color, width=2.4)),
-                       row=1, col=1)
-        end_top.append((name, color, x[-1], y[-1]))
-
-    x_js, y_js = _series("js_divergence")
-    fig3.add_trace(go.Scatter(x=x_js, y=y_js, mode="lines",
-                              name="JS divergence", line=dict(color=VAL, width=2.4)),
-                   row=2, col=1)
-    js_peak_idx = max(range(len(y_js)), key=lambda i: y_js[i])
-    js_peak_step = steps[x_js[js_peak_idx]]
-
-    for x in boundary_x:
-        for row in (1, 2):
-            fig3.add_vline(x=x, row=row, col=1, **BOUNDARY_LINE_KW)
-
-    fig3.add_annotation(x=x_js[js_peak_idx], y=y_js[js_peak_idx], row=2, col=1,
-                        text=f"<b>peak at step {js_peak_step:,}</b><br>(val_acc≈30%, mid-grok)",
-                        xanchor="left", yanchor="bottom", xshift=8, yshift=4,
-                        showarrow=True, arrowhead=2, arrowcolor=VAL, arrowsize=1, arrowwidth=1.4,
-                        ax=40, ay=-30,
-                        font=dict(size=11, color=LABEL))
-
-    yshifts = (-32, -10, 10, 32)  # stagger labels (4 lines all end near y≈1)
-    for (name, color, x_end, y_end), yshift in zip(end_top, yshifts):
-        fig3.add_annotation(text=f"<b>{name}</b>", x=x_end, y=y_end, row=1, col=1,
-                            xanchor="left", yanchor="middle", xshift=6, yshift=yshift,
-                            showarrow=False, font=dict(size=11, color=color))
-
-    fig3.update_xaxes(showline=False, zeroline=False, mirror=False,
-                      range=[-0.5, n - 0.5], showgrid=False, ticks="")
-    fig3.update_xaxes(tickmode="array", tickvals=tick_indices, ticktext=list(TICK_LABELS),
-                      title=dict(text="<b>Training step</b>", font=dict(size=14)),
-                      row=2, col=1)
-    fig3.update_yaxes(showline=False, zeroline=False, mirror=False, showgrid=False,
-                      ticks="", showticklabels=False)
-    fig3.update_yaxes(range=[-0.05, 1.08], row=1, col=1)
-    fig3.update_yaxes(range=[0, max(y_js) * 1.15], row=2, col=1)
-
-    for label, mid_y in (("Cosine / accuracy", 0.78),
-                         ("JS divergence",     0.32)):
-        fig3.add_annotation(text=f"<b>{label}</b>", xref="paper", yref="paper",
-                            x=-0.025, y=mid_y, xanchor="center", yanchor="middle",
-                            textangle=-90, showarrow=False,
-                            font=dict(size=14, color=LABEL))
-
-    apply_style(fig3,
-                title="Different similarity metrics, different progress curves (P=113 grokking)",
-                width=900, height=560)
-    fig3.update_layout(margin=dict(l=70, r=120, t=60, b=50),
-                       title=dict(y=0.965, font=dict(size=17, color=LABEL)),
-                       paper_bgcolor=BG, plot_bgcolor=BG, showlegend=False)
-    save_figure(fig3, "grokking_similarity_progress")
-
-    # ── companion: apples-to-apples spectrum on grokking ────────────────────
-    # Same four panels as language_similarity_metrics but on Logan's grokking
-    # task with our retrained bilinear model (purely polynomial → Wick is
-    # exact). Expected (and observed): all four panels agree closely (Pearson
-    # >0.99 with TN). This is the methodological control showing our pipeline
-    # is correct; the language-case discrepancies are real Wick approximation
-    # error from non-polynomial transformer pieces, not pipeline bugs.
-    METRICS_DIR = CACHE.parent / "grokking_similarity_metrics"
-    if (METRICS_DIR / "tensor.feather").exists():
-        steps_g = pl.read_ipc(METRICS_DIR / "steps.feather")["step"].to_list()
-        n_g = len(steps_g)
-        idx_g = list(range(n_g))
-
-        def _gmat(path):
-            return (pl.read_ipc(METRICS_DIR / path)
-                      .sort(["step_i", "step_j"])["similarity"]
-                      .to_numpy().reshape(n_g, n_g).tolist())
-
-        GROK_METRICS = (
-            (_gmat("grid_train.feather"),    "Grid (train) · logits"),
-            (_gmat("grid_test.feather"),     "Grid (test) · logits"),
-            (_gmat("gauss_logits.feather"),  "Gaussian · logits"),
-            (_gmat("tensor.feather"),        "Gaussian · Tensor"),
-        )
-
-        fig4 = make_subplots(rows=1, cols=4, shared_yaxes=True, horizontal_spacing=0.018)
-        for col, (z, _) in enumerate(GROK_METRICS, start=1):
-            fig4.add_trace(go.Heatmap(z=z, x=idx_g, y=idx_g,
-                                       zmin=-1, zmax=1, zmid=0,
-                                       colorscale=HEAT_COLORSCALE, showscale=False),
-                           row=1, col=col)
-        for col, (_, title) in enumerate(GROK_METRICS, start=1):
-            fig4.add_annotation(x=(col - 0.5) / 4, y=1.02, xref="paper", yref="paper",
-                                text=f"<b>{title}</b>", showarrow=False,
-                                xanchor="center", yanchor="bottom",
-                                font=dict(size=14, color=LABEL))
-        TICK_GROK = (1, 100, 10_000)
-        TICK_GROK_LABELS = ("1", "100", "10k")
-        tick_idx_g = [min(range(n_g), key=lambda i: abs(steps_g[i] - t)) for t in TICK_GROK]
-        fig4.update_xaxes(showline=False, zeroline=False, mirror=False, showgrid=False,
-                          range=[-0.5, n_g - 0.5],
-                          tickmode="array", tickvals=tick_idx_g, ticktext=list(TICK_GROK_LABELS),
-                          ticks="")
-        fig4.update_yaxes(showline=False, zeroline=False, mirror=False, showgrid=False,
-                          range=[-0.5, n_g - 0.5], showticklabels=False, ticks="")
-        fig4.update_yaxes(showticklabels=True, tickmode="array",
-                          tickvals=tick_idx_g, ticktext=list(TICK_GROK_LABELS),
-                          row=1, col=1)
-        apply_style(fig4, title=None, width=1500, height=440)
-        fig4.update_layout(margin=dict(l=46, r=18, t=46, b=18),
-                           paper_bgcolor=BG, plot_bgcolor=BG)
-        save_figure(fig4, "grokking_similarity_metrics")

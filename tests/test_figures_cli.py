@@ -4,7 +4,7 @@ import pytest
 from src.components.similarity import precompile, similarity_parts
 from src.figures import ARTIFACT_DIR, CACHE_DIR, DOWNLOAD_DIR, EXPERIMENT_DIR, FIGURE_DIR, FIGURES, REPO_ROOT, cosine_from_parts
 from src.figures.cli import plot_main, prepare_main, train_main
-from src.figures.style import COLORWAY, CURRICULUM_COLORS, SUBSET_COLORS
+from src.figures.style import COLORWAY
 from src.models.checkpoint_transformer import CheckpointTransformer
 from src.models.deep_mlp import DeepMLP
 
@@ -19,7 +19,7 @@ def test_artifact_directories_live_at_repo_root():
 
 
 def test_registry_contains_public_figure_families():
-    assert set(FIGURES) == {"seed-convergence", "curriculum-shift", "language-similarity", "grokking-similarity", "svhn-backdoor", "svhn-forgetting", "svhn-diffing", "subset-training"}
+    assert set(FIGURES) == {"language-similarity", "grokking-similarity", "svhn-backdoor", "svhn-forgetting", "svhn-diffing"}
 
 
 def test_deep_mlp_similarity_smoke():
@@ -65,12 +65,6 @@ def test_train_rejects_hf_sourced_family():
     """language-similarity has no train stage; argparse rejects it for `train`."""
     with pytest.raises(SystemExit):
         train_main(["language-similarity"])
-
-
-def test_color_palettes_share_one_source():
-    """Per-family palettes should be a slice of `COLORWAY`, not parallel hex literals."""
-    assert set(CURRICULUM_COLORS.values()) <= set(COLORWAY)
-    assert set(SUBSET_COLORS.values()) <= set(COLORWAY)
 
 
 def test_no_numpy_in_official_figures_code():
