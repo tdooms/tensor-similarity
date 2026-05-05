@@ -20,7 +20,7 @@ CFG = train_mod.ExperimentConfig(
     seed=1337,
     schedule_mode="power",
     schedule_exponent=5.0,
-    n_checkpoints=30,
+    n_checkpoints=100,
     output_dir=str(OUT_DIR),
 )
 

@@ -9,8 +9,8 @@
   "val_fraction": 0.7,
   "n_evecs": 4,
   "seed": 1337,
-  "output_dir": "/workspace/tn_4_interp/grokking_summary_bundle/results_grokking_summary",
+  "output_dir": "/home/thomas/tensor-mars/workspaces/logan/grokking_summary_bundle/results_grokking_summary",
   "schedule_mode": "power",
-  "n_checkpoints": 30,
+  "n_checkpoints": 100,
   "schedule_exponent": 5.0
 }

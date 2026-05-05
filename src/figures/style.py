@@ -9,7 +9,7 @@ COLORWAY = ("#0F172A", "#0EA5E9", "#14B8A6", "#84CC16", "#F59E0B",
 
 def apply_style(fig, title=None, width=1100, height=620, legend=True):
     fig.update_layout(
-        template="plotly_white", paper_bgcolor="#FCFCF9", plot_bgcolor="#FFFFFF",
+        template="plotly_white", paper_bgcolor="#FFFFFF", plot_bgcolor="#FFFFFF",
         colorway=COLORWAY, width=width, height=height, showlegend=legend,
         font=dict(family="Aptos, Avenir Next, Segoe UI Semibold, Segoe UI, Helvetica Neue, Arial, sans-serif",
                   color="#0F172A", size=15),

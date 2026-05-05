@@ -216,9 +216,6 @@ def main():
                     zeroline=True, zerolinecolor=MUTED, zerolinewidth=1,
                     showline=False, mirror=False, showgrid=False,
                 )
-                fig.add_shape(type="line", xref=x_id, yref=y_id,
-                              x0=boundary, x1=boundary, y0=-0.04, y1=1.05,
-                              **BOUNDARY_KW)
 
             else:  # main / slice — similarity heatmap
                 if kind == "main":
@@ -243,12 +240,6 @@ def main():
                     showticklabels=False, ticks="",
                     showline=False, zeroline=False, mirror=False, showgrid=False,
                 )
-                fig.add_shape(type="line", xref=x_id, yref=y_id,
-                              x0=boundary, x1=boundary, y0=-0.5, y1=n - 0.5,
-                              **BOUNDARY_KW)
-                fig.add_shape(type="line", xref=x_id, yref=y_id,
-                              x0=-0.5, x1=n - 0.5, y0=boundary, y1=boundary,
-                              **BOUNDARY_KW)
                 title_text = (f"<b>{title}</b>"
                               f"<span style='color:{MUTED}'>  ·  Δ = {gap:.2f}</span>")
 

@@ -27,7 +27,7 @@ import polars as pl
 from src.figures.style import apply_style, save_figure
 from src.figures.svhn_diffing.prepare import CACHE
 
-BG       = "#FAFAF7"
+BG       = "#FFFFFF"
 LABEL    = "#0f172a"
 MUTED    = "#64748b"
 BOUNDARY = "#0f172a"

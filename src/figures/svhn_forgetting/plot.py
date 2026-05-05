@@ -1,7 +1,7 @@
 """SVHN forgetting: which similarities track digit-level capability loss.
 
 A DeepMLP is trained through a 9-stage curriculum that progressively expands
-from digits 0–4 to 0–9, repeats, removes digit 9, then re-adds it. Three
+from digits 0–4 to 0–9, settles, removes digit 9, then re-adds it. Three
 metrics summarise the run as N×N pairwise heatmaps across 80 subsampled
 checkpoints:
 
@@ -25,7 +25,7 @@ import polars as pl
 from src.figures.style import apply_style, save_figure
 from src.figures.svhn_forgetting.prepare import CACHE
 
-BG       = "#FAFAF7"
+BG       = "#FFFFFF"
 LABEL    = "#0f172a"
 MUTED    = "#64748b"
 BOUNDARY = "#0f172a"
@@ -69,6 +69,13 @@ def _bounds(values):
     return zmin, zmax
 
 
+STAGE_DISPLAY = {"repeat": "settle"}
+
+
+def _stage_label(name):
+    return STAGE_DISPLAY.get(name, name)
+
+
 def _stage_boundaries(heatmap_steps):
     """Return (boundary_indices, [(left_idx, right_idx, stage_name)]).
 
@@ -81,11 +88,11 @@ def _stage_boundaries(heatmap_steps):
     for i, cp in enumerate(heatmap_steps[1:], start=1):
         if cp["stage"] != cur_stage:
             mid = i - 0.5
-            spans.append((left, mid, cur_stage))
+            spans.append((left, mid, _stage_label(cur_stage)))
             bounds_x.append(mid)
             left = mid
             cur_stage = cp["stage"]
-    spans.append((left, len(heatmap_steps) - 0.5, cur_stage))
+    spans.append((left, len(heatmap_steps) - 0.5, _stage_label(cur_stage)))
     return bounds_x, spans
 
 
