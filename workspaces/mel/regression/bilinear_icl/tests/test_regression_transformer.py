@@ -1,11 +1,13 @@
 import torch
+import pytest
 
 from bilinear_icl.data import sample_episodes, to_sequence
 from bilinear_icl.models import RegressionTransformer
 
 
-def test_regression_transformer_shape(small_cfg):
-    model = RegressionTransformer(**small_cfg)
+@pytest.mark.parametrize("attn_type", ["bilinear", "softmax"])
+def test_regression_transformer_shape(small_cfg, attn_type):
+    model = RegressionTransformer(**small_cfg, attn_type=attn_type)
     xs, ys, _ = sample_episodes(4, small_cfg["K"], small_cfg["D"], 0.05)
     y_hat = model(to_sequence(xs, ys))
     assert y_hat.shape == (4, small_cfg["K"])

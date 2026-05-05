@@ -13,6 +13,7 @@ def init_wandb(cfg, run_dir):
     return wandb.init(
         project=cfg["wandb"]["project"],
         entity=cfg["wandb"].get("entity"),
+        group=cfg["wandb"].get("group"),
         name=cfg["name"],
         config=cfg,
         dir=str(run_dir),

@@ -1,12 +1,14 @@
 import torch
 
 from bilinear_icl.data import to_sequence
+from ._sanity import assert_finite_pred
 
 
 @torch.no_grad()
 def _eval_at_scale(model, ep):
     xs, ys, _ = ep
     y_hat = model(to_sequence(xs, ys)).float()
+    assert_finite_pred(y_hat, "ood._eval_at_scale")
     ys = ys.float()
     loss_pos = ((y_hat - ys) ** 2).mean(dim=0)
     return y_hat, loss_pos

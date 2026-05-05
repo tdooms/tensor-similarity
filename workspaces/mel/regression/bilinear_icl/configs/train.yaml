@@ -14,6 +14,10 @@ model:
   d_mlp: 64
   attn_scale: 0.35
   mlp_scale: 0.35
+  attn_type: bilinear
+  norm_type: tok0
+  norm_places: [pre_unembed]
+  init_type: normal
   bos_norm_eps: 1.0e-6
 
 train:
@@ -28,6 +32,7 @@ train:
   grad_clip: 1.0
   dtype: bfloat16
   device: cuda
+  nan_check: true
 
 eval:
   episodes: 2048

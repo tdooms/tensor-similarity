@@ -23,6 +23,7 @@ from bilinear_icl.models import RegressionTransformer
 from bilinear_icl.train.checkpoint import build_schedule, save_checkpoint, write_manifest
 from bilinear_icl.train.loss import mean_mse
 from bilinear_icl.train.optim import build_optimizer, build_scheduler
+from bilinear_icl.train.sanity import check_finite_metrics, check_finite_tensors
 
 
 def _dtype_from_cfg(name: str):
@@ -120,9 +121,11 @@ def train(cfg: dict, run_dir: str | None = None):
     gen = torch.Generator(device=device).manual_seed(cfg["seed"])
     rows = []
     metrics_jsonl = run_path / "metrics.jsonl"
+    nan_check = cfg["train"].get("nan_check", True)
 
     def save_eval(step: int):
-        metrics = eval_runner(model, bundle, cfg)
+        metrics = eval_runner(model, bundle, cfg, step=step, run_dir=run_path)
+        check_finite_metrics("eval_metrics", metrics, step=step, run_dir=run_path, enabled=nan_check)
         payload = {"step": step, **metrics}
         rows.append(payload)
         with metrics_jsonl.open("a", encoding="utf-8") as f:
@@ -166,10 +169,33 @@ def train(cfg: dict, run_dir: str | None = None):
             y_hat = model(raw)
             loss = mean_mse(y_hat, ys)
 
+        check_finite_tensors("loss", [("loss", loss)], step=step, run_dir=run_path, enabled=nan_check)
+
         opt.zero_grad(set_to_none=True)
         loss.backward()
+        check_finite_tensors(
+            "grad",
+            [(n, p.grad) for n, p in model.named_parameters()],
+            step=step,
+            run_dir=run_path,
+            enabled=nan_check,
+        )
         grad_norm = clip_grad_norm_(model.parameters(), cfg["train"]["grad_clip"])
+        check_finite_metrics(
+            "grad_norm",
+            {"grad_norm": float(grad_norm.item() if hasattr(grad_norm, "item") else grad_norm)},
+            step=step,
+            run_dir=run_path,
+            enabled=nan_check,
+        )
         opt.step()
+        check_finite_tensors(
+            "params",
+            [(n, p.data) for n, p in model.named_parameters()],
+            step=step,
+            run_dir=run_path,
+            enabled=nan_check,
+        )
         sch.step()
 
         if step % 10 == 0:
@@ -189,6 +215,15 @@ def train(cfg: dict, run_dir: str | None = None):
             save_eval(step)
 
     df = pd.DataFrame(rows).sort_values("step").reset_index(drop=True)
+    if not df.empty:
+        final_step = int(df.iloc[-1]["step"])
+        check_finite_metrics(
+            "final_metrics",
+            df.iloc[-1].to_dict(),
+            step=final_step,
+            run_dir=run_path,
+            enabled=nan_check,
+        )
     df.to_parquet(run_path / "metrics.parquet", index=False)
 
     if cfg.get("figures", {}).get("run_at_end", False):

@@ -10,5 +10,8 @@ class BilinearMLP(nn.Module):
         self.r = nn.Linear(d_model, d_mlp, bias=False)
         self.d = nn.Linear(d_mlp, d_model, bias=False)
 
+    def branch(self, x: torch.Tensor) -> torch.Tensor:
+        return self.d(self.l(x) * self.r(x))
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return torch.lerp(x, self.d(self.l(x) * self.r(x)), self.scale)
+        return torch.lerp(x, self.branch(x), self.scale)

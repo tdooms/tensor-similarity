@@ -17,6 +17,8 @@ def _is_muon(name, p):
     return name.endswith(".weight") and any(
         f".{m}." in name or name.endswith(f".{m}.weight")
         for m in (
+            "attn.q",
+            "attn.k",
             "attn.q1",
             "attn.k1",
             "attn.q2",

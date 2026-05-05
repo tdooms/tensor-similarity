@@ -1,7 +1,6 @@
 from .checkpoint import build_schedule, save_checkpoint, write_manifest
 from .loss import mean_mse, per_position_mse
 from .optim import build_optimizer, build_scheduler
-from .trainer import train
 
 __all__ = [
     "build_schedule",
@@ -13,3 +12,11 @@ __all__ = [
     "build_scheduler",
     "train",
 ]
+
+
+def __getattr__(name):
+    if name == "train":
+        from .trainer import train
+
+        return train
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
