@@ -100,10 +100,10 @@ def main():
     for x in bounds_x:
         fig.add_shape(type="line", xref="x", yref="y",
                       x0=x, x1=x, y0=-0.5, y1=n - 0.5,
-                      line_color=BOUNDARY, line_width=1.6)
+                      line_color=BOUNDARY, line_width=0.7)
         fig.add_shape(type="line", xref="x", yref="y",
                       x0=-0.5, x1=n - 0.5, y0=x, y1=x,
-                      line_color=BOUNDARY, line_width=1.6)
+                      line_color=BOUNDARY, line_width=0.7)
 
     for metric, color, name in (("slice",  SLICE_COLOR,  f"Slice (class {target_digit})"),
                                 ("global", GLOBAL_COLOR, "Global")):
@@ -134,7 +134,12 @@ def main():
         yaxis2=dict(domain=[0.075, 0.345], anchor="x2", range=[-1.05, 1.05],
                     showline=False, zeroline=True,
                     zerolinecolor=MUTED, zerolinewidth=1,
-                    showgrid=False, ticks="", showticklabels=False),
+                    showgrid=True, gridcolor="#e2e8f0",
+                    tickmode="array", tickvals=[-1.0, 0.0, 1.0],
+                    ticktext=["−1", "0", "1"],
+                    ticks="outside", tickcolor="#cbd5e1",
+                    tickfont=dict(color=MUTED, size=11),
+                    showticklabels=True),
     )
 
     # Heatmap title above the panel.
@@ -156,14 +161,6 @@ def main():
                            textangle=-90,
                            font=dict(size=11, color=LABEL))
 
-    # Stage labels above the line plot, in cum_batch coords.
-    for x0, x1, name in spans:
-        fig.add_annotation(x=(x0 + x1) / 2, y=0.395, xref="x2", yref="paper",
-                           text=name, showarrow=False,
-                           xanchor="center", yanchor="middle",
-                           textangle=-90,
-                           font=dict(size=12, color=LABEL))
-
     fig.add_annotation(text="<b>Similarity to diff</b>", xref="paper", yref="paper",
                        x=-0.005, y=0.210, xanchor="right", yanchor="middle",
                        showarrow=False, font=dict(size=14, color=LABEL))
@@ -173,7 +170,7 @@ def main():
         layout_axes,
         margin=dict(l=150, r=24, t=32, b=58),
         paper_bgcolor=BG, plot_bgcolor=BG,
-        legend=dict(orientation="h", yanchor="bottom", y=0.420,
+        legend=dict(orientation="h", yanchor="middle", y=0.395,
                     xanchor="center", x=0.5,
                     bgcolor="rgba(0,0,0,0)",
                     font=dict(size=13, color=LABEL)),

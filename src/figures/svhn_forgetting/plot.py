@@ -41,7 +41,7 @@ HEAT_COLORSCALE = [
     [0.850, "#33588f"],
     [1.000, "#1c3a72"],
 ]
-BOUNDARY_KW = dict(line_color=BOUNDARY, line_width=1.6)
+BOUNDARY_KW = dict(line_color=BOUNDARY, line_width=0.7)
 
 MAIN_HEATMAPS = (
     ("tn",     "Tensor"),
@@ -148,29 +148,27 @@ def main():
             showline=False, zeroline=False, mirror=False, showgrid=False,
         )
         for x in bounds_x:
-            for direction in ("v", "h"):
-                kw = (dict(x0=x, x1=x, y0=-0.5, y1=n - 0.5) if direction == "v"
-                      else dict(x0=-0.5, x1=n - 0.5, y0=x, y1=x))
-                fig.add_shape(type="line", xref=f"x{suffix}", yref=f"y{suffix}",
-                              **kw, **BOUNDARY_KW)
+            fig.add_shape(type="line", xref=f"x{suffix}", yref=f"y{suffix}",
+                          x0=x, x1=x, y0=-0.5, y1=n - 0.5, **BOUNDARY_KW)
+            fig.add_shape(type="line", xref=f"x{suffix}", yref=f"y{suffix}",
+                          x0=-0.5, x1=n - 0.5, y0=x, y1=x, **BOUNDARY_KW)
 
     for axis_num, x_dom, y_dom, title, color, _, _ in panels:
         x_paper = (x_dom[0] + x_dom[1]) / 2
-        title_size = 15 if axis_num <= 3 else 12
+        title_size = 16 if axis_num <= 3 else 13
         fig.add_annotation(x=x_paper, y=y_dom[1] + 0.005, xref="paper", yref="paper",
                            text=f"<b>{title}</b>", showarrow=False,
                            xanchor="center", yanchor="bottom",
                            font=dict(size=title_size, color=color))
 
-    # Stage labels span the full top-row width (one global label per stage,
-    # not one per panel). The 3 main panels share the same checkpoint x-axis
-    # so a global mapping is correct conceptually; the small inter-panel
-    # gaps mean labels are very slightly offset from their per-panel boundary
-    # lines, but cleaner than 27 cramped per-panel labels.
-    full_left, full_right = MAIN_X[0][0], MAIN_X[-1][1]
-    full_w = full_right - full_left
+    # Stage labels above the leftmost panel only. The other two panels share
+    # the same x-axis structure, so their boundary lines visually carry the
+    # information without needing redundant labels above every panel.
+    label_dom = MAIN_X[0]
+    panel_w = label_dom[1] - label_dom[0]
     for left_x, right_x, name in span_blocks:
-        xp = full_left + full_w * (left_x + right_x + 1) / (2 * n)
+        mid = (left_x + right_x) / 2
+        xp = label_dom[0] + panel_w * (mid + 0.5) / n
         fig.add_annotation(x=xp, y=STAGE_LABEL_Y, xref="paper", yref="paper",
                            text=name, showarrow=False,
                            xanchor="center", yanchor="middle",
@@ -192,11 +190,11 @@ def main():
     _plot_progress(meta)
 
 
-# Neutral train/val: muted vs dark slate. Reads as "two flavours of the same
-# baseline" rather than competing primaries — the curves themselves carry the
-# information, the legend pulls them apart by name not by hue saturation.
+# Neutral train/val: medium-gray vs near-black slate. Reads as "two flavours
+# of the same baseline" rather than competing primaries; the curves carry the
+# information, the legend pulls them apart by name not by hue.
 TRAIN = "#94a3b8"   # slate-400
-VAL   = "#334155"   # slate-700
+VAL   = "#1e293b"   # slate-800
 # Sim metrics carry the figure's narrative — they get the saturated palette.
 SIM_COLORS = {
     "tn":     "#1c3a72",   # deep slate-navy (matches heatmap deep blue)
@@ -236,6 +234,8 @@ def _plot_progress(meta):
         _add(metric, progress, SIM_COLORS[metric], SIM_LABELS[metric],
              ("x", "y3"), group=metric, showlegend=True)
 
+    tick_kw = dict(showticklabels=True, ticks="outside",
+                   tickcolor="#cbd5e1", tickfont=dict(color=MUTED, size=11))
     layout_axes = dict(
         xaxis=dict(domain=[0.06, 0.995], anchor="y3", range=cum_lim,
                    showline=False, zeroline=False, showgrid=False, ticks="",
@@ -243,14 +243,22 @@ def _plot_progress(meta):
                    title=dict(text="<b>Cumulative batch</b>",
                               font=dict(size=15, color=LABEL))),
         yaxis=dict(domain=[0.640, 0.890], anchor="x", range=[0, 1.02],
-                   showline=False, zeroline=False, showgrid=False, ticks="",
-                   showticklabels=False),
+                   showline=False, zeroline=False,
+                   showgrid=True, gridcolor="#e2e8f0",
+                   tickmode="array", tickvals=[0, 0.5, 1.0],
+                   ticktext=["0", "0.5", "1"], **tick_kw),
         yaxis2=dict(domain=[0.345, 0.595], anchor="x", type="log",
-                    showline=False, zeroline=False, showgrid=False, ticks="",
-                    showticklabels=False),
+                    range=[-1.05, 0.4],
+                    showline=False, zeroline=False,
+                    showgrid=True, gridcolor="#e2e8f0",
+                    tickmode="array", tickvals=[-1, 0],
+                    ticktext=["10⁻¹", "10⁰"], **tick_kw),
         yaxis3=dict(domain=[0.060, 0.310], anchor="x", range=[-0.05, 1.05],
-                    showline=False, zeroline=False, showgrid=False, ticks="",
-                    showticklabels=False),
+                    showline=False, zeroline=True,
+                    zerolinecolor=MUTED, zerolinewidth=1,
+                    showgrid=True, gridcolor="#e2e8f0",
+                    tickmode="array", tickvals=[0, 0.5, 1.0],
+                    ticktext=["0", "0.5", "1"], **tick_kw),
     )
 
     # Stage boundaries on every row (vertical lines + name annotations
