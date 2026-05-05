@@ -49,10 +49,8 @@ MAIN_HEATMAPS = (
     ("weight", "Weight cosine"),
 )
 
-# Layout: 1200 × 1240 figure (matches svhn_backdoor's 3+2×5 blueprint with a
-# small extra header carved out for stage labels). Three main square panels
-# top, 2×5 grid below. Stage labels live in the ~0.045 of paper above the
-# panel titles, vertical text per stage span.
+# Layout: 1200 × 1240 figure (matches svhn_backdoor's 3+2×5 blueprint with
+# extra header room for stage labels rendered as top-side x-axis tick text).
 MAIN_X = ((0.000, 0.300), (0.350, 0.650), (0.700, 1.000))
 MAIN_Y = (0.546, 0.882)
 
@@ -60,7 +58,6 @@ DIGIT_X = ((0.000, 0.180), (0.205, 0.385), (0.410, 0.590),
            (0.615, 0.795), (0.820, 1.000))
 DIGIT_Y_TOP = (0.270, 0.474)
 DIGIT_Y_BOT = (0.018, 0.222)
-STAGE_LABEL_Y = 0.945
 
 
 def _bounds(values):
@@ -70,19 +67,21 @@ def _bounds(values):
 
 
 def _stage_boundaries(heatmap_steps):
-    """Return (boundary_x_positions, [(left_x, right_x, stage_name)])."""
+    """Return (boundary_indices, [(left_idx, right_idx, stage_name)]).
+
+    Indices live in heatmap-cell space [-0.5, n-0.5]: a boundary at i.5 falls
+    between cells i and i+1 (i.e. between checkpoints i and i+1).
+    """
     bounds_x, spans = [], []
     left = -0.5
     cur_stage = heatmap_steps[0]["stage"]
-    cur_left_idx = 0
     for i, cp in enumerate(heatmap_steps[1:], start=1):
         if cp["stage"] != cur_stage:
-            mid = (i - 1 + i) / 2
+            mid = i - 0.5
             spans.append((left, mid, cur_stage))
             bounds_x.append(mid)
             left = mid
             cur_stage = cp["stage"]
-            cur_left_idx = i
     spans.append((left, len(heatmap_steps) - 0.5, cur_stage))
     return bounds_x, spans
 
@@ -128,6 +127,13 @@ def main():
         panels.append((4 + digit, DIGIT_X[col], y, f"class {digit}", color,
                        z, slice_bounds))
 
+    # Stage labels are rendered via plotly's xaxis tickvals/ticktext on the
+    # top side of each main heatmap panel — that lets plotly position them
+    # exactly at the right heatmap-index midpoints automatically, no
+    # paper-coord arithmetic required.
+    stage_tickvals = [(left_x + right_x) / 2 for left_x, right_x, _ in span_blocks]
+    stage_ticktext = [name for _, _, name in span_blocks]
+
     fig = go.Figure()
     layout_axes = {}
     for axis_num, x_dom, y_dom, _, _, z, (zmin, zmax) in panels:
@@ -137,11 +143,22 @@ def main():
                                  zmin=zmin, zmax=zmax, zmid=0,
                                  colorscale=HEAT_COLORSCALE, showscale=False,
                                  xaxis=x_id, yaxis=y_id))
-        layout_axes[f"xaxis{suffix}"] = dict(
+
+        is_main_panel = axis_num <= 3
+        x_axis_kw = dict(
             domain=list(x_dom), anchor=y_id, range=[-0.5, n - 0.5],
-            showticklabels=False, ticks="",
             showline=False, zeroline=False, mirror=False, showgrid=False,
         )
+        if is_main_panel:
+            x_axis_kw |= dict(
+                side="top",
+                tickmode="array", tickvals=stage_tickvals, ticktext=stage_ticktext,
+                ticks="", tickangle=-90,
+                tickfont=dict(color=LABEL, size=12),
+            )
+        else:
+            x_axis_kw |= dict(showticklabels=False, ticks="")
+        layout_axes[f"xaxis{suffix}"] = x_axis_kw
         layout_axes[f"yaxis{suffix}"] = dict(
             domain=list(y_dom), anchor=x_id, range=[-0.5, n - 0.5],
             showticklabels=False, ticks="",
@@ -156,24 +173,13 @@ def main():
     for axis_num, x_dom, y_dom, title, color, _, _ in panels:
         x_paper = (x_dom[0] + x_dom[1]) / 2
         title_size = 16 if axis_num <= 3 else 13
-        fig.add_annotation(x=x_paper, y=y_dom[1] + 0.005, xref="paper", yref="paper",
+        # Main-panel titles sit above the stage tick labels; class titles
+        # (axis_num >= 4) sit just above their panels with no tick labels.
+        title_y = (0.973 if axis_num <= 3 else y_dom[1] + 0.005)
+        fig.add_annotation(x=x_paper, y=title_y, xref="paper", yref="paper",
                            text=f"<b>{title}</b>", showarrow=False,
                            xanchor="center", yanchor="bottom",
                            font=dict(size=title_size, color=color))
-
-    # Stage labels above the leftmost panel only. The other two panels share
-    # the same x-axis structure, so their boundary lines visually carry the
-    # information without needing redundant labels above every panel.
-    label_dom = MAIN_X[0]
-    panel_w = label_dom[1] - label_dom[0]
-    for left_x, right_x, name in span_blocks:
-        mid = (left_x + right_x) / 2
-        xp = label_dom[0] + panel_w * (mid + 0.5) / n
-        fig.add_annotation(x=xp, y=STAGE_LABEL_Y, xref="paper", yref="paper",
-                           text=name, showarrow=False,
-                           xanchor="center", yanchor="middle",
-                           textangle=-90,
-                           font=dict(size=12, color=LABEL))
 
     apply_style(fig, title=None, width=1200, height=1240, legend=False)
     fig.update_layout(
