@@ -9,7 +9,7 @@ results — no training or similarity recomputation here. We re-emit:
     progress.feather           (batch, metric, value) — sim-to-reference traces
                                                        (functional, cka, weight)
     per_class.feather          (batch, class_idx, kind, value)
-                               kind ∈ {slice, acc} — per-digit progress traces
+                               kind ∈ {tensor, weight, acc} — per-digit progress traces
     similarity.feather         (step_i, step_j, metric, value)
                                metric ∈ {tn, cka, weight}
     slice_similarity.feather   (step_i, step_j, class_idx, kind, value)
@@ -103,8 +103,13 @@ def main():
         .write_ipc(CACHE / "progress.feather")
 
     pl.concat([
-        _per_class_long(sim_batch, d, kind, f[f"sim_{kind}_{d}"])
-        for kind in ("slice", "acc")
+        _per_class_long(sim_batch, d, "acc",    f[f"sim_acc_{d}"])
+        for d in range(10)
+    ] + [
+        _per_class_long(sim_batch, d, "tensor", f[f"sim_slice_{d}"])
+        for d in range(10)
+    ] + [
+        _per_class_long(sim_batch, d, "weight", f[f"sim_weight_slice_{d}"])
         for d in range(10)
     ]).write_ipc(CACHE / "per_class.feather")
 

@@ -8,6 +8,7 @@ for p in [str(_REPO), str(_VISION)]:
     if p not in sys.path:
         sys.path.insert(0, p)
 
+import copy
 from functools import partial
 import numpy as np
 import matplotlib.pyplot as plt
@@ -15,10 +16,10 @@ import torch
 from tqdm import tqdm
 
 from _common import (
-    FIGURES_DIR, DATA_DIR, load_mnist, load_svhn, new_model, fit,
+    FIGURES_DIR, DATA_DIR, load_mnist, load_svhn, new_model, slice_sim, fit,
     get_interaction_matrix, fit_progressive, build_cumulative_history, get_stage_spans,
 )
-from _plots import line_plot, save_show
+from _plots import line_plot, slice_heatmap_plot, per_digit_line_plot, save_show
 
 plt.rcParams.update({'font.size': 16})
 plt.rcParams['lines.linewidth'] = 2.5
@@ -76,7 +77,6 @@ with torch.no_grad():
     M_B_base = get_interaction_matrix(model_B_base)
     M_B_ft   = get_interaction_matrix(model_B_ft)
 M_diff_full = M_B_ft - M_B_base            # [10, d_input, d_input]
-M_diff      = M_diff_full[TARGET_DIGIT]    # [d_input, d_input] — digit-9 slice
 
 #%% TRAIN PROGRESSIVE MODEL
 print("\nTraining progressive model...")
@@ -87,14 +87,14 @@ prog_cps, prog_hist = fit_progressive(
     load_fn=partial(load_fn, offset=OFFSET_A),
 )
 
-#%% COMPUTE DIFF SIMILARITY OVER TRAINING
-def diff_sim_class(model, k):
-    """Isserlis cosine between model's class-k slice and M_diff_full[k]."""
-    M   = get_interaction_matrix(model)[k]
-    M_d = M_diff_full[k]
-    cross = M.trace() * M_d.trace() + 2 * (M @ M_d).trace()
+#%% COMPUTE DIFF SIMILARITY OVER TRAINING (all digits)
+def diff_sim_slice(model, digit):
+    """Isserlis cosine between model's digit slice and M_diff_full[digit]."""
+    M  = get_interaction_matrix(model)[digit]
+    Md = M_diff_full[digit]
+    cross = M.trace() * Md.trace() + 2 * (M @ Md).trace()
     norm1 = M.trace() ** 2 + 2 * (M @ M).trace()
-    norm2 = M_d.trace() ** 2 + 2 * (M_d @ M_d).trace()
+    norm2 = Md.trace() ** 2 + 2 * (Md @ Md).trace()
     return (cross / (norm1 * norm2).sqrt()).item()
 
 
@@ -110,7 +110,7 @@ def diff_sim_global(model):
     return (cross / (norm_diff * norm_prog).sqrt()).item()
 
 
-per_class_vals = [[] for _ in range(10)]
+slice_vals_all = {d: [] for d in range(10)}
 global_vals, diff_batches = [], []
 cumulative_batch = 0
 m_temp = new_model(seed=SEED, d_input=D_INPUT, d_model=D_MODEL, d_hidden=D_HIDDEN, device=device)
@@ -121,39 +121,69 @@ for stage in digit_curriculum:
     for cp in tqdm(checkpoints, desc=name):
         m_temp.load_state_dict(cp['state_dict'])
         m_temp.eval()
-        for k in range(10):
-            per_class_vals[k].append(diff_sim_class(m_temp, k))
+        for d in range(10):
+            slice_vals_all[d].append(diff_sim_slice(m_temp, d))
         global_vals.append(diff_sim_global(m_temp))
         diff_batches.append(cumulative_batch + cp['batch'])
     if checkpoints:
         cumulative_batch += checkpoints[-1]['batch']
 
-per_class_vals = [np.array(v) for v in per_class_vals]
+slice_vals_all = {d: np.array(v) for d, v in slice_vals_all.items()}
 global_vals    = np.array(global_vals)
 diff_batches   = np.array(diff_batches)
 
+#%% HEATMAP — load progressive checkpoints
+all_cps, cum = [], 0
+for stage in digit_curriculum:
+    for cp in prog_cps[stage['name']]:
+        all_cps.append({'batch': cum + cp['batch'],
+                        'state_dict': cp['state_dict'],
+                        'stage': stage['name']})
+    if prog_cps[stage['name']]:
+        cum += prog_cps[stage['name']][-1]['batch']
+
+N_HEATMAP   = min(80, len(all_cps))
+indices     = np.linspace(0, len(all_cps) - 1, N_HEATMAP, dtype=int)
+heatmap_cps = [all_cps[i] for i in indices]
+
+m_heat = new_model(seed=SEED, d_input=D_INPUT, d_model=D_MODEL, d_hidden=D_HIDDEN, device=device)
+heatmap_models = []
+for cp in tqdm(heatmap_cps, desc="Loading heatmap models"):
+    m_heat.load_state_dict(cp['state_dict'])
+    heatmap_models.append(copy.deepcopy(m_heat).eval())
+
+#%% HEATMAP — compute slice similarity for all digits
+print(f"Computing {N_HEATMAP}×{N_HEATMAP} slice similarity heatmaps (all digits)...")
+slice_heatmaps = {d: np.zeros((N_HEATMAP, N_HEATMAP)) for d in range(10)}
+for i in tqdm(range(N_HEATMAP)):
+    for j in range(i + 1):
+        for d in range(10):
+            slice_heatmaps[d][i, j] = slice_heatmaps[d][j, i] = slice_sim(
+                heatmap_models[i], heatmap_models[j], digit=d)
 
 #%% SAVE DATA
 if SAVE_DATA:
     import json
     cum_batch, tr_acc, vl_acc, tr_loss, vl_loss = build_cumulative_history(prog_hist, digit_curriculum)
     spans_tmp = get_stage_spans(prog_hist, digit_curriculum)
-    np.savez_compressed(DATA_DIR / f"diffing_{DATASET}.npz",
-        **{f"slice_vals_{k}": per_class_vals[k] for k in range(10)},
+    np.savez_compressed(DATA_DIR / f"diffing_slicing_{DATASET}.npz",
         global_vals=global_vals,
         diff_batches=diff_batches,
         cum_batch=cum_batch,
         train_acc=tr_acc, val_acc=vl_acc,
         train_loss=tr_loss, val_loss=vl_loss,
+        **{f'slice_heatmap_{d}': slice_heatmaps[d] for d in range(10)},
+        **{f'slice_vals_{d}':    slice_vals_all[d]  for d in range(10)},
     )
     meta = {
+        'heatmap_cps': [{'batch': int(cp['batch']), 'stage': cp['stage']} for cp in heatmap_cps],
         'spans': [[int(x0), int(x1), name] for x0, x1, name in spans_tmp],
         'xlim': [0, int(cum_batch[-1])],
         'diff_xlim': [int(diff_batches[0]), int(diff_batches[-1])],
         'dataset': DATASET,
         'target_digit': TARGET_DIGIT,
     }
-    with open(DATA_DIR / f"diffing_{DATASET}_meta.json", 'w') as f:
+    with open(DATA_DIR / f"diffing_slicing_{DATASET}_meta.json", 'w') as f:
         json.dump(meta, f, indent=2)
     print(f"Data saved to {DATA_DIR}")
 
@@ -169,18 +199,26 @@ fig, _ = line_plot(
     [(cum_batch, tr_acc, dict(color='steelblue', alpha=0.8)),
      (cum_batch, vl_acc, dict(color='tomato',    alpha=0.8))],
     spans, "Cumulative batch", "Accuracy", ylim=(0, 1), xlim=xlim, legend=acc_legend)
-save_show(fig, FIGURES_DIR / f"vision_diffing2_accuracy_{DATASET}.png", save=SAVE_FIGURES)
+save_show(fig, FIGURES_DIR / f"vision_diffing_slicing_accuracy_{DATASET}.png", save=SAVE_FIGURES)
 
-#%% PLOT — diff similarity over training
+#%% PLOT — diff similarity over training (target digit + global)
 fig, _ = line_plot(
-    [(diff_batches, per_class_vals[TARGET_DIGIT], dict(color='red',       label=f'Slice (digit {TARGET_DIGIT})', alpha=0.9)),
-     (diff_batches, global_vals,                 dict(color='steelblue', label='Global',                        alpha=0.9))],
+    [(diff_batches, slice_vals_all[TARGET_DIGIT], dict(color='red',       label=f'Slice (digit {TARGET_DIGIT})', alpha=0.9)),
+     (diff_batches, global_vals,                  dict(color='steelblue', label='Global',                        alpha=0.9))],
     spans, "Cumulative batch", "Similarity to diff",
     ylim=(-1.05, 1.05), xlim=xlim,
     legend=[plt.Line2D([0], [0], color='red',       label=f'Slice (digit {TARGET_DIGIT})'),
             plt.Line2D([0], [0], color='steelblue', label='Global')])
-save_show(fig, FIGURES_DIR / f"vision_diffing2_diff_sim_{DATASET}.png", save=SAVE_FIGURES)
+save_show(fig, FIGURES_DIR / f"vision_diffing_slicing_diff_sim_{DATASET}.png", save=SAVE_FIGURES)
 
+#%% PLOT — per-digit diff similarity line plots
+fig = per_digit_line_plot(
+    slice_vals_all, diff_batches, spans, "Similarity to diff", ylim=(-1.05, 1.05))
+save_show(fig, FIGURES_DIR / f"vision_diffing_slicing_diff_sim_digits_{DATASET}.png", save=SAVE_FIGURES)
+
+#%% PLOT — 2×5 slice similarity heatmaps
+fig = slice_heatmap_plot(slice_heatmaps, heatmap_cps, label='Tensor slice similarity')
+save_show(fig, FIGURES_DIR / f"vision_diffing_slicing_heatmap_slice_{DATASET}.png", save=SAVE_FIGURES)
 
 print("Done.")
 

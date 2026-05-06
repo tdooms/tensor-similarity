@@ -5,19 +5,15 @@ Same 9-stage progressive curriculum as `svhn-forgetting`. We hold a fixed
 seed) and watch how strongly the progressive model's interaction matrix
 projects onto it over training.
 
-Two views:
+Two views per checkpoint:
 
-    progress  — Gaussian cosine of model_A(t) vs M_diff, both as the
-                full 10-class interaction matrix (`global`) and restricted
-                to the digit-9 slice (`slice`). The slice is the on-target
-                signal; global lets us check it isn't a generic alignment
-                of every output direction.
-    heatmap   — N×N pairwise digit-9 slice similarity across the same
-                checkpoints, showing block structure across stages.
+    slice (class k) — Isserlis cosine of model_A(t)[k] vs M_diff_full[k],
+                      for each of the 10 output classes. Class 9 is the
+                      on-target signal; all others serve as controls.
+    global          — Isserlis cosine of the full 10-class matrix vs
+                      M_diff_full, checking that any rise isn't generic.
 
-The "diffing" signal lives in *slice* during *add 9* and *re-add 9*: the
-projection rises sharply when the model first learns digit 9 and again when
-it's re-introduced after removal, while *global* stays flat throughout.
+The diffing signal lives in the class-9 slice during *add 9* and *re-add 9*.
 """
 import json
 
@@ -32,131 +28,87 @@ LABEL    = "#0f172a"
 MUTED    = "#64748b"
 BOUNDARY = "#0f172a"
 
-HEAT_COLORSCALE = [
-    [0.000, "#7c2d2d"],
-    [0.150, "#a8453a"],
-    [0.300, "#cf7f70"],
-    [0.500, BG],
-    [0.700, "#6b8ec0"],
-    [0.850, "#33588f"],
-    [1.000, "#1c3a72"],
-]
-
 # Slice/global colors mirror the svhn_forgetting palette family: deep slate
 # for the on-target signal, warm rose for the contrastive global control.
 SLICE_COLOR  = "#1c3a72"
 GLOBAL_COLOR = "#a8453a"
 
-
-def _bounds(values):
-    zmin = min(float(values.quantile(0.01)), -0.01)
-    zmax = max(float(values.quantile(0.99)),  0.01)
-    return zmin, zmax
+STAGE_DISPLAY = {"repeat": "control"}
 
 
 def main():
     meta = json.loads((CACHE / "metadata.json").read_text(encoding="utf-8"))
-    heatmap_steps = meta["heatmap_steps"]
-    heatmap_batches = [cp["batch"] for cp in heatmap_steps]
     target_digit = meta["target_digit"]
-    n = len(heatmap_steps)
+    spans        = meta["spans"]
+    cum_lim      = meta["cum_xlim"]
 
-    sim = pl.read_ipc(CACHE / "similarity.feather")
-    progress = pl.read_ipc(CACHE / "progress.feather")
+    progress  = pl.read_ipc(CACHE / "progress.feather")
+    per_class = pl.read_ipc(CACHE / "per_class.feather")
 
-    step_to_idx = {b: i for i, b in enumerate(heatmap_batches)}
-    z = (sim.with_columns(
-                i=pl.col("step_i").replace_strict(step_to_idx, return_dtype=pl.Int64),
-                j=pl.col("step_j").replace_strict(step_to_idx, return_dtype=pl.Int64),
-            ).sort(["i", "j"])["value"]
-              .to_numpy().reshape(n, n).tolist())
-    zmin, zmax = _bounds(sim.filter(pl.col("step_i") != pl.col("step_j"))["value"])
-
-    spans = meta["spans"]
-    cum_lim = meta["cum_xlim"]
-
-    # Heatmap and line plot share the cum_batch x-axis: heatmap cells live at
-    # actual checkpoint batch numbers, line plot at sim_batch values. Both
-    # span the same x_dom on paper, so vertical features (stage boundaries,
-    # spikes at stage transitions) line up across the two panels.
-    stage_boundaries_batch = [s[0] for s in spans[1:]]
-    stage_midpoints_batch = [(s[0] + s[1]) / 2 for s in spans]
-    stage_names = [s[2] for s in spans]
+    stage_boundaries = [s[0] for s in spans[1:]]
+    stage_names      = [STAGE_DISPLAY.get(s[2], s[2]) for s in spans]
 
     fig = go.Figure()
 
-    fig.add_trace(go.Heatmap(z=z, x=heatmap_batches, y=heatmap_batches,
-                             zmin=zmin, zmax=zmax, zmid=0,
-                             colorscale=HEAT_COLORSCALE, showscale=False,
-                             xaxis="x", yaxis="y"))
-    for xb in stage_boundaries_batch:
-        fig.add_shape(type="line", xref="x", yref="y",
-                      x0=xb, x1=xb, y0=cum_lim[0], y1=cum_lim[1],
-                      line_color=BOUNDARY, line_width=0.7)
-        fig.add_shape(type="line", xref="x", yref="y",
-                      x0=cum_lim[0], x1=cum_lim[1], y0=xb, y1=xb,
-                      line_color=BOUNDARY, line_width=0.7)
-
-    for metric, color, name in (("slice",  SLICE_COLOR,  f"Slice (class {target_digit})"),
-                                ("global", GLOBAL_COLOR, "Global")):
-        s = progress.filter(pl.col("metric") == metric).sort("batch")
+    # Per-class slice traces: faint for controls, full opacity + thicker for target.
+    for digit in range(10):
+        s = per_class.filter(pl.col("class_idx") == digit).sort("batch")
+        is_target = digit == target_digit
         fig.add_trace(go.Scatter(
             x=s["batch"].to_list(), y=s["value"].to_list(),
-            mode="lines", line=dict(color=color, width=2.4),
-            name=name, xaxis="x2", yaxis="y2",
+            mode="lines",
+            line=dict(color=SLICE_COLOR, width=2.4 if is_target else 1.2),
+            opacity=1.0 if is_target else 0.25,
+            name=f"Tensor slices" if is_target else f"class {digit}",
+            showlegend=is_target,
         ))
 
-    for xb in stage_boundaries_batch:
-        fig.add_shape(type="line", xref="x2", yref="y2 domain",
+    # Global trace.
+    s = progress.filter(pl.col("metric") == "global").sort("batch")
+    fig.add_trace(go.Scatter(
+        x=s["batch"].to_list(), y=s["value"].to_list(),
+        mode="lines", line=dict(color=GLOBAL_COLOR, width=2.4),
+        name="Tensor",
+    ))
+
+    # Stage boundary lines.
+    for xb in stage_boundaries:
+        fig.add_shape(type="line", xref="x", yref="y domain",
                       x0=xb, x1=xb, y0=0, y1=1,
                       line_color=BOUNDARY, line_width=1.0)
 
-    # Single shared x_dom keeps the two panels aligned. The heatmap's left
-    # y-axis carries the stage names (horizontal text, in the figure margin),
-    # and the line plot's bottom x-axis carries cum_batch ticks. No labels
-    # at the top of either panel — pulled tight against the figure edge.
-    SHARED_X = [0.075, 0.985]
-    layout_axes = dict(
-        xaxis=dict(domain=SHARED_X, anchor="y", range=cum_lim,
-                   showticklabels=False, ticks="",
-                   showline=False, zeroline=False, mirror=False, showgrid=False),
-        yaxis=dict(domain=[0.435, 0.985], anchor="x", range=cum_lim,
-                   tickmode="array", tickvals=stage_midpoints_batch,
-                   ticktext=stage_names,
-                   ticks="", tickfont=dict(color=LABEL, size=12),
-                   showline=False, zeroline=False, mirror=False, showgrid=False,
-                   showticklabels=True),
-        xaxis2=dict(domain=SHARED_X, anchor="y2", range=cum_lim,
-                    showline=False, zeroline=False, showgrid=False, ticks="",
-                    tickfont=dict(color=MUTED, size=12),
-                    title=dict(text="<b>Cumulative batch</b>",
-                               font=dict(size=15, color=LABEL))),
-        yaxis2=dict(domain=[0.080, 0.345], anchor="x2", range=[-1.05, 1.05],
-                    showline=False, zeroline=True,
-                    zerolinecolor=MUTED, zerolinewidth=1,
-                    showgrid=True, gridcolor="#e2e8f0",
-                    tickmode="array", tickvals=[-1.0, 0.0, 1.0],
-                    ticktext=["−1", "0", "1"],
-                    ticks="outside", tickcolor="#cbd5e1",
-                    tickfont=dict(color=MUTED, size=11),
-                    showticklabels=True),
-    )
+    # Stage name labels above the panel (rotated), legend sits above them.
+    for x0, x1, name in zip([s[0] for s in spans], [s[1] for s in spans], stage_names):
+        fig.add_annotation(x=(x0 + x1) / 2, y=0.905, xref="x", yref="paper",
+                           text=name, showarrow=False,
+                           xanchor="center", yanchor="bottom",
+                           textangle=-90,
+                           font=dict(size=12, color=LABEL))
 
-    # Line-plot left annotation labels what the curves represent. The
-    # heatmap's row labels are the stages on its y-axis — no extra
-    # paper-coord title needed for that panel.
     fig.add_annotation(text="<b>Similarity to diff</b>", xref="paper", yref="paper",
-                       x=-0.005, y=0.213,
+                       x=-0.005, y=0.45,
                        xanchor="right", yanchor="middle",
                        textangle=-90, showarrow=False,
-                       font=dict(size=13, color=LABEL))
+                       font=dict(size=14, color=LABEL))
 
-    apply_style(fig, title=None, width=1300, height=820, legend=True)
+    tick_kw = dict(showticklabels=True, ticks="outside",
+                   tickcolor="#cbd5e1", tickfont=dict(color=MUTED, size=11))
+    apply_style(fig, title=None, width=1100, height=420, legend=True)
     fig.update_layout(
-        layout_axes,
-        margin=dict(l=82, r=18, t=12, b=58),
+        xaxis=dict(domain=[0.06, 0.995], anchor="y", range=cum_lim,
+                   showline=False, zeroline=False, showgrid=False, ticks="",
+                   tickfont=dict(color=MUTED, size=13),
+                   title=dict(text="<b>Cumulative batch</b>",
+                              font=dict(size=15, color=LABEL))),
+        yaxis=dict(domain=[0.10, 0.80], anchor="x", range=[-1.05, 1.05],
+                   showline=False, zeroline=True,
+                   zerolinecolor=MUTED, zerolinewidth=1,
+                   showgrid=True, gridcolor="#e2e8f0",
+                   tickmode="array", tickvals=[-1.0, 0.0, 1.0],
+                   ticktext=["−1", "0", "1"], **tick_kw),
+        margin=dict(l=88, r=24, t=64, b=58),
         paper_bgcolor=BG, plot_bgcolor=BG,
-        legend=dict(orientation="h", yanchor="middle", y=0.395,
+        legend=dict(orientation="h", yanchor="bottom", y=1.08,
                     xanchor="center", x=0.5,
                     bgcolor="rgba(0,0,0,0)",
                     font=dict(size=13, color=LABEL)),

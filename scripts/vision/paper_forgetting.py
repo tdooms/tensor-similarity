@@ -27,9 +27,9 @@ plt.rcParams['lines.linewidth'] = 2.5
 
 device = 'cpu'
 device = 'mps'
-HeatMapSize = 80
-SAVE_DATA    = True
-SAVE_FIGURES = True
+HeatMapSize = 20
+SAVE_DATA    = False
+SAVE_FIGURES = False
 
 #%% CONFIG
 DATASET  = 'svhn'  # 'mnist' or 'svhn'
@@ -261,7 +261,7 @@ save_show(fig, FIGURES_DIR / f"vision_forgetting2_sim_line_{DATASET}.png", save=
 #%% PLOT — per-digit slice similarity line plots (vs reference)
 fig = per_digit_line_plot(
     {d: np.array(sim_results[f'slice_{d}']) for d in range(10)},
-    sim_batch, sim_spans, "Slice sim to reference", ylim=(-0.15, 1.05))
+    sim_batch, sim_spans, "Slice similarity\nto reference", ylim=(-0.15, 1.05))
 save_show(fig, FIGURES_DIR / f"vision_forgetting2_slice_line_{DATASET}.png", save=SAVE_FIGURES)
 
 #%% PLOT — per-digit val accuracy line plots
@@ -269,6 +269,22 @@ fig = per_digit_line_plot(
     {d: np.array(sim_results[f'acc_{d}']) for d in range(10)},
     sim_batch, sim_spans, "Val accuracy", ylim=(0, 1))
 save_show(fig, FIGURES_DIR / f"vision_forgetting2_acc_digit_{DATASET}.png", save=SAVE_FIGURES)
+
+#%% WEIGHT SLICE COSINE vs reference (per digit)
+weight_slice_vals = {d: [] for d in range(10)}
+for stage in digit_curriculum:
+    for cp in progressive_checkpoints[reference_seed][stage['name']]:
+        m_temp.load_state_dict(cp['state_dict'])
+        m_temp.eval()
+        for d in range(10):
+            weight_slice_vals[d].append(weight_slice_cosine(m_temp, ref_model, digit=d))
+weight_slice_vals = {d: np.array(v) for d, v in weight_slice_vals.items()}
+
+if SAVE_DATA:
+    existing = dict(np.load(DATA_DIR / f"forgetting_{DATASET}.npz"))
+    existing.update({f'sim_weight_slice_{d}': weight_slice_vals[d] for d in range(10)})
+    np.savez_compressed(DATA_DIR / f"forgetting_{DATASET}.npz", **existing)
+    print(f"Weight slice data appended ({len(weight_slice_vals[0])} points per digit)")
 
 print("Done.")
 

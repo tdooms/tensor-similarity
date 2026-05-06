@@ -17,6 +17,7 @@ Layout follows `svhn_backdoor`: warm bg, brick↔slate diverging palette,
 square panels via manual axis-domain placement, slate stage-boundary lines
 across every panel, stage names as vertical labels above the top row.
 """
+
 import json
 
 import plotly.graph_objects as go
@@ -69,7 +70,7 @@ def _bounds(values):
     return zmin, zmax
 
 
-STAGE_DISPLAY = {"repeat": "settle"}
+STAGE_DISPLAY = {"repeat": "control"}
 
 
 def _stage_label(name):
@@ -218,7 +219,8 @@ SIM_LABELS = {"tn": "Tensor", "cka": "CKA · logits", "weight": "Matrix cosine"}
 def _plot_progress(meta):
     history = pl.read_ipc(CACHE / "history.feather")
     progress = pl.read_ipc(CACHE / "progress.feather")
-    spans = meta["spans"]
+    per_class = pl.read_ipc(CACHE / "per_class.feather")
+    spans = [(x0, x1, _stage_label(name)) for x0, x1, name in meta["spans"]]
 
     cum_lim = meta["cum_xlim"]
     sim_lim = meta["sim_xlim"]
@@ -240,42 +242,62 @@ def _plot_progress(meta):
     # Row 2: loss (log) — same train/val groups, no duplicate legend entries.
     _add("train_loss", history, TRAIN, "Train", ("x", "y2"), group="train", showlegend=False)
     _add("val_loss",   history, VAL,   "Val",   ("x", "y2"), group="val",   showlegend=False)
-    # Row 3: similarity — three distinct metrics, each their own legend entry.
+    # Row 3: overall similarity — three distinct metrics, each their own legend entry.
     for metric in ("tn", "cka", "weight"):
         _add(metric, progress, SIM_COLORS[metric], SIM_LABELS[metric],
              ("x", "y3"), group=metric, showlegend=True)
+    # Row 4: per-class slice similarity — tensor (dark blue) and weight (red).
+    # Class 9 is fully opaque; all others are faded. No legend entries.
+    for kind, color in (("tensor", SIM_COLORS["tn"]), ("weight", SIM_COLORS["weight"])):
+        df_kind = per_class.filter(pl.col("kind") == kind)
+        for digit in range(10):
+            s = df_kind.filter(pl.col("class_idx") == digit).sort("batch")
+            fig.add_trace(go.Scatter(
+                x=s["batch"].to_list(), y=s["value"].to_list(),
+                mode="lines",
+                line=dict(color=color, width=1.2),
+                opacity=1.0 if digit == TARGET_CLASS else 0.25,
+                showlegend=False,
+                xaxis="x", yaxis="y4",
+            ))
 
     tick_kw = dict(showticklabels=True, ticks="outside",
                    tickcolor="#cbd5e1", tickfont=dict(color=MUTED, size=11))
     layout_axes = dict(
-        xaxis=dict(domain=[0.06, 0.995], anchor="y3", range=cum_lim,
+        xaxis=dict(domain=[0.06, 0.995], anchor="y4", range=cum_lim,
                    showline=False, zeroline=False, showgrid=False, ticks="",
                    tickfont=dict(color=MUTED, size=13),
                    title=dict(text="<b>Cumulative batch</b>",
                               font=dict(size=15, color=LABEL))),
-        yaxis=dict(domain=[0.640, 0.890], anchor="x", range=[0, 1.02],
+        yaxis=dict(domain=[0.705, 0.890], anchor="x", range=[0, 1.02],
                    showline=False, zeroline=False,
                    showgrid=True, gridcolor="#e2e8f0",
                    tickmode="array", tickvals=[0, 0.5, 1.0],
                    ticktext=["0", "0.5", "1"], **tick_kw),
-        yaxis2=dict(domain=[0.345, 0.595], anchor="x", type="log",
+        yaxis2=dict(domain=[0.490, 0.675], anchor="x", type="log",
                     range=[-1.05, 0.4],
                     showline=False, zeroline=False,
                     showgrid=True, gridcolor="#e2e8f0",
                     tickmode="array", tickvals=[-1, 0],
                     ticktext=["10⁻¹", "10⁰"], **tick_kw),
-        yaxis3=dict(domain=[0.060, 0.310], anchor="x", range=[-0.05, 1.05],
+        yaxis3=dict(domain=[0.275, 0.460], anchor="x", range=[-0.05, 1.05],
                     showline=False, zeroline=True,
                     zerolinecolor=MUTED, zerolinewidth=1,
                     showgrid=True, gridcolor="#e2e8f0",
                     tickmode="array", tickvals=[0, 0.5, 1.0],
                     ticktext=["0", "0.5", "1"], **tick_kw),
+        yaxis4=dict(domain=[0.055, 0.240], anchor="x", range=[-0.65, 1.05],
+                    showline=False, zeroline=True,
+                    zerolinecolor=MUTED, zerolinewidth=1,
+                    showgrid=True, gridcolor="#e2e8f0",
+                    tickmode="array", tickvals=[-0.5, 0, 0.5, 1.0],
+                    ticktext=["-0.5", "0", "0.5", "1"], **tick_kw),
     )
 
     # Stage boundaries on every row (vertical lines + name annotations
     # above the figure, vertical text).
     for x0, _, _ in spans[1:]:
-        for ax in ("y", "y2", "y3"):
+        for ax in ("y", "y2", "y3", "y4"):
             fig.add_shape(type="line", xref="x", yref=f"{ax} domain",
                           x0=x0, x1=x0, y0=0, y1=1,
                           line_color=BOUNDARY, line_width=1.4)
@@ -287,14 +309,15 @@ def _plot_progress(meta):
                            textangle=-90,
                            font=dict(size=12, color=LABEL))
 
-    for label, mid_y in (("Accuracy",   0.765),
-                         ("Loss (log)", 0.470),
-                         ("Similarity", 0.185)):
+    for label, mid_y in (("Accuracy",   0.798),
+                         ("Loss (log)", 0.583),
+                         ("Similarity", 0.368),
+                         ("Slice<br>similarity", 0.148)):
         fig.add_annotation(text=f"<b>{label}</b>", xref="paper", yref="paper",
                            x=-0.005, y=mid_y, xanchor="right", yanchor="middle",
                            showarrow=False, font=dict(size=14, color=LABEL))
 
-    apply_style(fig, title=None, width=1100, height=720, legend=True)
+    apply_style(fig, title=None, width=1100, height=960, legend=True)
     fig.update_layout(
         layout_axes,
         margin=dict(l=88, r=24, t=64, b=58),
@@ -305,3 +328,5 @@ def _plot_progress(meta):
                     font=dict(size=13, color=LABEL)),
     )
     save_figure(fig, "svhn_progress")
+
+# %%

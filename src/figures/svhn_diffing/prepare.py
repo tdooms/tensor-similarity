@@ -31,8 +31,8 @@ DATASET = "svhn"
 
 HISTORY_KEYS = ("train_acc", "val_acc", "train_loss", "val_loss")
 PROGRESS_KEYS = (
-    ("slice_vals",  "slice"),
-    ("global_vals", "global"),
+    ("slice_vals_9", "slice"),
+    ("global_vals",  "global"),
 )
 
 
@@ -74,6 +74,15 @@ def main():
 
     _heatmap_long(f["heatmap_slice"], heatmap_steps, "slice") \
         .write_ipc(CACHE / "similarity.feather")
+
+    pl.concat([
+        pl.DataFrame({
+            "batch":     np.asarray(diff_batches, dtype=np.int64),
+            "class_idx": np.full(len(diff_batches), k, dtype=np.int64),
+            "value":     np.asarray(f[f"slice_vals_{k}"], dtype=np.float32),
+        })
+        for k in range(10)
+    ]).write_ipc(CACHE / "per_class.feather")
 
     (CACHE / "metadata.json").write_text(
         json.dumps({
