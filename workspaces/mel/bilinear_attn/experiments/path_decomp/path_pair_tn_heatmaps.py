@@ -44,7 +44,7 @@ from src.components.base import Term  # noqa: E402
 from src.components.similarity import State, _initial_state, _moment, _step  # noqa: E402
 
 
-DEFAULT_STEPS = list(range(0, 15001, 500))
+DEFAULT_STEP_INTERVAL = 500
 FAMILIES = list(enumerate_families())
 PATH_LABELS = [
     "direct" if fam == "direct" else "layer1" if fam == "layer1" else format(fam[1], "05b")
@@ -59,6 +59,66 @@ def choose_device(name: str) -> torch.device:
     if device.type == "cuda" and not torch.cuda.is_available():
         raise RuntimeError("CUDA requested but torch.cuda.is_available() is False")
     return device
+
+
+def cache_stats(cache_dir: Path) -> tuple[int, int]:
+    if not cache_dir.exists():
+        return 0, 0
+    files = [p for p in cache_dir.rglob("*") if p.is_file()]
+    return len(files), sum(p.stat().st_size for p in files)
+
+
+def print_cache_status(cache_dir: Path) -> None:
+    n_files, n_bytes = cache_stats(cache_dir)
+    if n_files:
+        print(
+            f"cache_found={cache_dir} files={n_files} bytes={n_bytes}",
+            flush=True,
+        )
+    else:
+        print(f"cache_found=false cache_dir={cache_dir}", flush=True)
+
+
+def configure_runtime_cache(cache_dir: Path) -> None:
+    """Point both env and already-imported contraction utilities at cache_dir."""
+    import cotengra as ctg
+    from src.components import utils as comp_utils
+
+    configure_cache(cache_dir)
+    comp_utils._CACHE_DIR = cache_dir
+    comp_utils._OPT = ctg.ReusableHyperOptimizer(
+        directory=str(cache_dir),
+        minimize="size",
+        methods=("greedy", "kahypar"),
+        max_repeats=32,
+        parallel=False,
+        progbar=False,
+    )
+    comp_utils._EXPRS.clear()
+
+
+def checkpoint_steps(run_dir: Path) -> list[int]:
+    checkpoint_dir = run_dir / "checkpoints"
+    steps = []
+    for path in checkpoint_dir.glob("step_*.pt"):
+        try:
+            steps.append(int(path.stem.removeprefix("step_")))
+        except ValueError:
+            pass
+    if not steps:
+        raise FileNotFoundError(f"No step_*.pt checkpoints found in {checkpoint_dir}")
+    return sorted(set(steps))
+
+
+def select_steps(run_dir: Path, explicit_steps: list[int] | None, step_interval: int) -> list[int]:
+    if explicit_steps:
+        return sorted(dict.fromkeys(explicit_steps))
+    if step_interval <= 0:
+        raise ValueError("--step_interval must be positive")
+    available = checkpoint_steps(run_dir)
+    final_step = available[-1]
+    selected = [s for s in available if s == 0 or s == final_step or s % step_interval == 0]
+    return sorted(dict.fromkeys(selected))
 
 
 def load_component_with_n_ctx(
@@ -197,7 +257,16 @@ def fill_pair(values: np.ndarray, i: int, j: int, matrix: np.ndarray) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run_dir", default="experiments/induction_heads/runs/small-big-experiment-runs")
-    parser.add_argument("--steps", type=int, nargs="+", default=DEFAULT_STEPS)
+    parser.add_argument("--steps", type=int, nargs="+", default=None)
+    parser.add_argument(
+        "--step_interval",
+        type=int,
+        default=DEFAULT_STEP_INTERVAL,
+        help=(
+            "When --steps is omitted, use checkpoint 0, the final checkpoint, "
+            "and checkpoints whose step is a multiple of this value."
+        ),
+    )
     parser.add_argument("--window", type=int, default=None)
     parser.add_argument("--device", default="auto", choices=("auto", "cpu", "cuda"))
     parser.add_argument("--cache_dir", default=".cache/ctg-paths")
@@ -210,35 +279,37 @@ def main() -> None:
     cache_dir = Path(args.cache_dir)
     if not cache_dir.is_absolute():
         cache_dir = ROOT / cache_dir
-    configure_cache(cache_dir)
+    configure_runtime_cache(cache_dir)
+    print_cache_status(cache_dir)
     device = choose_device(args.device)
     dtype = torch.float64
+    steps = select_steps(run_dir, args.steps, args.step_interval)
     output_dir = (
         Path(args.output_dir)
         if args.output_dir is not None
         else run_dir / "path_decomp_trajectory" / "path_pair_matrices"
     )
     data_path = output_dir / "path_pair_tn_matrices.npz"
-    values = load_existing(data_path, args.steps)
+    values = load_existing(data_path, steps)
     components: dict[int, object] = {}
 
     print(f"device={device}", flush=True)
     print(f"cache_dir={cache_dir}", flush=True)
-    print(f"steps={args.steps}", flush=True)
+    print(f"steps={steps}", flush=True)
     print(f"window={args.window}", flush=True)
     print(f"n_ctx={args.n_ctx}", flush=True)
     print(f"output={data_path}", flush=True)
 
     pending_pairs = [
         (i, j)
-        for i, j in pair_indices(len(args.steps), args.window)
+        for i, j in pair_indices(len(steps), args.window)
         if np.any(np.isnan(values[i, j]))
     ]
 
     with tqdm(total=len(pending_pairs), desc="Path-pair TN matrices", unit="pair") as pbar:
         for k, (i, j) in enumerate(pending_pairs, start=1):
-            step_i = args.steps[i]
-            step_j = args.steps[j]
+            step_i = steps[i]
+            step_j = steps[j]
             if step_i not in components:
                 components[step_i] = load_component_with_n_ctx(
                     run_dir, step_i, args.n_ctx, dtype, device
@@ -255,11 +326,11 @@ def main() -> None:
             fill_pair(values, i, j, matrix)
 
             if args.save_every > 0 and k % args.save_every == 0:
-                save_data(data_path, args.steps, values)
+                save_data(data_path, steps, values)
             tqdm.write(f"step {step_i} vs {step_j}: path-pair matrix time={elapsed:.2f}s")
             pbar.update(1)
 
-    save_data(data_path, args.steps, values)
+    save_data(data_path, steps, values)
     print(f"Wrote data: {data_path}", flush=True)
 
 
