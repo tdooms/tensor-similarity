@@ -189,6 +189,8 @@ def load_component_with_n_ctx(
     with (run_dir / "config.yaml").open() as f:
         cfg = yaml.safe_load(f)
     cfg = copy.deepcopy(cfg)
+    if cfg.get("model", {}).get("norm_type") == "tok_0":
+        cfg["model"]["norm_type"] = "tok0"
     cfg["model"]["n_ctx"] = n_ctx
 
     model = AttentionLM.from_config(cfg)
