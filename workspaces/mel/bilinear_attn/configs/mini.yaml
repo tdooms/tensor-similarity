@@ -1,44 +1,41 @@
-data:
-  use_bos: true
-init:
-  init_gain: 0.33
-  init_type: normal
-  std_embed: 0.03
-  std_o: 0.08
-  std_qkv: 0.04
-loss:
-  label_smoothing: 0.0
-  type: next_token_ce
-model:
-  attn_scale: 0.5
-  attn_type: quadratic
-  d_model: 32
-  n_ctx: 9
-  n_head: 4
-  n_layers: 2
-  norm_places:
-  - pre_unembed
-  norm_type: tok0
-  rope_base: 1000
-  use_bias_qk: false
-  use_rmsnorm_qk: false
-  vocab_size: 16
 name: big_experiment
 seed: 42
+
+model:
+  vocab_size: 8
+  n_ctx: 16
+  d_model: 8
+  n_head: 2
+  n_layers: 2
+  attn_type: quadratic
+  attn_scale: 0.35
+  rope_base: 10000
+  norm_type: none
+  norm_places: [pre_unembed]
+  use_rmsnorm_qk: false
+  use_bias_qk: false
+init:
+  init_type: mup
+  std_embed: 0.02
+  std_o: 0.01
+  std_qkv: 0.02
 train:
-  batch_size: 64
+  batch_size: 128
   betas:
   - 0.9
   - 0.95
-  checkpoint_every: 100
+  checkpoint_every: 500
   debug: true
   dtype: bfloat16
   eval_every: 100
   grad_clip: 1.0
   lr: 0.0003
-  lr_decay_frac: 0.33
-  max_steps: 15000
+  lr_decay_frac: 0.25
+  max_steps: 1000
   muon_lr: 0.02
   use_muon: true
   warmup_steps: 500
-  weight_decay: 0.01
+  weight_decay: 0.1
+loss:
+  type: next_token_ce
+  label_smoothing: 0.0
