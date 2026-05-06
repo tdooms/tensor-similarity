@@ -58,6 +58,38 @@ def write_summary_csv(path: Path, values: np.ndarray, labels: list[str]) -> None
         writer.writerows(rows)
 
 
+def plot_grid(
+    values: np.ndarray,
+    labels: list[str],
+    output_path: Path,
+    *,
+    vmin: float | None,
+    vmax: float | None,
+    cmap: str,
+) -> None:
+    fig, axes = plt.subplots(3, 3, figsize=(8, 8), constrained_layout=True)
+    last_im = None
+    for gi, g in enumerate(labels):
+        for hi, h in enumerate(labels):
+            ax = axes[gi, hi]
+            last_im = ax.imshow(
+                np.ma.masked_invalid(values[:, :, gi, hi]),
+                vmin=vmin,
+                vmax=vmax,
+                cmap=cmap,
+            )
+            ax.set_title(f"{g}, {h}", fontsize=10)
+            ax.set_xticks([])
+            ax.set_yticks([])
+            for spine in ax.spines.values():
+                spine.set_visible(False)
+    if last_im is not None:
+        fig.colorbar(last_im, ax=axes, shrink=0.75, pad=0.01)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, dpi=220)
+    plt.close(fig)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", required=True, help="Path to layer_block_tn_sims.npz")
@@ -66,6 +98,7 @@ def main() -> None:
     parser.add_argument("--vmin", type=float, default=-1.0)
     parser.add_argument("--vmax", type=float, default=1.0)
     parser.add_argument("--cmap", default="coolwarm")
+    parser.add_argument("--grid", action="store_true", help="Also write one compact 3x3 image containing all heatmaps.")
     args = parser.parse_args()
 
     input_path = Path(args.input)
@@ -88,6 +121,11 @@ def main() -> None:
             output_path = output_dir / f"{mode}_{g}_vs_{h}.png"
             title = f"{g} vs {h} layer-block TN {'raw' if args.raw else 'local cosine'}"
             plot_heatmap(matrix, steps, title, output_path, vmin=vmin, vmax=vmax, cmap=args.cmap)
+
+    if args.grid:
+        grid_path = output_dir / f"{mode}_all_layer_blocks.png"
+        plot_grid(values, labels, grid_path, vmin=vmin, vmax=vmax, cmap=args.cmap)
+        print(f"Wrote grid: {grid_path}")
 
     write_summary_csv(output_dir / f"{mode}_summary.csv", values, labels)
     print(f"Wrote heatmaps: {output_dir}")
