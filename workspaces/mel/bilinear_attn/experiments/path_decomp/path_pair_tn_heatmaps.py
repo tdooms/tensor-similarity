@@ -110,14 +110,68 @@ def checkpoint_steps(run_dir: Path) -> list[int]:
     return sorted(set(steps))
 
 
-def select_steps(run_dir: Path, explicit_steps: list[int] | None, step_interval: int) -> list[int]:
-    if explicit_steps:
-        return sorted(dict.fromkeys(explicit_steps))
-    if step_interval <= 0:
-        raise ValueError("--step_interval must be positive")
-    available = checkpoint_steps(run_dir)
+def nearest_available_steps(available: list[int], requested: np.ndarray) -> list[int]:
+    """Snap requested numeric steps to the nearest checkpoint files present."""
+    available_arr = np.array(available, dtype=np.int64)
+    selected = []
+    for value in requested:
+        idx = int(np.argmin(np.abs(available_arr - value)))
+        selected.append(int(available_arr[idx]))
+    return selected
+
+
+def linear_steps(available: list[int], count: int) -> list[int]:
+    if count <= 0:
+        return []
+    requested = np.linspace(available[0], available[-1], num=count)
+    return nearest_available_steps(available, requested)
+
+
+def log_steps(available: list[int], count: int) -> list[int]:
+    """Choose log-spaced checkpoint steps, always including 0 when available."""
+    if count <= 0:
+        return []
     final_step = available[-1]
-    selected = [s for s in available if s == 0 or s == final_step or s % step_interval == 0]
+    if final_step <= 0:
+        return [final_step]
+
+    selected = [0] if available[0] == 0 else []
+    positive_count = max(count - len(selected), 0)
+    if positive_count:
+        positive_available = [s for s in available if s > 0]
+        min_positive = positive_available[0]
+        requested = np.geomspace(min_positive, final_step, num=positive_count)
+        selected.extend(nearest_available_steps(available, requested))
+    return selected
+
+
+def select_steps(
+    run_dir: Path,
+    explicit_steps: list[int] | None,
+    step_interval: int | None,
+    linear_count: int,
+    log_count: int,
+) -> list[int]:
+    available = checkpoint_steps(run_dir)
+    if explicit_steps:
+        missing = sorted(set(explicit_steps) - set(available))
+        if missing:
+            raise FileNotFoundError(f"Requested checkpoint steps not found: {missing}")
+        return sorted(dict.fromkeys(explicit_steps))
+
+    selected: list[int] = []
+    final_step = available[-1]
+
+    if step_interval is not None:
+        if step_interval <= 0:
+            raise ValueError("--step_interval must be positive")
+        selected.extend(s for s in available if s == 0 or s == final_step or s % step_interval == 0)
+
+    selected.extend(linear_steps(available, linear_count))
+    selected.extend(log_steps(available, log_count))
+
+    if not selected:
+        selected.extend([available[0], final_step])
     return sorted(dict.fromkeys(selected))
 
 
@@ -267,12 +321,30 @@ def main() -> None:
             "and checkpoints whose step is a multiple of this value."
         ),
     )
+    parser.add_argument(
+        "--no_step_interval",
+        action="store_true",
+        help="Disable interval-based checkpoint selection when using linear/log selection.",
+    )
+    parser.add_argument(
+        "--linear_checkpoints",
+        type=int,
+        default=0,
+        help="Add this many linearly spaced checkpoints, snapped to available checkpoint files.",
+    )
+    parser.add_argument(
+        "--log_checkpoints",
+        type=int,
+        default=0,
+        help="Add this many log-spaced checkpoints, snapped to available checkpoint files.",
+    )
     parser.add_argument("--window", type=int, default=None)
     parser.add_argument("--device", default="auto", choices=("auto", "cpu", "cuda"))
     parser.add_argument("--cache_dir", default=".cache/ctg-paths")
     parser.add_argument("--output_dir", default=None)
     parser.add_argument("--save_every", type=int, default=1)
     parser.add_argument("--n_ctx", type=int, default=None, help="Optional checkpoint-load context override.")
+    parser.add_argument("--dry_run", action="store_true", help="Print selected checkpoints and pending pair count, then exit.")
     args = parser.parse_args()
 
     run_dir = Path(args.run_dir)
@@ -283,7 +355,14 @@ def main() -> None:
     print_cache_status(cache_dir)
     device = choose_device(args.device)
     dtype = torch.float64
-    steps = select_steps(run_dir, args.steps, args.step_interval)
+    step_interval = None if args.no_step_interval else args.step_interval
+    steps = select_steps(
+        run_dir,
+        args.steps,
+        step_interval,
+        args.linear_checkpoints,
+        args.log_checkpoints,
+    )
     output_dir = (
         Path(args.output_dir)
         if args.output_dir is not None
@@ -305,6 +384,12 @@ def main() -> None:
         for i, j in pair_indices(len(steps), args.window)
         if np.any(np.isnan(values[i, j]))
     ]
+    print(f"n_checkpoints={len(steps)}", flush=True)
+    print(f"pending_pairs={len(pending_pairs)}", flush=True)
+
+    if args.dry_run:
+        print("dry_run=true", flush=True)
+        return
 
     with tqdm(total=len(pending_pairs), desc="Path-pair TN matrices", unit="pair") as pbar:
         for k, (i, j) in enumerate(pending_pairs, start=1):

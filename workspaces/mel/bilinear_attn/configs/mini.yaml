@@ -25,6 +25,9 @@ train:
   - 0.9
   - 0.95
   checkpoint_every: 500
+  checkpoint_schedule: linear_log
+  checkpoint_linear_count: 20
+  checkpoint_log_count: 20
   debug: true
   dtype: bfloat16
   eval_every: 100

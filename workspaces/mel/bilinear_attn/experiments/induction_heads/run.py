@@ -18,6 +18,10 @@ from tqdm import tqdm
 
 from models import AttentionLM
 from train.optim import create_optimizer, create_scheduler, Optimizers
+from train.trainer import (
+    _build_linear_log_checkpoint_steps,
+    _build_log_linear_checkpoint_steps,
+)
 from experiments.induction_heads.data import create_repeated_token_dataloaders
 
 
@@ -216,6 +220,31 @@ def main():
 
     eval_every = train_cfg.get("eval_every", 100)
     checkpoint_every = args.checkpoint_every or train_cfg.get("checkpoint_every", 0)
+    checkpoint_schedule = str(train_cfg.get("checkpoint_schedule", "interval"))
+    checkpoint_steps: set[int] = set()
+    if args.checkpoint_every is not None:
+        checkpoint_schedule = "interval"
+    if checkpoint_schedule == "log_linear":
+        checkpoint_steps = set(
+            _build_log_linear_checkpoint_steps(
+                max_steps=max_steps,
+                checkpoint_count=int(float(train_cfg.get("checkpoint_count", 1000))),
+                alpha=float(train_cfg.get("checkpoint_log_linear_alpha", 0.5)),
+            )
+        )
+    elif checkpoint_schedule == "linear_log":
+        checkpoint_steps = set(
+            _build_linear_log_checkpoint_steps(
+                max_steps=max_steps,
+                linear_count=int(float(train_cfg.get("checkpoint_linear_count", 0))),
+                log_count=int(float(train_cfg.get("checkpoint_log_count", 0))),
+            )
+        )
+    elif checkpoint_schedule != "interval":
+        raise ValueError(
+            "train.checkpoint_schedule must be one of "
+            "'interval', 'log_linear', or 'linear_log'"
+        )
 
     # ── run dir ──────────────────────────────────────────────────────────
     timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
@@ -254,6 +283,9 @@ def main():
 
     # ── training loop ────────────────────────────────────────────────────
     print(f"Training for {max_steps} steps  (eval every {eval_every}) ...")
+    if checkpoint_schedule in ("log_linear", "linear_log"):
+        print(f"Checkpoint schedule: {checkpoint_schedule} ({len(checkpoint_steps)} checkpoints)")
+        print(f"Checkpoint steps: {sorted(checkpoint_steps)}")
     model.train()
     data_iter = iter(train_dl)
     pbar = tqdm(total=max_steps, desc="Training")
@@ -368,7 +400,12 @@ def main():
             model.train()
 
         # ── checkpoint ────────────────────────────────────────────────
-        if checkpoint_every > 0 and step % checkpoint_every == 0:
+        should_checkpoint = (
+            step in checkpoint_steps
+            if checkpoint_schedule in ("log_linear", "linear_log")
+            else checkpoint_every > 0 and step % checkpoint_every == 0
+        )
+        if should_checkpoint:
             ckpt_path = run_dir / "checkpoints" / f"step_{step}.pt"
             torch.save({"step": step, "model_state_dict": model.state_dict()}, ckpt_path)
 

@@ -62,6 +62,47 @@ def _build_log_linear_checkpoint_steps(max_steps: int, checkpoint_count: int, al
     return steps
 
 
+def _nearest_training_steps(max_steps: int, requested) -> list[int]:
+    """Snap requested numeric positions to integer training steps."""
+    return [min(max_steps, max(0, int(round(float(x))))) for x in requested]
+
+
+def _build_linear_log_checkpoint_steps(
+    max_steps: int,
+    linear_count: int,
+    log_count: int,
+) -> list[int]:
+    """Build the union of separate linear and log checkpoint schedules.
+
+    Step 0 and ``max_steps`` are always included. Log spacing includes step 0
+    separately, then spaces over positive steps.
+    """
+    if max_steps < 0:
+        raise ValueError(f"max_steps must be >= 0, got {max_steps}")
+    if linear_count < 0:
+        raise ValueError(f"checkpoint_linear_count must be >= 0, got {linear_count}")
+    if log_count < 0:
+        raise ValueError(f"checkpoint_log_count must be >= 0, got {log_count}")
+
+    steps: list[int] = [0, max_steps]
+    if linear_count > 0:
+        denom = max(1, linear_count - 1)
+        linear = [(i / denom) * max_steps for i in range(linear_count)]
+        steps.extend(_nearest_training_steps(max_steps, linear))
+
+    if log_count > 0 and max_steps > 0:
+        positive_count = max(log_count - 1, 0)
+        if positive_count > 0:
+            # Start at 1 because training steps are integer and log(0) is undefined.
+            log_values = [
+                math.exp(math.log(1.0) + (math.log(float(max_steps)) - math.log(1.0)) * i / max(1, positive_count - 1))
+                for i in range(positive_count)
+            ]
+            steps.extend(_nearest_training_steps(max_steps, log_values))
+
+    return sorted(set(steps))
+
+
 class Trainer:
     """Training loop for AttentionLM."""
     
@@ -144,9 +185,11 @@ class Trainer:
 
         self.checkpoint_mode = str(train_cfg.get("checkpoint_schedule", "interval"))
         self.checkpoint_count = int(float(train_cfg.get("checkpoint_count", 1000)))
+        self.checkpoint_linear_count = int(float(train_cfg.get("checkpoint_linear_count", 0)))
+        self.checkpoint_log_count = int(float(train_cfg.get("checkpoint_log_count", 0)))
         digits_max_steps = len(str(max(1, int(self.max_steps))))
-        digits_checkpoint_count = len(str(max(1, self.checkpoint_count)))
-        self._checkpoint_name_width = max(4, digits_max_steps, digits_checkpoint_count)
+        digits_schedule_count = len(str(max(1, self.checkpoint_count, self.checkpoint_linear_count, self.checkpoint_log_count)))
+        self._checkpoint_name_width = max(4, digits_max_steps, digits_schedule_count)
         self.checkpoint_log_linear_alpha = float(train_cfg.get("checkpoint_log_linear_alpha", 0.5))
         self.checkpoint_steps: set[int] = set()
         if self.checkpoint_mode == "log_linear":
@@ -156,6 +199,19 @@ class Trainer:
                     checkpoint_count=self.checkpoint_count,
                     alpha=self.checkpoint_log_linear_alpha,
                 )
+            )
+        elif self.checkpoint_mode == "linear_log":
+            self.checkpoint_steps = set(
+                _build_linear_log_checkpoint_steps(
+                    max_steps=self.max_steps,
+                    linear_count=self.checkpoint_linear_count,
+                    log_count=self.checkpoint_log_count,
+                )
+            )
+        elif self.checkpoint_mode != "interval":
+            raise ValueError(
+                "train.checkpoint_schedule must be one of "
+                "'interval', 'log_linear', or 'linear_log'"
             )
         self._retcon_checkpoint_names()
 
@@ -416,7 +472,7 @@ class Trainer:
                     self.log_metrics({"val_loss": val_loss})
                     self.model.train()
                 
-                if self.checkpoint_mode == "log_linear":
+                if self.checkpoint_mode in ("log_linear", "linear_log"):
                     if self.step in self.checkpoint_steps:
                         self.save_checkpoint()
                 elif self.step % save_every == 0:
@@ -443,7 +499,7 @@ class Trainer:
                 raise
         
         pbar.close()
-        if self.checkpoint_mode != "log_linear":
+        if self.checkpoint_mode not in ("log_linear", "linear_log"):
             self.save_checkpoint("final")
         self._generate_plots()
         self._upload_pending_checkpoints(force=True)
