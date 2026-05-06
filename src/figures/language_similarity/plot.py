@@ -151,11 +151,18 @@ def main():
                     tickmode="array", tickvals=tick_indices, ticktext=tick_labels,
                     ticks="", showline=False, zeroline=False, mirror=False, showgrid=False,
                 )
+                # n-gram score is bounded below by 1 (uniform-distribution
+                # baseline), so start the axis there and show ticks at the
+                # half-points for context.
                 layout_axes[f"yaxis{suffix}"] = dict(
-                    domain=list(y_dom), anchor=x_id, range=[0, 2.6],
-                    showticklabels=False, ticks="",
-                    zeroline=True, zerolinecolor=MUTED, zerolinewidth=1,
-                    showline=False, mirror=False, showgrid=False,
+                    domain=list(y_dom), anchor=x_id, range=[1, 2.6],
+                    tickmode="array",
+                    tickvals=[1, 1.5, 2, 2.5],
+                    ticktext=["1", "1.5", "2", "2.5"],
+                    showticklabels=True, ticks="outside",
+                    tickfont=dict(size=10, color=MUTED),
+                    showgrid=True, gridcolor="#e2e8f0", gridwidth=1,
+                    showline=False, zeroline=False, mirror=False,
                 )
 
             fig.add_annotation(x=x_paper, y=y_dom[1] + 0.005, xref="paper", yref="paper",
@@ -169,7 +176,7 @@ def main():
         margin=dict(l=4, r=4, t=4, b=4),
         paper_bgcolor=BG, plot_bgcolor=BG,
         legend=dict(orientation="h", yanchor="top",
-                    y=M_ROW1_Y[1] - 0.012,
+                    y=M_ROW1_Y[1] - 0.005,
                     xanchor="center", x=(COL_X[0][0] + COL_X[0][1]) / 2,
                     bgcolor="rgba(255,255,255,0.8)",
                     font=dict(size=12, color=LABEL),

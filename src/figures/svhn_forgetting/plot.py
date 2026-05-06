@@ -7,7 +7,7 @@ checkpoints:
 
     Tensor  — Gaussian functional similarity (gauge-invariant, data-free)
     CKA     — linear CKA on logits (data-driven, per-sample)
-    Weight  — naive weight cosine
+    Matrix  — naive Frobenius cosine of flattened weights
 
 A 2×5 grid below shows the per-digit Tensor slice. The forgetting signal lives
 in class 9: its slice collapses during *remove 9* and recovers during *re-add
@@ -46,7 +46,7 @@ BOUNDARY_KW = dict(line_color=BOUNDARY, line_width=0.7)
 MAIN_HEATMAPS = (
     ("tn",     "Tensor"),
     ("cka",    "CKA · logits"),
-    ("weight", "Weight cosine"),
+    ("weight", "Matrix cosine"),
 )
 
 # Layout: 1240 × 920 figure → plot area 1172 × 896 with margin l=66 (room
@@ -131,10 +131,8 @@ def main():
     for digit in range(10):
         col = digit % 5
         y = DIGIT_Y_TOP if digit < 5 else DIGIT_Y_BOT
-        is_target = (digit == TARGET_CLASS)
-        color = TARGET_COLOR if is_target else LABEL
         z = _matrix(slice_sim.filter(pl.col("class_idx") == digit))
-        panels.append((4 + digit, DIGIT_X[col], y, f"class {digit}", color,
+        panels.append((4 + digit, DIGIT_X[col], y, f"class {digit}", LABEL,
                        z, slice_bounds))
 
     # Stage labels ride the y-axis of each row's leftmost panel (axes 1, 4, 9).
@@ -214,7 +212,7 @@ SIM_COLORS = {
     "cka":    "#6b8ec0",   # mid slate-blue
     "weight": "#a8453a",   # warm rose
 }
-SIM_LABELS = {"tn": "Tensor", "cka": "CKA · logits", "weight": "Weight cosine"}
+SIM_LABELS = {"tn": "Tensor", "cka": "CKA · logits", "weight": "Matrix cosine"}
 
 
 def _plot_progress(meta):
