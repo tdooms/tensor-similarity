@@ -166,7 +166,7 @@ def main():
         if axis_num in LEFT_OF_ROW:
             y_axis_kw |= dict(
                 tickmode="array", tickvals=stage_tickvals, ticktext=stage_ticktext,
-                ticks="", tickfont=dict(color=LABEL, size=11),
+                ticks="", tickfont=dict(color=LABEL, size=13),
                 showticklabels=True,
             )
         else:
@@ -181,7 +181,7 @@ def main():
 
     for axis_num, x_dom, y_dom, title, color, _, _ in panels:
         x_paper = (x_dom[0] + x_dom[1]) / 2
-        title_size = 16 if axis_num <= 3 else 13
+        title_size = 18 if axis_num <= 3 else 15
         fig.add_annotation(x=x_paper, y=y_dom[1] + 0.005, xref="paper", yref="paper",
                            text=f"<b>{title}</b>", showarrow=False,
                            xanchor="center", yanchor="bottom",
@@ -307,7 +307,7 @@ def _plot_progress(meta):
                            text=name, showarrow=False,
                            xanchor="center", yanchor="bottom",
                            textangle=-90,
-                           font=dict(size=12, color=LABEL))
+                           font=dict(size=14, color=LABEL))
 
     for label, mid_y in (("Accuracy",   0.798),
                          ("Loss (log)", 0.583),
