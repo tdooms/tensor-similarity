@@ -181,3 +181,37 @@ plt.tight_layout()
 plt.savefig(os.path.join(RESULTS_DIR, 'cross_distribution_heatmap.png'), dpi=150)
 plt.close()
 print("Saved cross_distribution_heatmap.png")
+
+# --- Chart 1b: Compact scatter grid (coauthor suggestion) ---
+n_cols_compact = 3
+n_rows_compact = math.ceil(n_dists / n_cols_compact)
+fig, axes = plt.subplots(n_rows_compact, n_cols_compact,
+                         figsize=(n_cols_compact * 2.5, n_rows_compact * 2.5))
+axes = axes.flatten()
+
+for idx, dist_name in enumerate(dist_names):
+    ax = axes[idx]
+    rows = [r for r in within_dist_results if r['dist'] == dist_name]
+    ts = [r['tensor_sim_standard'] for r in rows]
+    fs = [r['func_sim_train'] for r in rows]
+
+    r_val, _ = stats.pearsonr(ts, fs)
+    ax.scatter(ts, fs, alpha=0.15, s=3, color='C0')
+    ax.set_title(f'{DIST_LABELS[dist_name]}\n(r = {r_val:.3f})', fontsize=8)
+    ax.set_xlim(-1, 1)
+    ax.set_ylim(-1, 1)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.grid(True, alpha=0.2)
+
+for idx in range(n_dists, len(axes)):
+    axes[idx].set_visible(False)
+
+fig.text(0.5, 0.01,
+         'x-axis: tensor similarity,  y-axis: cosine similarity of outputs,  both bounded in $[-1, 1]$',
+         ha='center', fontsize=8, style='italic')
+
+plt.tight_layout(rect=[0, 0.04, 1, 1])
+plt.savefig(os.path.join(RESULTS_DIR, 'scatter_grid_compact.png'), dpi=150)
+plt.close()
+print("Saved scatter_grid_compact.png")
