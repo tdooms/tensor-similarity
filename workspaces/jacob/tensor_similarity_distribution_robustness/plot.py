@@ -75,7 +75,7 @@ for idx, dist_name in enumerate(dist_names):
 for idx in range(n_dists, len(axes)):
     axes[idx].set_visible(False)
 
-plt.suptitle('Tensor Similarity vs Empirical Cosine Similarity — No Residual, 1 Layer', fontsize=14)
+plt.suptitle('', fontsize=14)
 plt.tight_layout()
 plt.savefig(os.path.join(RESULTS_DIR, 'scatter_grid.png'), dpi=150)
 plt.close()
