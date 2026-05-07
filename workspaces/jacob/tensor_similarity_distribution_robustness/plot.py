@@ -66,8 +66,8 @@ for idx, dist_name in enumerate(dist_names):
 
     r_val, _ = stats.pearsonr(ts, fs)
     ax.set_title(f'{DIST_LABELS[dist_name]}\nr={r_val:.3f}', fontsize=22)
-    ax.set_xlabel('Tensor Similarity (standard)', fontsize=12)
-    ax.set_ylabel('Empirical Cosine Similarity', fontsize=12)
+    ax.set_xlabel('Tensor Similarity', fontsize=12)
+    ax.set_ylabel('Output Cosine Similarity', fontsize=12)
     ax.tick_params(labelsize=12)
     ax.grid(True, alpha=0.3)
     if idx == 0:
