@@ -14,6 +14,18 @@ import matplotlib.pyplot as plt
 
 RESULTS_DIR = 'results_neg10_no_residual'
 
+DIST_LABELS = {
+    'gaussian':            'Gaussian',
+    'half_gaussian':       'Half Gaussian',
+    'bimodal':             'Bimodal',
+    'uniform':             'Uniform',
+    'laplace':             'Laplace',
+    'sparse_spikes':       'Sparse Spikes',
+    'permutation':         'Permutations',
+    'correlated_gaussian': 'Correlated Gaussian',
+    'neg10_last_gaussian': 'Gaussian and $-10$',
+}
+
 with open(os.path.join(RESULTS_DIR, 'results.json')) as f:
     data = json.load(f)
 
@@ -53,7 +65,7 @@ for idx, dist_name in enumerate(dist_names):
                alpha=0.3, s=8, color='C1', label='same-step')
 
     r_val, _ = stats.pearsonr(ts, fs)
-    ax.set_title(f'{dist_name}\nr={r_val:.3f}')
+    ax.set_title(f'{DIST_LABELS[dist_name]}\nr={r_val:.3f}')
     ax.set_xlabel('Tensor Sim (standard)')
     ax.set_ylabel('Func Sim (train dist)')
     ax.grid(True, alpha=0.3)
@@ -85,7 +97,7 @@ width = 0.35
 ax.bar(x - width/2, r_standard, width, label='Standard (Sigma=I)')
 ax.bar(x + width/2, r_generalized, width, label='Generalized (Sigma=estimated)')
 ax.set_xticks(x)
-ax.set_xticklabels(dist_names, rotation=45, ha='right')
+ax.set_xticklabels([DIST_LABELS[d] for d in dist_names], rotation=45, ha='right')
 ax.set_ylabel('Pearson r (tensor sim vs func sim)')
 ax.set_title('Standard vs Generalized Tensor Similarity — No Residual, 1 Layer')
 ax.legend()
@@ -104,7 +116,7 @@ for ax, dname, color in [(axes[0], 'gaussian', 'C0'), (axes[1], 'neg10_last_gaus
     fs = [r['func_sim_train'] for r in rows]
     r_val, _ = stats.pearsonr(ts, fs)
     ax.scatter(ts, fs, alpha=0.3, s=8, color=color)
-    ax.set_title(f'{dname}\nStandard r={r_val:.3f}')
+    ax.set_title(f'{DIST_LABELS[dname]}\nStandard r={r_val:.3f}')
     ax.set_xlabel('Tensor Sim (standard)')
     ax.set_ylabel('Func Sim (train dist)')
     ax.grid(True, alpha=0.3)
@@ -124,7 +136,7 @@ for idx, dist_name in enumerate(dist_names):
         accs = accuracies[(dist_name, seed)]
         steps = sorted(accs.keys())
         ax.plot(steps, [accs[s] for s in steps], alpha=0.5, marker='o', markersize=3)
-    ax.set_title(dist_name)
+    ax.set_title(DIST_LABELS[dist_name])
     ax.set_xlabel('Step')
     ax.set_ylabel('Accuracy')
     ax.set_xscale('symlog', linthresh=1)
@@ -158,8 +170,8 @@ fig, ax = plt.subplots(figsize=(10, 8))
 im = ax.imshow(cross_matrix, cmap='RdYlGn', vmin=-1, vmax=1)
 ax.set_xticks(range(n_dists))
 ax.set_yticks(range(n_dists))
-ax.set_xticklabels(dist_names, rotation=45, ha='right')
-ax.set_yticklabels(dist_names)
+ax.set_xticklabels([DIST_LABELS[d] for d in dist_names], rotation=45, ha='right')
+ax.set_yticklabels([DIST_LABELS[d] for d in dist_names])
 for i in range(n_dists):
     for j in range(n_dists):
         ax.text(j, i, f'{cross_matrix[i, j]:.2f}', ha='center', va='center', fontsize=8)
