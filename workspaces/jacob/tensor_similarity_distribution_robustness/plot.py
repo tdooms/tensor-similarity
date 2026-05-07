@@ -48,7 +48,7 @@ n_cols = 3
 n_rows = math.ceil(n_dists / n_cols)
 
 # --- Chart 1: Scatter grid ---
-fig, axes = plt.subplots(n_rows, n_cols, figsize=(6 * n_cols, 5 * n_rows))
+fig, axes = plt.subplots(n_rows, n_cols, figsize=(6 * n_cols, 6 * n_rows))
 axes = axes.flatten()
 for idx, dist_name in enumerate(dist_names):
     ax = axes[idx]
@@ -65,7 +65,7 @@ for idx, dist_name in enumerate(dist_names):
                alpha=0.3, s=8, color='C1', label='same-step')
 
     r_val, _ = stats.pearsonr(ts, fs)
-    ax.set_title(f'{DIST_LABELS[dist_name]}\nr={r_val:.3f}')
+    ax.set_title(f'{DIST_LABELS[dist_name]}\nr={r_val:.3f}', fontsize=18)
     ax.set_xlabel('Tensor Similarity (standard)')
     ax.set_ylabel('Empirical Cosine Similarity')
     ax.grid(True, alpha=0.3)
@@ -76,7 +76,7 @@ for idx in range(n_dists, len(axes)):
     axes[idx].set_visible(False)
 
 plt.suptitle('', fontsize=14)
-plt.tight_layout()
+plt.tight_layout(h_pad=3)
 plt.savefig(os.path.join(RESULTS_DIR, 'scatter_grid.png'), dpi=150)
 plt.close()
 print("Saved scatter_grid.png")
