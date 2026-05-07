@@ -77,7 +77,7 @@ for idx in range(n_dists, len(axes)):
     axes[idx].set_visible(False)
 
 plt.suptitle('', fontsize=14)
-plt.tight_layout(h_pad=3)
+plt.tight_layout(h_pad=8)
 plt.savefig(os.path.join(RESULTS_DIR, 'scatter_grid.png'), dpi=150)
 plt.close()
 print("Saved scatter_grid.png")
