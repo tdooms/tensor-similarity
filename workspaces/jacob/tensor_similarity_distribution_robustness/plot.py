@@ -66,8 +66,8 @@ for idx, dist_name in enumerate(dist_names):
 
     r_val, _ = stats.pearsonr(ts, fs)
     ax.set_title(f'{DIST_LABELS[dist_name]}\nr={r_val:.3f}')
-    ax.set_xlabel('Tensor Sim (standard)')
-    ax.set_ylabel('Func Sim (train dist)')
+    ax.set_xlabel('Tensor Similarity (standard)')
+    ax.set_ylabel('Empirical Cosine Similarity')
     ax.grid(True, alpha=0.3)
     if idx == 0:
         ax.legend(fontsize=7)
@@ -75,7 +75,7 @@ for idx, dist_name in enumerate(dist_names):
 for idx in range(n_dists, len(axes)):
     axes[idx].set_visible(False)
 
-plt.suptitle('Tensor Sim vs Functional Sim — No Residual, 1 Layer', fontsize=14)
+plt.suptitle('Tensor Similarity vs Empirical Cosine Similarity — No Residual, 1 Layer', fontsize=14)
 plt.tight_layout()
 plt.savefig(os.path.join(RESULTS_DIR, 'scatter_grid.png'), dpi=150)
 plt.close()
@@ -98,7 +98,7 @@ ax.bar(x - width/2, r_standard, width, label='Standard (Sigma=I)')
 ax.bar(x + width/2, r_generalized, width, label='Generalized (Sigma=estimated)')
 ax.set_xticks(x)
 ax.set_xticklabels([DIST_LABELS[d] for d in dist_names], rotation=45, ha='right')
-ax.set_ylabel('Pearson r (tensor sim vs func sim)')
+ax.set_ylabel('Pearson r (tensor similarity vs empirical cosine similarity)')
 ax.set_title('Standard vs Generalized Tensor Similarity — No Residual, 1 Layer')
 ax.legend()
 ax.set_ylim(0, 1.05)
@@ -117,11 +117,11 @@ for ax, dname, color in [(axes[0], 'gaussian', 'C0'), (axes[1], 'neg10_last_gaus
     r_val, _ = stats.pearsonr(ts, fs)
     ax.scatter(ts, fs, alpha=0.3, s=8, color=color)
     ax.set_title(f'{DIST_LABELS[dname]}\nStandard r={r_val:.3f}')
-    ax.set_xlabel('Tensor Sim (standard)')
-    ax.set_ylabel('Func Sim (train dist)')
+    ax.set_xlabel('Tensor Similarity (standard)')
+    ax.set_ylabel('Empirical Cosine Similarity')
     ax.grid(True, alpha=0.3)
 
-plt.suptitle('Gaussian vs neg10-Last-Gaussian (no residual, 1 layer)', fontsize=14)
+plt.suptitle('Gaussian vs Gaussian and $-10$ (no residual, 1 layer)', fontsize=14)
 plt.tight_layout()
 plt.savefig(os.path.join(RESULTS_DIR, 'gaussian_vs_neg10.png'), dpi=150)
 plt.close()
@@ -175,43 +175,9 @@ ax.set_yticklabels([DIST_LABELS[d] for d in dist_names])
 for i in range(n_dists):
     for j in range(n_dists):
         ax.text(j, i, f'{cross_matrix[i, j]:.2f}', ha='center', va='center', fontsize=8)
-plt.colorbar(im, ax=ax, label='Tensor Sim (standard)')
+plt.colorbar(im, ax=ax, label='Tensor Similarity (standard)')
 ax.set_title('Cross-Distribution Tensor Similarity (no residual, final checkpoint)')
 plt.tight_layout()
 plt.savefig(os.path.join(RESULTS_DIR, 'cross_distribution_heatmap.png'), dpi=150)
 plt.close()
 print("Saved cross_distribution_heatmap.png")
-
-# --- Chart 1b: Compact scatter grid (coauthor suggestion) ---
-n_cols_compact = 3
-n_rows_compact = math.ceil(n_dists / n_cols_compact)
-fig, axes = plt.subplots(n_rows_compact, n_cols_compact,
-                         figsize=(n_cols_compact * 2.5, n_rows_compact * 2.5))
-axes = axes.flatten()
-
-for idx, dist_name in enumerate(dist_names):
-    ax = axes[idx]
-    rows = [r for r in within_dist_results if r['dist'] == dist_name]
-    ts = [r['tensor_sim_standard'] for r in rows]
-    fs = [r['func_sim_train'] for r in rows]
-
-    r_val, _ = stats.pearsonr(ts, fs)
-    ax.scatter(ts, fs, alpha=0.15, s=3, color='C0')
-    ax.set_title(f'{DIST_LABELS[dist_name]}\n(r = {r_val:.3f})', fontsize=8)
-    ax.set_xlim(-1, 1)
-    ax.set_ylim(-1, 1)
-    ax.set_xticks([])
-    ax.set_yticks([])
-    ax.grid(True, alpha=0.2)
-
-for idx in range(n_dists, len(axes)):
-    axes[idx].set_visible(False)
-
-fig.text(0.5, 0.01,
-         'x-axis: tensor similarity,  y-axis: cosine similarity of outputs,  both bounded in $[-1, 1]$',
-         ha='center', fontsize=8, style='italic')
-
-plt.tight_layout(rect=[0, 0.04, 1, 1])
-plt.savefig(os.path.join(RESULTS_DIR, 'scatter_grid_compact.png'), dpi=150)
-plt.close()
-print("Saved scatter_grid_compact.png")
