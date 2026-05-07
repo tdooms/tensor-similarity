@@ -1,0 +1,197 @@
+============================================================
+Phase 1: Training models (NO RESIDUAL, 1 layer)
+  9 distributions x 5 seeds x 14 checkpoints
+============================================================
+  gaussian seed=0... final acc=50.2%
+  gaussian seed=1... final acc=50.4%
+  gaussian seed=2... final acc=50.2%
+  gaussian seed=3... final acc=49.8%
+  gaussian seed=4... final acc=50.0%
+  half_gaussian seed=0... final acc=92.1%
+  half_gaussian seed=1... final acc=92.0%
+  half_gaussian seed=2... final acc=92.0%
+  half_gaussian seed=3... final acc=91.9%
+  half_gaussian seed=4... final acc=92.3%
+  bimodal seed=0... final acc=49.6%
+  bimodal seed=1... final acc=49.5%
+  bimodal seed=2... final acc=49.3%
+  bimodal seed=3... final acc=49.9%
+  bimodal seed=4... final acc=49.4%
+  uniform seed=0... final acc=49.6%
+  uniform seed=1... final acc=50.1%
+  uniform seed=2... final acc=49.1%
+  uniform seed=3... final acc=50.0%
+  uniform seed=4... final acc=49.9%
+  laplace seed=0... final acc=50.0%
+  laplace seed=1... final acc=50.2%
+  laplace seed=2... final acc=49.5%
+  laplace seed=3... final acc=49.8%
+  laplace seed=4... final acc=50.0%
+  sparse_spikes seed=0... final acc=39.1%
+  sparse_spikes seed=1... final acc=39.3%
+  sparse_spikes seed=2... final acc=39.0%
+  sparse_spikes seed=3... final acc=39.1%
+  sparse_spikes seed=4... final acc=39.1%
+  permutation seed=0... final acc=100.0%
+  permutation seed=1... final acc=100.0%
+  permutation seed=2... final acc=100.0%
+  permutation seed=3... final acc=100.0%
+  permutation seed=4... final acc=100.0%
+  correlated_gaussian seed=0... final acc=49.8%
+  correlated_gaussian seed=1... final acc=50.1%
+  correlated_gaussian seed=2... final acc=49.9%
+  correlated_gaussian seed=3... final acc=50.1%
+  correlated_gaussian seed=4... final acc=49.8%
+  neg10_last_gaussian seed=0... final acc=99.1%
+  neg10_last_gaussian seed=1... final acc=98.7%
+  neg10_last_gaussian seed=2... final acc=99.2%
+  neg10_last_gaussian seed=3... final acc=98.6%
+  neg10_last_gaussian seed=4... final acc=99.1%
+
+============================================================
+Phase 2: Estimating covariance matrices
+============================================================
+  gaussian: trace=3.990, rank=4
+  half_gaussian: trace=1.451, rank=4
+  bimodal: trace=4.359, rank=4
+  uniform: trace=1.332, rank=4
+  laplace: trace=3.999, rank=4
+  sparse_spikes: trace=3.990, rank=4
+  permutation: trace=5.000, rank=3
+  correlated_gaussian: trace=3.992, rank=4
+  neg10_last_gaussian: trace=3.020, rank=3
+
+============================================================
+Phase 3: Computing within-distribution pairwise metrics
+============================================================
+  gaussian: 2415 pairs...
+    500/2415
+    1000/2415
+    1500/2415
+    2000/2415
+  half_gaussian: 2415 pairs...
+    500/2415
+    1000/2415
+    1500/2415
+    2000/2415
+  bimodal: 2415 pairs...
+    500/2415
+    1000/2415
+    1500/2415
+    2000/2415
+  uniform: 2415 pairs...
+    500/2415
+    1000/2415
+    1500/2415
+    2000/2415
+  laplace: 2415 pairs...
+    500/2415
+    1000/2415
+    1500/2415
+    2000/2415
+  sparse_spikes: 2415 pairs...
+    500/2415
+    1000/2415
+    1500/2415
+    2000/2415
+  permutation: 2415 pairs...
+    500/2415
+    1000/2415
+    1500/2415
+    2000/2415
+  correlated_gaussian: 2415 pairs...
+    500/2415
+    1000/2415
+    1500/2415
+    2000/2415
+  neg10_last_gaussian: 2415 pairs...
+    500/2415
+    1000/2415
+    1500/2415
+    2000/2415
+
+============================================================
+Phase 4: Cross-distribution comparison (final checkpoint)
+============================================================
+  gaussian vs half_gaussian...
+  gaussian vs bimodal...
+  gaussian vs uniform...
+  gaussian vs laplace...
+  gaussian vs sparse_spikes...
+  gaussian vs permutation...
+  gaussian vs correlated_gaussian...
+  gaussian vs neg10_last_gaussian...
+  half_gaussian vs bimodal...
+  half_gaussian vs uniform...
+  half_gaussian vs laplace...
+  half_gaussian vs sparse_spikes...
+  half_gaussian vs permutation...
+  half_gaussian vs correlated_gaussian...
+  half_gaussian vs neg10_last_gaussian...
+  bimodal vs uniform...
+  bimodal vs laplace...
+  bimodal vs sparse_spikes...
+  bimodal vs permutation...
+  bimodal vs correlated_gaussian...
+  bimodal vs neg10_last_gaussian...
+  uniform vs laplace...
+  uniform vs sparse_spikes...
+  uniform vs permutation...
+  uniform vs correlated_gaussian...
+  uniform vs neg10_last_gaussian...
+  laplace vs sparse_spikes...
+  laplace vs permutation...
+  laplace vs correlated_gaussian...
+  laplace vs neg10_last_gaussian...
+  sparse_spikes vs permutation...
+  sparse_spikes vs correlated_gaussian...
+  sparse_spikes vs neg10_last_gaussian...
+  permutation vs correlated_gaussian...
+  permutation vs neg10_last_gaussian...
+  correlated_gaussian vs neg10_last_gaussian...
+
+============================================================
+Phase 5: Saving results
+============================================================
+  Saved results_neg10_no_residual/results.json
+
+============================================================
+Phase 6: Generating charts
+============================================================
+  Saved scatter_grid.png
+  Saved standard_vs_generalized.png
+  Saved gaussian_vs_neg10.png
+  Saved training_curves.png
+  Saved cross_distribution_heatmap.png
+
+============================================================
+Summary of Pearson r values (within-distribution)
+============================================================
+Distribution             Standard  Generalized
+----------------------------------------------
+gaussian                    0.997        0.997
+half_gaussian               0.920        0.920
+bimodal                     0.987        0.987
+uniform                     0.994        0.994
+laplace                     0.992        0.992
+sparse_spikes               0.977        0.978
+permutation                 0.964        0.933
+correlated_gaussian         0.954        0.991
+neg10_last_gaussian         0.606        0.498
+
+============================================================
+Final accuracies
+============================================================
+  gaussian               mean=50.1%  std=0.2%
+  half_gaussian          mean=92.1%  std=0.1%
+  bimodal                mean=49.5%  std=0.2%
+  uniform                mean=49.7%  std=0.4%
+  laplace                mean=49.9%  std=0.2%
+  sparse_spikes          mean=39.1%  std=0.1%
+  permutation            mean=100.0%  std=0.0%
+  correlated_gaussian    mean=49.9%  std=0.1%
+  neg10_last_gaussian    mean=99.0%  std=0.2%
+
+============================================================
+Done! All results saved to results_neg10_no_residual
+============================================================
