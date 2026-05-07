@@ -65,7 +65,7 @@ for idx, dist_name in enumerate(dist_names):
                alpha=0.3, s=8, color='C1', label='same-step')
 
     r_val, _ = stats.pearsonr(ts, fs)
-    ax.set_title(f'{DIST_LABELS[dist_name]}\nr={r_val:.3f}', fontsize=18)
+    ax.set_title(f'{DIST_LABELS[dist_name]}\nr={r_val:.3f}', fontsize=27)
     ax.set_xlabel('Tensor Similarity (standard)')
     ax.set_ylabel('Empirical Cosine Similarity')
     ax.grid(True, alpha=0.3)
